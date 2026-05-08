@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0E0F11;
+  --color-bg-elevated: rgba(255,255,255,0.04);
+  --color-bg-hover: rgba(255,255,255,0.06);
+  --color-bg-active: rgba(255,255,255,0.08);
+  --color-border-subtle: rgba(255,255,255,0.06);
+  --color-border-strong: rgba(255,255,255,0.12);
+  --color-text-primary: #E8E9EA;
+  --color-text-secondary: #9CA0A6;
+  --color-text-tertiary: #5C6066;
+  --color-accent-brand: #7AB892;
+  --color-accent-brand-dim: rgba(122,184,146,0.15);
+  --color-status-ok: #7AB892;
+  --color-status-warn: #E0B95C;
+  --color-status-alert: #D97366;
+  --color-status-info: #7CA8C9;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-feature-settings: "tnum";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus rings only on focus-visible */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  
+  :focus-visible {
+    outline: 2px solid var(--color-accent-brand);
+    outline-offset: 2px;
+  }
+
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+}
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-page-break {
+    page-break-before: always;
+  }
+  /* Remove glass effects for print */
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Force dark text for variables just in case */
+  :root {
+    --color-text-primary: #000;
+    --color-text-secondary: #333;
+    --color-bg-elevated: transparent;
+    --color-border-subtle: #ccc;
+  }
+}
+
