@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { CheckCircle2, Circle, X, Plus, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from './Button';
+import { CheckCircle2, Circle, X, Clock } from 'lucide-react';
 import { Input } from './Input';
 
 interface TasksPanelProps {
@@ -13,6 +11,7 @@ interface TasksPanelProps {
 export function TasksPanel({ open, onClose }: TasksPanelProps) {
   const { tasks, toggleTask, addTask, deleteTask } = useApp();
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const titleId = useId();
   
   if (!open) return null;
 
@@ -32,18 +31,33 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
   const completedTasks = tasks.filter(t => t.completed);
 
   return (
-    <div className="absolute top-[46px] right-0 w-[360px] bg-bg-base/90 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-50 flex flex-col max-h-[calc(100vh-80px)] overflow-hidden">
+    <div
+      className="absolute top-[46px] right-0 w-[360px] bg-bg-base/90 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-50 flex flex-col max-h-[calc(100vh-80px)] overflow-hidden"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={titleId}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
       <div className="p-4 border-b border-border-subtle flex items-center justify-between shrink-0">
-        <h3 className="font-medium text-text-primary">Tasks</h3>
-        <button onClick={onClose} className="p-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
+        <h3 id={titleId} className="font-medium text-text-primary">Tasks</h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close tasks panel"
+          className="p-1 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+        >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        <form onSubmit={handleAddTask} className="flex gap-2 relative">
+        <form onSubmit={handleAddTask} className="flex gap-2 relative" aria-label="Add task">
           <Input 
             autoFocus
+            label="New task title"
+            hideLabel
             value={newTaskTitle}
             onChange={(e) => setNewTaskTitle(e.target.value)}
             placeholder="Add a new task..."
@@ -51,7 +65,7 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
           />
         </form>
 
-        <div className="space-y-1">
+        <div className="space-y-1" role="list" aria-label="Pending tasks">
           {pendingTasks.length === 0 && (
             <div className="text-center py-8 text-sm text-text-tertiary">
               <CheckCircle2 className="w-8 h-8 mx-auto mb-2 opacity-20" />
@@ -59,9 +73,12 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
             </div>
           )}
           {pendingTasks.map(task => (
-            <div key={task.id} className="group flex items-start gap-3 p-2 hover:bg-bg-hover rounded-lg transition-colors">
+            <div key={task.id} role="listitem" className="group flex items-start gap-3 p-2 hover:bg-bg-hover rounded-lg transition-colors">
               <button 
+                type="button"
                 onClick={() => toggleTask(task.id)}
+                aria-label={`Mark ${task.title} as completed`}
+                aria-pressed={task.completed}
                 className="mt-1 flex-shrink-0 text-text-secondary hover:text-status-ok transition-colors"
                 title="Mark as completed"
               >
@@ -77,7 +94,9 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
                 )}
               </div>
               <button 
+                type="button"
                 onClick={() => deleteTask(task.id)}
+                aria-label={`Delete ${task.title}`}
                 className="mt-1 p-1 opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-status-alert hover:bg-status-alert/10 rounded transition-all focus:opacity-100"
                 title="Delete task"
               >
@@ -90,10 +109,14 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
         {completedTasks.length > 0 && (
           <div className="space-y-1 pt-4 border-t border-border-subtle">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary mb-2 px-2">Completed</h4>
-            {completedTasks.map(task => (
-              <div key={task.id} className="group flex items-start gap-3 p-2 hover:bg-bg-hover rounded-lg transition-colors opacity-60 hover:opacity-100">
+            <div role="list" aria-label="Completed tasks">
+              {completedTasks.map(task => (
+                <div key={task.id} role="listitem" className="group flex items-start gap-3 p-2 hover:bg-bg-hover rounded-lg transition-colors opacity-60 hover:opacity-100">
                 <button 
+                  type="button"
                   onClick={() => toggleTask(task.id)}
+                  aria-label={`Mark ${task.title} as pending`}
+                  aria-pressed={task.completed}
                   className="mt-1 flex-shrink-0 text-status-ok"
                   title="Mark as pending"
                 >
@@ -103,14 +126,17 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
                   <p className="text-sm text-text-secondary line-through decoration-text-tertiary">{task.title}</p>
                 </div>
                 <button 
+                  type="button"
                   onClick={() => deleteTask(task.id)}
+                  aria-label={`Delete ${task.title}`}
                   className="mt-1 p-1 opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-status-alert hover:bg-status-alert/10 rounded transition-all focus:opacity-100"
                   title="Delete task"
                 >
                   <X className="w-3 h-3" />
                 </button>
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

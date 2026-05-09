@@ -12,9 +12,18 @@ const statusColors = {
   info: "bg-status-info",
 };
 
+const statusLabels = {
+  ok: "Status: ok",
+  warn: "Status: warning",
+  alert: "Status: alert",
+  info: "Status: information",
+};
+
 export function StatusDot({ status, className }: StatusDotProps) {
   return (
     <span
+      role="img"
+      aria-label={statusLabels[status]}
       className={cn(
         "inline-block w-[6px] h-[6px] rounded-full",
         statusColors[status],

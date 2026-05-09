@@ -1,19 +1,18 @@
 import { useState, useMemo } from "react";
-import { DataTable } from "@/components/ui/DataTable";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Store, ShoppingBag, X, MessageSquare, Mail, History } from "lucide-react";
 import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
-import { Link } from "react-router";
+import { LoadingTable, ErrorState, EmptyState, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import { CultivarName } from "@/components/ui/CultivarName";
+import { CUSTOMERS_PAGE_NAME_POOL, SALES_CHANNELS } from "@/lib/constants";
 
 const CUSTOMERS = Array.from({ length: 25 }).map((_, i) => {
-  const names = ["Sarah Chen", "Marcus Aldana", "Priya Patel", "Alice Smith", "Luis Garcia", "Emma Wilson"];
+  const names = CUSTOMERS_PAGE_NAME_POOL;
   const name = names[Math.floor(Math.random() * names.length)] + " " + i;
-  const channel = Math.random() > 0.5 ? "Shopify" : "Etsy";
+  const channel = Math.random() > 0.5 ? SALES_CHANNELS[1] : SALES_CHANNELS[0];
   const numOrders = Math.floor(Math.random() * 8) + 1;
   const ltv = numOrders * (15 + Math.floor(Math.random() * 40));
   
@@ -25,9 +24,11 @@ const CUSTOMERS = Array.from({ length: 25 }).map((_, i) => {
     orders: numOrders,
     ltv: ltv,
     lastOrder: `${Math.floor(Math.random() * 30) + 1} days ago`,
-    rosetteSubscriber: Math.random() > 0.8 && channel === "Shopify",
+    rosetteSubscriber: Math.random() > 0.8 && channel === SALES_CHANNELS[1],
   };
 });
+
+type CustomerRow = (typeof CUSTOMERS)[number];
 
 export default function Customers() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -35,48 +36,48 @@ export default function Customers() {
 
   const selectedCustomer = useMemo(() => data.find((c) => c.id === selectedId), [data, selectedId]);
 
-  const columns = useMemo(() => [
+  const columns = useMemo((): DataTableColumn<CustomerRow>[] => [
     {
-      accessorKey: "name",
+      key: "name",
       header: "Name",
-      cell: (info: any) => (
+      render: (row) => (
         <div className="flex items-center gap-2">
-          <span className="font-medium text-text-primary">{info.getValue()}</span>
-          {info.row.original.rosetteSubscriber && (
+          <span className="font-medium text-text-primary">{row.name}</span>
+          {row.rosetteSubscriber && (
             <Badge variant="brand">Rosette+</Badge>
           )}
         </div>
       ),
     },
     {
-      accessorKey: "email",
+      key: "email",
       header: "Email",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.email}</span>,
     },
     {
-      accessorKey: "channel",
+      key: "channel",
       header: "Pref. Channel",
-      cell: (info: any) => (
+      render: (row) => (
         <div className="flex items-center gap-2 text-text-secondary">
-          {info.getValue() === "Shopify" ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
-          {info.getValue()}
+          {row.channel === SALES_CHANNELS[1] ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
+          {row.channel}
         </div>
       ),
     },
     {
-      accessorKey: "orders",
+      key: "orders",
       header: "Total Orders",
-      cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span>,
+      render: (row) => <span className="tabular-nums">{row.orders}</span>,
     },
     {
-      accessorKey: "ltv",
+      key: "ltv",
       header: "Lifetime Value",
-      cell: (info: any) => <span className="tabular-nums font-medium">${info.getValue().toFixed(2)}</span>,
+      render: (row) => <span className="tabular-nums font-medium">${row.ltv.toFixed(2)}</span>,
     },
     {
-      accessorKey: "lastOrder",
+      key: "lastOrder",
       header: "Last Order",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.lastOrder}</span>,
     },
   ], []);
 
@@ -89,15 +90,17 @@ export default function Customers() {
         </div>
 
         <Card className="flex-1 overflow-auto flex flex-col">
-          {isLoading ? (
-             <LoadingTable cols={6} rows={15} />
-          ) : isError ? (
-             <ErrorState />
-          ) : isEmpty ? (
-             <EmptyState title="No customers yet" description="They will appear here after the first order imports." />
-          ) : (
-             <DataTable columns={columns} data={data} onRowClick={(row) => setSelectedId(row.id)} />
-          )}
+          <StateRenderer
+            state={resolveDataViewState(isLoading, isError, isEmpty)}
+            data={data}
+            loadingFallback={<LoadingTable cols={6} rows={15} />}
+            errorFallback={<ErrorState />}
+            emptyFallback={<EmptyState title="No customers yet" description="They will appear here after the first order imports." />}
+          >
+            {(rows) => (
+              <DataTable columns={columns} data={rows} onRowClick={(row) => setSelectedId(row.id)} />
+            )}
+          </StateRenderer>
         </Card>
       </div>
 
@@ -149,7 +152,7 @@ export default function Customers() {
               <section>
                  <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Associations & History</h3>
                  <div className="space-y-2">
-                    <Link to={`/customers/${selectedCustomer.id}/thread`} className="flex items-center justify-between p-2 rounded-lg border border-border-subtle bg-[rgba(255,255,255,0.02)] hover:bg-bg-hover transition-colors group">
+                    <div className="flex items-center justify-between p-2 rounded-lg border border-border-subtle bg-[rgba(255,255,255,0.02)] hover:bg-bg-hover transition-colors group">
                        <div className="flex items-center gap-2">
                          <div className="w-8 h-8 rounded bg-bg-elevated flex items-center justify-center text-text-secondary group-hover:text-text-primary transition-colors">
                             <MessageSquare className="w-4 h-4" />
@@ -160,7 +163,7 @@ export default function Customers() {
                          </div>
                        </div>
                        <Badge>2 Unread</Badge>
-                    </Link>
+                    </div>
                     
                     <button className="w-full flex items-center justify-between p-2 rounded-lg border border-border-subtle bg-[rgba(255,255,255,0.02)] hover:bg-bg-hover transition-colors group">
                        <div className="flex items-center gap-2">

@@ -4,8 +4,6 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { useDataState } from "@/hooks/useDataState";
 import { ErrorState, EmptyState } from "@/components/ui/StateRenderer";
 import { PackageOpen } from "lucide-react";
-import { CultivarName } from "@/components/ui/CultivarName";
-
 const SUPPLIES = [
   { id: 1, name: "Long-fiber Sphagnum", stock: "2 bales", threshold: "3 bales", vendor: "Sphagnum Moss Co.", lastOrdered: "2 months ago", low: true },
   { id: 2, name: "Perlite", stock: "10 bags", threshold: "2 bags", vendor: "Home Depot", lastOrdered: "3 months ago", low: false },

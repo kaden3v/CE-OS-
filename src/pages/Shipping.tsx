@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { ThermometerSun, AlertTriangle, Send, Settings, Mail, Box, Map } from "lucide-react";
+import { ThermometerSun, Send, Settings, Mail, Box, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDataState } from "@/hooks/useDataState";
 import { ErrorState, EmptyState } from "@/components/ui/StateRenderer";
@@ -202,7 +201,7 @@ export default function Shipping() {
             {!regionLoading && !regionError && !regionEmpty && regionData.map((region) => (
               <Card key={region.name} className="p-0 overflow-hidden flex">
                 <div className="w-12 flex-shrink-0 flex items-center justify-center border-r border-border-subtle bg-bg-base">
-                  <StatusDot status={region.status as any} />
+                  <StatusDot status={region.status as "ok" | "warn" | "alert" | "info"} />
                 </div>
                 <div className="p-4 flex-1 flex items-center justify-between">
                   <div>

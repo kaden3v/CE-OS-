@@ -1,11 +1,13 @@
 import { StatTile } from "@/components/ui/StatTile";
 import { Card } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { mockOrders } from "@/lib/mockData";
+import { mockOrders, DASHBOARD_CHANNEL_DATA, DASHBOARD_CULTIVAR_CHART_DATA } from "@/lib/mockData";
+import { formatUSD } from "@/lib/money";
+import { ORDER_STATUSES, SALES_CHANNELS } from "@/lib/constants";
 import { Store, ShoppingBag, ThermometerSun, CheckCircle2, BarChart3, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RechartsChart } from "@/components/ui/RechartsChart";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 
@@ -15,13 +17,6 @@ const REVENUE_DATA = [
   { name: 'Jul', value: 4300 }
 ];
 
-const CHANNEL_DATA = [
-  { name: 'Shopify', value: 450 }, { name: 'Etsy', value: 320 }, { name: 'Wholesale', value: 150 }
-];
-
-const CULTIVAR_DATA = [
-  { name: "'Pirouette'", value: 400 }, { name: "'El Lobo'", value: 300 }, { name: 'gigantea', value: 300 }, { name: 'esseriana', value: 200 }
-];
 const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
 
 export default function Dashboard() {
@@ -95,15 +90,15 @@ export default function Dashboard() {
                             <span className="font-medium">{order.customer}</span>
                             <StatusDot
                               status={
-                                order.status === "Pending" ? "alert" :
-                                order.status === "Processing" ? "warn" :
-                                order.status === "Packed" ? "info" : "ok"
+                                order.status === ORDER_STATUSES[0] ? "alert" :
+                                order.status === ORDER_STATUSES[1] ? "warn" :
+                                order.status === ORDER_STATUSES[2] ? "info" : "ok"
                               }
                             />
                           </div>
                           <div className="text-xs text-text-secondary mt-2 flex items-center gap-2">
                             <span className="flex items-center gap-2">
-                              {order.channel === "Shopify" ? <Store className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+                              {order.channel === SALES_CHANNELS[1] ? <Store className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
                               {order.channel}
                             </span>
                             <span>&middot;</span>
@@ -114,7 +109,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium whitespace-nowrap">${order.subtotal.toFixed(2)}</div>
+                        <div className="font-medium whitespace-nowrap">{formatUSD(order.subtotalCents)}</div>
                         <div className="text-xs text-text-secondary mt-2">{order.items} item{order.items !== 1 ? 's' : ''}</div>
                       </div>
                     </div>
@@ -223,11 +218,11 @@ export default function Dashboard() {
                  <div className="flex-1 min-h-0">
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={CHANNEL_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} layout="vertical">
+                        <BarChart data={DASHBOARD_CHANNEL_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} layout="vertical">
                           <XAxis type="number" hide />
                           <YAxis dataKey="name" type="category" stroke="var(--color-text-secondary)" fontSize={12} tickLine={false} axisLine={false} width={80} />
                           <Bar dataKey="value" fill="var(--color-bg-active)" radius={[0, 4, 4, 0]}>
-                             {CHANNEL_DATA.map((entry, index) => (
+                             {DASHBOARD_CHANNEL_DATA.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={index === 0 ? "var(--color-accent-brand)" : "var(--color-border-strong)"} />
                              ))}
                           </Bar>
@@ -246,7 +241,7 @@ export default function Dashboard() {
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={CULTIVAR_DATA}
+                            data={DASHBOARD_CULTIVAR_CHART_DATA}
                             cx="50%"
                             cy="50%"
                             innerRadius={60}
@@ -255,7 +250,7 @@ export default function Dashboard() {
                             dataKey="value"
                             stroke="none"
                           >
-                            {CULTIVAR_DATA.map((entry, index) => (
+                            {DASHBOARD_CULTIVAR_CHART_DATA.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>

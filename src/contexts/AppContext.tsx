@@ -1,19 +1,33 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+} from "react";
+import * as storage from "@/lib/storage";
+import { DEFAULT_OPERATOR_TIMEZONE } from "@/lib/dates";
 
-type SettingsState = {
+const SETTINGS_STORAGE_KEY = "app-settings";
+
+export type SettingsState = {
   developerMode: boolean;
   demoMode: boolean;
   loadingMode: boolean;
   errorMode: boolean;
   emptyMode: boolean;
-  density: 'comfortable' | 'compact';
+  density: "comfortable" | "compact";
+  /** Show tissue-culture lab column(s) on the propagation board (e.g. Establishment). */
+  tissueCultureStagesEnabled: boolean;
+  /** IANA timezone for formatting date/times in the UI (shop default: Phoenix). */
+  operatorTimezone: string;
 };
 
-type Toast = {
+export type Toast = {
   id: string;
   title: string;
   description?: string;
-  status: 'ok' | 'info' | 'warn' | 'alert';
+  status: "ok" | "info" | "warn" | "alert";
   duration?: number;
 };
 
@@ -22,7 +36,7 @@ type Notification = {
   title: string;
   description: string;
   time: string;
-  status: 'ok' | 'info' | 'warn' | 'alert';
+  status: "ok" | "info" | "warn" | "alert";
   read: boolean;
 };
 
@@ -34,21 +48,26 @@ export type Task = {
   completed: boolean;
 };
 
+export type StorageRecoveryIssue = {
+  resource: string;
+  backupKey: string;
+};
+
 interface AppContextType {
   settings: SettingsState;
   updateSettings: (updates: Partial<SettingsState>) => void;
   // Toasts
   toasts: Toast[];
-  addToast: (toast: Omit<Toast, 'id'>) => void;
+  addToast: (toast: Omit<Toast, "id">) => void;
   removeToast: (id: string) => void;
   // Notifications
   notifications: Notification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
-  addNotification: (notification: Omit<Notification, 'id' | 'read' | 'time'>) => void;
+  addNotification: (notification: Omit<Notification, "id" | "read" | "time">) => void;
   // Tasks
   tasks: Task[];
-  addTask: (task: Omit<Task, 'id' | 'completed'>) => void;
+  addTask: (task: Omit<Task, "id" | "completed">) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
   // Command Palette
@@ -57,89 +76,165 @@ interface AppContextType {
   // Order Detail Slide-in (Global)
   globalOrderViewId: string | null;
   setGlobalOrderViewId: (id: string | null) => void;
+  // Entity storage recovery (useEntity read failures)
+  storageRecoveryIssues: StorageRecoveryIssue[];
+  registerStorageRecoveryIssue: (resource: string, backupKey: string) => void;
+  resolveStorageRecoveryIssue: (resource: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const DEFAULT_SETTINGS: SettingsState = {
+  developerMode: false,
+  demoMode: false,
+  loadingMode: false,
+  errorMode: false,
+  emptyMode: false,
+  density: "comfortable",
+  tissueCultureStagesEnabled: true,
+  operatorTimezone: DEFAULT_OPERATOR_TIMEZONE,
+};
+
+function loadInitialSettings(): SettingsState {
+  let merged: SettingsState = { ...DEFAULT_SETTINGS };
+  if (typeof window !== "undefined") {
+    try {
+      const stored = storage.get<Partial<SettingsState>>(SETTINGS_STORAGE_KEY);
+      if (stored) merged = { ...merged, ...stored };
+    } catch {
+      /* ignore corrupt settings */
+    }
+    if (new URLSearchParams(window.location.search).get("dev") === "1") {
+      merged.developerMode = true;
+    }
+  }
+  return merged;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<SettingsState>({
-    developerMode: new URLSearchParams(window.location.search).get('dev') === '1',
-    demoMode: false,
-    loadingMode: false,
-    errorMode: false,
-    emptyMode: false,
-    density: 'comfortable',
-  });
+  const [settings, setSettings] = useState<SettingsState>(loadInitialSettings);
+
+  useEffect(() => {
+    storage.set(SETTINGS_STORAGE_KEY, settings);
+  }, [settings]);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<Task[]>([
-    { id: '1', title: "Transfer P. 'Pirouette' batch #402 to establishment", due: "Today", type: "propagation", completed: false },
-    { id: '2', title: "Renew AZ Dept. of Agriculture License", due: "In 3 days", type: "license", completed: false },
-    { id: '3', title: "Reorder LFS (Low stock: 2 bales left)", due: "This week", type: "supply", completed: false },
+    {
+      id: "1",
+      title: "Transfer P. 'Pirouette' batch #402 to establishment",
+      due: "Today",
+      type: "propagation",
+      completed: false,
+    },
+    {
+      id: "2",
+      title: "Renew AZ Dept. of Agriculture License",
+      due: "In 3 days",
+      type: "license",
+      completed: false,
+    },
+    {
+      id: "3",
+      title: "Reorder LFS (Low stock: 2 bales left)",
+      due: "This week",
+      type: "supply",
+      completed: false,
+    },
   ]);
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [globalOrderViewId, setGlobalOrderViewId] = useState<string | null>(null);
+  const [globalOrderViewId, setGlobalOrderViewId] = useState<string | null>(
+    null
+  );
+  const [storageRecoveryIssues, setStorageRecoveryIssues] = useState<
+    StorageRecoveryIssue[]
+  >([]);
 
   const updateSettings = (updates: Partial<SettingsState>) => {
-    setSettings(prev => ({ ...prev, ...updates }));
+    setSettings((prev) => ({ ...prev, ...updates }));
   };
 
-  const addToast = (toast: Omit<Toast, 'id'>) => {
+  const addToast = (toast: Omit<Toast, "id">) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { ...toast, id }]);
+    setToasts((prev) => [...prev, { ...toast, id }]);
   };
 
   const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const addNotification = (notif: Omit<Notification, 'id' | 'read' | 'time'>) => {
+  const addNotification = (
+    notif: Omit<Notification, "id" | "read" | "time">
+  ) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setNotifications(prev => [{ ...notif, id, read: false, time: 'Just now' }, ...prev]);
+    setNotifications((prev) => [
+      { ...notif, id, read: false, time: "Just now" },
+      ...prev,
+    ]);
   };
 
   const markNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  const addTask = (task: Omit<Task, 'id' | 'completed'>) => {
+  const addTask = (task: Omit<Task, "id" | "completed">) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setTasks(prev => [{ ...task, id, completed: false }, ...prev]);
+    setTasks((prev) => [{ ...task, id, completed: false }, ...prev]);
   };
 
   const toggleTask = (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+    );
   };
 
   const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const registerStorageRecoveryIssue = (resource: string, backupKey: string) => {
+    setStorageRecoveryIssues((prev) => {
+      const rest = prev.filter((x) => x.resource !== resource);
+      return [...rest, { resource, backupKey }];
+    });
+  };
+
+  const resolveStorageRecoveryIssue = (resource: string) => {
+    setStorageRecoveryIssues((prev) => prev.filter((x) => x.resource !== resource));
   };
 
   return (
-    <AppContext.Provider value={{
-      settings,
-      updateSettings,
-      toasts,
-      addToast,
-      removeToast,
-      notifications,
-      addNotification,
-      markNotificationRead,
-      markAllNotificationsRead,
-      tasks,
-      addTask,
-      toggleTask,
-      deleteTask,
-      isCommandPaletteOpen,
-      setCommandPaletteOpen,
-      globalOrderViewId,
-      setGlobalOrderViewId
-    }}>
+    <AppContext.Provider
+      value={{
+        settings,
+        updateSettings,
+        toasts,
+        addToast,
+        removeToast,
+        notifications,
+        addNotification,
+        markNotificationRead,
+        markAllNotificationsRead,
+        tasks,
+        addTask,
+        toggleTask,
+        deleteTask,
+        isCommandPaletteOpen,
+        setCommandPaletteOpen,
+        globalOrderViewId,
+        setGlobalOrderViewId,
+        storageRecoveryIssues,
+        registerStorageRecoveryIssue,
+        resolveStorageRecoveryIssue,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );

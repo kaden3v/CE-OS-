@@ -2,8 +2,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { Plus, MoreHorizontal, Clock, AlertCircle, X, ChevronRight, FileText, FlaskConical, ScrollText } from "lucide-react";
-import React, { useState } from "react";
+import { Plus, MoreHorizontal, Clock, AlertCircle, X, ChevronRight, FlaskConical } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDataState } from "@/hooks/useDataState";
 import { ErrorState, EmptyState } from "@/components/ui/StateRenderer";
 import { Link } from "react-router";
@@ -11,37 +11,64 @@ import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
+import { PROPAGATION_KANBAN_COLUMNS, PROPAGATION_STAGES, PROPAGATION_TC_KANBAN_COLUMN_IDS } from "@/lib/constants";
+import type { PropagationStage } from "@/lib/constants";
+import { seedPropagationBatches, seedProtocols } from "@/lib/mockData";
 
-const COLUMNS = [
-  { id: "mother", title: "Mother Plants", count: 4 },
-  { id: "division", title: "Division & Pullings", count: 12 },
-  { id: "establishment", title: "Establishment", count: 8 },
-  { id: "ready", title: "Ready for Sale", count: 24 },
-];
+type PropagationBatchRow = (typeof seedPropagationBatches)[number];
+type ProtocolRow = (typeof seedProtocols)[number];
 
-const BATCHES = [
-  { id: "B-101", cultivar: "P. 'Pirouette'", targetId: 1, count: 42, stage: "establishment", started: "3 weeks ago", estReady: "Next week", notes: "" },
-  { id: "B-102", cultivar: "P. gigantea", targetId: 5, count: 18, stage: "division", started: "5 days ago", estReady: "In 4 weeks", notes: "Slight browning on edges" },
-  { id: "B-103", cultivar: "P. esseriana", targetId: 2, count: 65, stage: "ready", started: "2 months ago", estReady: "Now", notes: "Excellent coloration" },
-  { id: "B-104", cultivar: "P. agnata", targetId: 3, count: 5, stage: "mother", started: "1 year ago", estReady: "N/A", notes: "Ready for division" },
-  { id: "B-105", cultivar: "P. 'Tina'", targetId: 7, count: 30, stage: "division", started: "1 week ago", estReady: "In 3 weeks", notes: "" },
-];
-
-const PROTOCOLS = [
-  { id: 1, type: "Media Recipe", title: "1/2 MS Modification", content: "Modified Murashige and Skoog medium containing 50% macronutrients.", ingredients: ["1/2 MS salts", "30g/L Sucrose", "7g/L Agar", "pH 5.7"], lastUpdated: "March 2024" },
-  { id: 2, type: "Sterilization", title: "Pinguicula Leaf Pulling Sterilization", content: "Standard protocol for surface sterilization of Pinguicula leaf cuttings before initiation.", ingredients: ["10% Bleach (0.5% NaOCl)", "0.1% Tween 20", "Sterile Water x3"], lastUpdated: "April 2024" },
-  { id: 3, type: "Multiplication", title: "High-BA Multiplication Phase", content: "Used for rapid multiplication of recalcitrant species.", ingredients: ["1/2 MS Base", "1.0 mg/L BA", "0.1 mg/L NAA", "pH 5.7"], lastUpdated: "January 2024" }
-];
+function batchBelongsOnColumn(
+  batch: PropagationBatchRow,
+  columnId: string,
+  tissueCultureStagesEnabled: boolean
+): boolean {
+  if (batch.stage === columnId) return true;
+  if (
+    !tissueCultureStagesEnabled &&
+    columnId === "division" &&
+    batch.stage === "establishment"
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export default function Propagation() {
-  const [batchesData, setBatchesData] = useState(BATCHES);
-  const { data: batches, isLoading, isError, isEmpty } = useDataState(batchesData);
-  const { data: protocols, isLoading: protocolsLoading, isError: protocolsError, isEmpty: protocolsEmpty } = useDataState(PROTOCOLS);
+  const [batchesData, setBatchesData] = useState<PropagationBatchRow[]>(() => [...seedPropagationBatches]);
+  const { data: batches, isLoading, isError, isEmpty } = useDataState<PropagationBatchRow>(batchesData);
+  const { data: protocols, isLoading: protocolsLoading, isError: protocolsError, isEmpty: protocolsEmpty } = useDataState<ProtocolRow>([...seedProtocols]);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [view, setView] = useState<"Board" | "Protocols">("Board");
-  const { addToast } = useApp();
+  const { settings, addToast } = useApp();
+  const tcStagesEnabled = settings.tissueCultureStagesEnabled;
+
+  const visibleColumns = useMemo(
+    () =>
+      PROPAGATION_KANBAN_COLUMNS.filter(
+        (col) =>
+          tcStagesEnabled ||
+          !PROPAGATION_TC_KANBAN_COLUMN_IDS.includes(
+            col.id as (typeof PROPAGATION_TC_KANBAN_COLUMN_IDS)[number]
+          )
+      ),
+    [tcStagesEnabled]
+  );
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newBatch, setNewBatch] = useState({ cultivar: "", count: 0, stage: "division" });
+  const [newBatch, setNewBatch] = useState<{ cultivar: string; count: number; stage: PropagationStage }>({
+    cultivar: "",
+    count: 0,
+    stage: PROPAGATION_STAGES[1],
+  });
+
+  useEffect(() => {
+    if (!tcStagesEnabled) {
+      setNewBatch((prev) =>
+        prev.stage === "establishment" ? { ...prev, stage: "division" } : prev
+      );
+    }
+  }, [tcStagesEnabled]);
 
   const handleAddBatch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +85,7 @@ export default function Propagation() {
     };
     setBatchesData([batch, ...batchesData]);
     setIsAddModalOpen(false);
-    setNewBatch({ cultivar: "", count: 0, stage: "division" });
+    setNewBatch({ cultivar: "", count: 0, stage: PROPAGATION_STAGES[1] });
     addToast("Propagation batch added", "success");
   };
 
@@ -91,27 +118,26 @@ export default function Propagation() {
               <span className="hidden md:inline">Add Batch</span>
               <span className="md:hidden">Add</span>
             </Button>
-          ) : (
-            <Button variant="outline" disabled>
-              <ScrollText className="w-4 h-4 mr-2" />
-              Upload SOP
-            </Button>
-          )}
+          ) : null}
         </div>
 
         {view === "Board" && (
           <>
-            <div className="mb-6 shrink-0">
-              <div className="bg-bg-active border border-border-subtle rounded-lg p-2 flex items-center gap-2 text-sm">
-                <AlertCircle className="w-4 h-4 text-text-secondary shrink-0" />
-                <span className="text-text-secondary truncate">Tissue culture stages not enabled in current Kanban view. Enable in Settings.</span>
+            {!tcStagesEnabled && (
+              <div className="mb-6 shrink-0">
+                <div className="bg-bg-active border border-border-subtle rounded-lg p-2 flex items-center gap-2 text-sm">
+                  <AlertCircle className="w-4 h-4 text-text-secondary shrink-0" />
+                  <span className="text-text-secondary truncate">
+                    Tissue culture stages are off in Settings. The Establishment column is hidden; batches in that stage appear under Division and Pullings.
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
               {isLoading ? (
                 <div className="flex h-full gap-6 min-w-full md:min-w-[1000px]  w-full p-2">
-                  {COLUMNS.map((col) => (
+                  {visibleColumns.map((col) => (
                     <div key={col.id} className="flex-1 flex flex-col w-[85vw] md:w-[280px] shrink-0 SNAP_TARGET">
                       <div className="flex items-center justify-between mb-4 px-2 opacity-50">
                         <h3 className="font-medium text-sm text-text-secondary uppercase tracking-wider">{col.title}</h3>
@@ -130,15 +156,15 @@ export default function Propagation() {
                 <div className="h-full items-center justify-center flex"><EmptyState title="No propagation" /></div>
               ) : (
                 <div className="flex h-full gap-6 min-w-max pr-6 pb-24 md:pb-0">
-                  {COLUMNS.map((col) => (
+                  {visibleColumns.map((col) => (
                     <div key={col.id} className="flex-1 flex flex-col w-[85vw] md:w-[280px] shrink-0 snap-center md:snap-none">
                       <div className="flex items-center justify-between mb-4 px-2">
                         <h3 className="font-medium text-sm text-text-secondary uppercase tracking-wider">{col.title}</h3>
-                        <Badge>{batches.filter(b => b.stage === col.id).length}</Badge>
+                        <Badge>{batches.filter((b) => batchBelongsOnColumn(b, col.id, tcStagesEnabled)).length}</Badge>
                       </div>
                       
                       <div className="flex-1 overflow-y-auto space-y-3 bg-bg-base/50 rounded-xl p-2 border border-border-subtle/30">
-                        {batches.filter(b => b.stage === col.id).map(batch => (
+                        {batches.filter((b) => batchBelongsOnColumn(b, col.id, tcStagesEnabled)).map(batch => (
                           <Card 
                             key={batch.id} 
                             className={cn(
@@ -252,7 +278,7 @@ export default function Propagation() {
                 <h2 className="text-xl font-semibold mb-2">Batch {selectedBatch.id}</h2>
                 <div className="flex items-center gap-2 text-sm text-text-secondary">
                    <div className="w-2 h-2 rounded-full bg-status-info"></div>
-                   <span>{COLUMNS.find(c => c.id === selectedBatch.stage)?.title}</span>
+                   <span>{PROPAGATION_KANBAN_COLUMNS.find(c => c.id === selectedBatch.stage)?.title}</span>
                 </div>
               </div>
               <button 
@@ -293,7 +319,7 @@ export default function Propagation() {
                     
                     <div className="relative">
                       <div className="absolute -left-[27px] w-3 h-3 rounded-full bg-status-info ring-4 ring-bg-base/20 mt-2"></div>
-                      <div className="font-medium">{COLUMNS.find(c => c.id === selectedBatch.stage)?.title}</div>
+                      <div className="font-medium">{PROPAGATION_KANBAN_COLUMNS.find(c => c.id === selectedBatch.stage)?.title}</div>
                       <div className="text-sm text-text-secondary">Current Stage</div>
                     </div>
                     
@@ -337,13 +363,12 @@ export default function Propagation() {
                   <label className="text-sm font-medium">Stage</label>
                   <select
                      value={newBatch.stage}
-                     onChange={(e) => setNewBatch({...newBatch, stage: e.target.value})}
+                     onChange={(e) => setNewBatch({ ...newBatch, stage: e.target.value as PropagationStage })}
                      className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-brand focus:border-transparent"
                   >
-                     <option value="mother">Mother Plants</option>
-                     <option value="division">Division & Pullings</option>
-                     <option value="establishment">Establishment</option>
-                     <option value="ready">Ready for Sale</option>
+                     {visibleColumns.map((col) => (
+                       <option key={col.id} value={col.id}>{col.title}</option>
+                     ))}
                   </select>
                 </div>
                 <div className="space-y-2">

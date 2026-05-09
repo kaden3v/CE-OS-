@@ -1,0 +1,59 @@
+# Pinned action SHAs — Renovate `pinDigests` will propose digest bumps on its own schedule.
+name: Security audit
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 12 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  audit-and-gitleaks:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.21.2"
+      # Override with your mirror if required, e.g. s3://bucket/gitleaks_${VERSION}_linux_x64.tar.gz (ensure CI can fetch it)
+      GITLEAKS_DOWNLOAD_URL: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (production, fail on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          V="${GITLEAKS_VERSION}"
+          if [[ -n "${GITLEAKS_DOWNLOAD_URL}" ]]; then
+            URL="${GITLEAKS_DOWNLOAD_URL}"
+          else
+            URL="https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz"
+          fi
+          curl -sSfL "$URL" | tar -xz
+          sudo install -m755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Gitleaks — PR commit range
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          gitleaks detect --source . --verbose --redact --log-opts="${BASE}..${HEAD}"
+
+      - name: Gitleaks — full tree (scheduled)
+        if: github.event_name == 'schedule'
+        run: gitleaks detect --source . --verbose --redact

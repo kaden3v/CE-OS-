@@ -1,0 +1,34 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "UTC",
+  "schedule": ["before 6am on Sunday"],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "pinDigests": true,
+  "packageRules": [
+    {
+      "description": "Single grouped PR for all npm minor/patch bumps",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major"
+    },
+    {
+      "description": "Major bumps: isolated PRs (not in all non-major group), needs dashboard approval",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Auto-merge only safe dev patch bumps (requires GitHub auto-merge + passing checks)",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    }
+  ]
+}

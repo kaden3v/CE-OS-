@@ -1,7 +1,50 @@
 import React from "react";
-import { cn } from "@/lib/utils";
+import type { CSSProperties } from "react";
+import type { LucideIcon } from "lucide-react";
 import { AlertCircle, FileSearch, Filter } from "lucide-react";
 import { Button } from "./Button";
+
+export type DataViewState = "loading" | "error" | "empty" | "ready";
+
+export function resolveDataViewState(
+  isLoading: boolean,
+  isError: boolean,
+  isEmpty: boolean
+): DataViewState {
+  if (isLoading) return "loading";
+  if (isError) return "error";
+  if (isEmpty) return "empty";
+  return "ready";
+}
+
+export type StateRendererProps<T> = {
+  state: DataViewState;
+  data: T;
+  children: (data: T) => React.ReactNode;
+  errorFallback?: React.ReactNode;
+  emptyFallback?: React.ReactNode;
+  loadingFallback?: React.ReactNode;
+};
+
+export function StateRenderer<T>({
+  state,
+  data,
+  children,
+  errorFallback,
+  emptyFallback,
+  loadingFallback,
+}: StateRendererProps<T>) {
+  if (state === "loading") {
+    return <>{loadingFallback ?? null}</>;
+  }
+  if (state === "error") {
+    return <>{errorFallback ?? <ErrorState />}</>;
+  }
+  if (state === "empty") {
+    return <>{emptyFallback ?? <EmptyState />}</>;
+  }
+  return <>{children(data)}</>;
+}
 
 export function LoadingTable({ rows = 8, cols = 5 }: { rows?: number; cols?: number }) {
   return (
@@ -21,7 +64,16 @@ export function LoadingTable({ rows = 8, cols = 5 }: { rows?: number; cols?: num
             <tr key={i} className="border-b border-border-subtle/50 last:border-0">
               {Array.from({ length: cols }).map((_, j) => (
                 <td key={j} className="px-4 py-2">
-                  <div className="h-4 bg-bg-elevated rounded animate-pulse" style={{ width: `${Math.random() * 60 + 20}%`, animationDuration: '1.2s', '--tw-pulse-opacity': '0.6' } as any} />
+                  <div
+                    className="h-4 bg-bg-elevated rounded animate-pulse"
+                    style={
+                      {
+                        width: `${Math.random() * 60 + 20}%`,
+                        animationDuration: "1.2s",
+                        ["--tw-pulse-opacity"]: "0.6",
+                      } as CSSProperties
+                    }
+                  />
                 </td>
               ))}
             </tr>
@@ -48,7 +100,7 @@ export function ErrorState({ title = "Couldn't load data", description = "There 
   );
 }
 
-export function EmptyState({ icon: Icon = FileSearch, title = "No results", description = "No items match your criteria.", action }: { icon?: any, title?: string, description?: string, action?: React.ReactNode }) {
+export function EmptyState({ icon: Icon = FileSearch, title = "No results", description = "No items match your criteria.", action }: { icon?: LucideIcon, title?: string, description?: string, action?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center p-12 text-center h-[300px] bg-bg-elevated backdrop-blur-md rounded-lg">
       <div className="w-24 h-24 rounded-2xl border border-border-subtle flex items-center justify-center mb-6 bg-bg-base/50">

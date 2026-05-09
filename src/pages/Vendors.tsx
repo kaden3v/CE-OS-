@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { DataTable } from "@/components/ui/DataTable";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, ErrorState, EmptyState, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 import { Store, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useApp } from "@/contexts/AppContext";
@@ -16,6 +16,8 @@ const INITIAL_VENDORS = [
   { id: 4, name: "Amazon Business", category: "Supplies", ytd: 340.25, lastOrder: "3 weeks ago", contact: "N/A" },
   { id: 5, name: "Sphagnum Moss Co.", category: "Media", ytd: 290.00, lastOrder: "2 months ago", contact: "orders@moss.com" },
 ];
+
+type VendorRow = (typeof INITIAL_VENDORS)[number];
 
 export default function Vendors() {
   const [vendors, setVendors] = useState(INITIAL_VENDORS);
@@ -48,31 +50,31 @@ export default function Vendors() {
     addToast({ title: "Vendor Added", description: `${newName} has been added to your directory.`, status: "success" });
   };
 
-  const columns = useMemo(() => [
+  const columns = useMemo((): DataTableColumn<VendorRow>[] => [
     {
-      accessorKey: "name",
+      key: "name",
       header: "Name",
-      cell: (info: any) => <span className="font-medium">{info.getValue()}</span>,
+      render: (row) => <span className="font-medium">{row.name}</span>,
     },
     {
-      accessorKey: "category",
+      key: "category",
       header: "Category",
-      cell: (info: any) => <Badge>{info.getValue()}</Badge>,
+      render: (row) => <Badge>{row.category}</Badge>,
     },
     {
-      accessorKey: "ytd",
+      key: "ytd",
       header: "Total Spent YTD",
-      cell: (info: any) => <span className="tabular-nums">${info.getValue().toFixed(2)}</span>,
+      render: (row) => <span className="tabular-nums">${row.ytd.toFixed(2)}</span>,
     },
     {
-      accessorKey: "lastOrder",
+      key: "lastOrder",
       header: "Last Order",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.lastOrder}</span>,
     },
     {
-      accessorKey: "contact",
+      key: "contact",
       header: "Contact",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.contact}</span>,
     },
   ], []);
 
@@ -90,17 +92,22 @@ export default function Vendors() {
       </div>
 
       <Card className="flex-1 overflow-auto flex flex-col">
-        {isLoading && <LoadingTable cols={5} rows={8} />}
-        {isError && <ErrorState />}
-        {!isLoading && !isError && isEmpty && (
-          <EmptyState 
-            icon={Store} 
-            title="No vendors yet" 
-            description="Directory of suppliers, nurseries, and service providers." 
-            action={<Button variant="outline" onClick={() => setIsModalOpen(true)}>Add Vendor</Button>}
-          />
-        )}
-        {!isLoading && !isError && !isEmpty && <DataTable columns={columns} data={data} />}
+        <StateRenderer
+          state={resolveDataViewState(isLoading, isError, isEmpty)}
+          data={data}
+          loadingFallback={<LoadingTable cols={5} rows={8} />}
+          errorFallback={<ErrorState />}
+          emptyFallback={(
+            <EmptyState
+              icon={Store}
+              title="No vendors yet"
+              description="Directory of suppliers, nurseries, and service providers."
+              action={<Button variant="outline" onClick={() => setIsModalOpen(true)}>Add Vendor</Button>}
+            />
+          )}
+        >
+          {(rows) => <DataTable columns={columns} data={rows} />}
+        </StateRenderer>
       </Card>
 
       {/* Add Vendor Modal */}

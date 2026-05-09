@@ -1,35 +1,27 @@
 import React, { useState, useMemo } from "react";
-import { DataTable } from "@/components/ui/DataTable";
+import { GoogleGenAI } from "@google/genai";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Plus, X, Search, Heart, Edit, MoreVertical, ExternalLink, ChevronDown } from "lucide-react";
+import { Plus, X, Heart, Edit, ExternalLink, ChevronDown } from "lucide-react";
 import { Link } from "react-router";
 import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, ErrorState, EmptyState, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
+import { sanitizeHTML } from "@/lib/sanitize";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
-
-const CULTIVARS = [
-  { id: 1, name: "Pinguicula 'Pirouette'", common: "Pirouette", genus: "Pinguicula", origin: "Hybrid", acquired: "2023-04-12", active: true, notes: "Fast growing, vigorous.", listed: true },
-  { id: 2, name: "P. agnata 'El Lobo'", common: "El Lobo", genus: "Pinguicula", origin: "Mexico", acquired: "2024-01-05", active: true, notes: "Needs dry winter rest.", listed: false },
-  { id: 3, name: "Pinguicula 'Johanna'", common: "P. agnata × P. debbertiana", genus: "Pinguicula", origin: "Hybrid", acquired: "2023-11-20", active: true, notes: "", listed: true },
-  { id: 4, name: "Pinguicula gigantea", common: "Giant Butterwort", genus: "Pinguicula", origin: "Mexico", acquired: "2022-09-14", active: true, notes: "Sticky on both sides of leaves.", listed: false },
-  { id: 5, name: "Pinguicula moranensis", common: "Mexican Butterwort", genus: "Pinguicula", origin: "Mexico", acquired: "2022-05-10", active: true, notes: "", listed: true },
-  { id: 6, name: "Pinguicula agnata", common: "Agnata", genus: "Pinguicula", origin: "Mexico", acquired: "2023-02-18", active: true, notes: "", listed: false },
-  { id: 7, name: "Pinguicula debbertiana", common: "Debbertiana", genus: "Pinguicula", origin: "Mexico", acquired: "2024-03-01", active: true, notes: "", listed: false },
-  { id: 8, name: "Pinguicula 'Tina'", common: "Tina", genus: "Pinguicula", origin: "Hybrid (Zecheri x Agnata)", acquired: "2023-08-30", active: true, notes: "", listed: true },
-  { id: 9, name: "Pinguicula 'Sethos'", common: "Sethos", genus: "Pinguicula", origin: "Hybrid (Ehlersiae x Moranensis)", acquired: "2023-07-15", active: true, notes: "", listed: false },
-  { id: 10, name: "Pinguicula esseriana", common: "Esseriana", genus: "Pinguicula", origin: "Mexico", acquired: "2023-10-05", active: true, notes: "", listed: false },
-  { id: 11, name: "Drosera capensis 'Red'", common: "Red Cape Sundew", genus: "Drosera", origin: "South Africa", acquired: "2022-06-20", active: true, notes: "Weed.", listed: false },
-];
+import { seedCultivars } from "@/lib/mockData";
+import { todayDateOnly } from "@/lib/dates";
 
 const VIEWS = ["All cultivars", "Active", "Mother stock", "Hybrids only"];
 
-function LineageTree({ cultivar }: { cultivar: any }) {
+type CultivarRow = (typeof seedCultivars)[number];
+
+function LineageTree({ cultivar }: { cultivar: CultivarRow }) {
   if (cultivar.id !== 3) {
     return (
       <div className="flex flex-col items-center justify-center p-8 border border-dashed border-border-subtle rounded-xl text-center">
@@ -97,15 +89,20 @@ function GrowthGallery() {
 }
 
 export default function Cultivars() {
-  const [cultivarsData, setCultivarsData] = useState(CULTIVARS);
+  const [cultivarsData, setCultivarsData] = useState<CultivarRow[]>(() => [...seedCultivars]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("Overview");
   const [currentView, setCurrentView] = useState(VIEWS[0]);
-  const { data, isLoading, isError, isEmpty } = useDataState(cultivarsData);
-  const { addToast } = useApp();
+  const [generatingCareNotesId, setGeneratingCareNotesId] = useState<number | null>(null);
+  const { data, isLoading, isError, isEmpty } = useDataState<CultivarRow>(cultivarsData);
+  const { addToast, settings } = useApp();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newCultivar, setNewCultivar] = useState({ name: "", common: "", genus: "Pinguicula", origin: "" });
+
+  const updateCultivar = (id: number, patch: Partial<CultivarRow>) => {
+    setCultivarsData((prev) => prev.map((cultivar) => (cultivar.id === id ? { ...cultivar, ...patch } : cultivar)));
+  };
 
   const handleAddCultivar = (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,50 +112,122 @@ export default function Cultivars() {
       common: newCultivar.common,
       genus: newCultivar.genus,
       origin: newCultivar.origin,
-      acquired: new Date().toISOString().split('T')[0],
+      acquired: todayDateOnly(settings.operatorTimezone),
       active: true,
       notes: "",
+      careNotes: "",
       listed: false
     };
     setCultivarsData([cultivar, ...cultivarsData]);
     setIsAddModalOpen(false);
     setNewCultivar({ name: "", common: "", genus: "Pinguicula", origin: "" });
-    addToast("Cultivar added successfully", "success");
+    addToast({ title: "Cultivar added successfully", status: "ok" });
+  };
+
+  const handleGenerateCareNotesDraft = async (cultivar: CultivarRow) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+    if (!apiKey) {
+      addToast({
+        title: "Missing Gemini API key",
+        description: "Set VITE_GEMINI_API_KEY to generate care notes drafts.",
+        status: "alert",
+      });
+      return;
+    }
+
+    setGeneratingCareNotesId(cultivar.id);
+    updateCultivar(cultivar.id, { careNotes: "" });
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContentStream({
+        model: "gemini-2.5-flash",
+        contents: [
+          "Draft concise, practical care notes for a solo nursery operator.",
+          "Focus on light, water, substrate, dormancy/seasonal behavior, and heat management.",
+          "Use plain language that can be edited before publishing.",
+          `Cultivar name: ${cultivar.name}`,
+          cultivar.common ? `Common name: ${cultivar.common}` : "Common name: none provided",
+          "Context: Chandler, AZ -- hot desert climate; primarily indoor cultivation",
+        ].join("\n"),
+        config: {
+          temperature: 0.4,
+          maxOutputTokens: 500,
+        },
+      });
+
+      let draft = "";
+      for await (const chunk of response) {
+        const text = chunk.text;
+        if (!text) continue;
+
+        draft += text;
+        updateCultivar(cultivar.id, { careNotes: draft });
+      }
+
+      if (draft.trim()) {
+        const { clean, wasModified } = sanitizeHTML(draft, { strict: false });
+        updateCultivar(cultivar.id, { careNotes: clean });
+        if (wasModified) {
+          addToast({
+            title: "Content was sanitized — review before saving",
+            description:
+              "We removed unsafe markup from the Gemini draft. Edit the text before relying on it.",
+            status: "info",
+          });
+        }
+      } else {
+        addToast({
+          title: "No care notes returned",
+          description: "Gemini completed without returning text. Try again in a moment.",
+          status: "warn",
+        });
+      }
+    } catch {
+      addToast({
+        title: "Could not generate care notes",
+        description: "Gemini failed to return a draft. Check the API key and try again.",
+        status: "alert",
+      });
+    } finally {
+      setGeneratingCareNotesId(null);
+    }
   };
 
   const selectedCultivar = useMemo(() => cultivarsData.find(c => c.id === selectedId), [cultivarsData, selectedId]);
 
-  const columns = useMemo(() => [
+  const columns = useMemo((): DataTableColumn<CultivarRow>[] => [
     {
-      accessorKey: "name",
+      key: "name",
       header: "Name",
-      cell: (info: any) => <CultivarName name={info.getValue()} className="font-medium  text-text-primary" />,
+      render: (row) => <CultivarName name={row.name} className="font-medium  text-text-primary" />,
     },
     {
-      accessorKey: "common",
+      key: "common",
       header: "Common Name",
     },
     {
-      accessorKey: "genus",
+      key: "genus",
       header: "Genus",
-      cell: (info: any) => <Badge>{info.getValue()}</Badge>,
+      render: (row) => <Badge>{row.genus}</Badge>,
     },
     {
-      accessorKey: "origin",
+      key: "origin",
       header: "Origin",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.origin}</span>,
     },
     {
-      accessorKey: "acquired",
+      key: "acquired",
       header: "First Acquired",
-      cell: (info: any) => <span className="text-text-secondary tabular-nums">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary tabular-nums">{row.acquired}</span>,
     },
     {
-      accessorKey: "active",
+      key: "active",
       header: "Active",
-      cell: (info: any) => (
-        <Badge variant={info.getValue() ? "brand" : "default"}>
-          {info.getValue() ? "Yes" : "No"}
+      render: (row) => (
+        <Badge variant={row.active ? "brand" : "default"}>
+          {row.active ? "Yes" : "No"}
         </Badge>
       ),
     },
@@ -173,8 +242,6 @@ export default function Cultivars() {
             <p className="text-sm text-text-secondary">Manage master records for all cultivated species and hybrids.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/cultivars/breeding"><Button variant="outline">Breeding Tracker</Button></Link>
-            <Link to="/cultivars/profit"><Button variant="outline">Profit Analysis</Button></Link>
             <Button variant="brand" onClick={() => setIsAddModalOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Cultivar
@@ -193,19 +260,21 @@ export default function Cultivars() {
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
            </div>
-           <Button variant="ghost" size="sm" className="text-text-tertiary" onClick={() => addToast("View preset saved.", "success")}>Save as view</Button>
+           <Button variant="ghost" size="sm" className="text-text-tertiary" onClick={() => addToast({ title: "View preset saved.", status: "ok" })}>Save as view</Button>
         </div>
 
         <Card className="flex-1 overflow-auto flex flex-col">
-          {isLoading ? (
-             <LoadingTable cols={6} rows={15} />
-          ) : isError ? (
-             <ErrorState />
-          ) : isEmpty ? (
-             <EmptyState title="No cultivars yet" description="Add the first one to begin tracking parentage and care." action={<Button variant="brand" onClick={() => setIsAddModalOpen(true)}>Add Cultivar</Button>} />
-          ) : (
-            <DataTable columns={columns} data={data} onRowClick={(row) => setSelectedId(row.id)} />
-          )}
+          <StateRenderer
+            state={resolveDataViewState(isLoading, isError, isEmpty)}
+            data={data}
+            loadingFallback={<LoadingTable cols={6} rows={15} />}
+            errorFallback={<ErrorState />}
+            emptyFallback={<EmptyState title="No cultivars yet" description="Add the first one to begin tracking parentage and care." action={<Button variant="brand" onClick={() => setIsAddModalOpen(true)}>Add Cultivar</Button>} />}
+          >
+            {(rows) => (
+              <DataTable columns={columns} data={rows} onRowClick={(row) => setSelectedId(row.id)} />
+            )}
+          </StateRenderer>
         </Card>
       </div>
 
@@ -295,6 +364,31 @@ export default function Cultivars() {
                      ) : (
                         <p className="text-sm text-text-tertiary italic">No notes added.</p>
                      )}
+                  </section>
+
+                  {/* Care Notes */}
+                  <section>
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div>
+                        <h3 className="text-xs uppercase tracking-wide text-text-secondary">Care notes</h3>
+                        <p className="text-xs text-text-tertiary mt-1">Editable draft for climate-specific care guidance.</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        loading={generatingCareNotesId === selectedCultivar.id}
+                        onClick={() => handleGenerateCareNotesDraft(selectedCultivar)}
+                      >
+                        {generatingCareNotesId === selectedCultivar.id ? "Generating..." : "Generate care notes draft"}
+                      </Button>
+                    </div>
+                    <textarea
+                      rows={9}
+                      className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-strong resize-y"
+                      placeholder="Add care notes for light, water, media, dormancy, and desert heat handling."
+                      value={selectedCultivar.careNotes}
+                      onChange={(e) => updateCultivar(selectedCultivar.id, { careNotes: e.target.value })}
+                    />
                   </section>
 
                    {/* Associated Links */}

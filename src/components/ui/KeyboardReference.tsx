@@ -1,8 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect } from "react";
-import { cn } from "@/lib/utils";
-
 interface Props {
   open: boolean;
   onClose: () => void;

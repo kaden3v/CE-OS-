@@ -1,13 +1,12 @@
 import React, { useState, useMemo } from "react";
-import { DataTable } from "@/components/ui/DataTable";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Plus, Package, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CultivarName } from "@/components/ui/CultivarName";
 import { useDataState } from "@/hooks/useDataState";
-import { EmptyState, ErrorState, LoadingTable } from "@/components/ui/StateRenderer";
+import { EmptyState, ErrorState, LoadingTable, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 
@@ -18,10 +17,12 @@ const RECEIPTS = [
   { id: "REC-2404", date: "Oct 08", vendor: "Customer Return", items: "Order ORD-1102 (Damaged in transit)", status: "Processing", type: "Return" },
 ];
 
+type ReceiptRow = (typeof RECEIPTS)[number];
+
 export default function Receiving() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [receiptsData, setReceiptsData] = useState(RECEIPTS);
-  const { data, isLoading, isError, isEmpty } = useDataState(receiptsData);
+  const [receiptsData, setReceiptsData] = useState<ReceiptRow[]>(RECEIPTS);
+  const { data, isLoading, isError, isEmpty } = useDataState<ReceiptRow>(receiptsData);
   const { addToast } = useApp();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newReceipt, setNewReceipt] = useState({ vendor: "", items: "", type: "Supplies" });
@@ -45,18 +46,18 @@ export default function Receiving() {
 
   const selectedReceipt = useMemo(() => data.find(r => r.id === selectedId), [data, selectedId]);
 
-  const columns = useMemo(() => [
-    { accessorKey: "id", header: "Receipt ID", cell: (info: any) => <span className="font-mono text-xs text-text-secondary">{info.getValue()}</span> },
-    { accessorKey: "date", header: "Date" },
-    { accessorKey: "vendor", header: "Source/Vendor", cell: (info: any) => <span className="font-medium">{info.getValue()}</span> },
-    { accessorKey: "type", header: "Type", cell: (info: any) => <Badge variant="outline">{info.getValue()}</Badge> },
-    { accessorKey: "items", header: "Items Received" },
-    { 
-       accessorKey: "status", 
-       header: "Status",
-       cell: (info: any) => (
-          <Badge variant={info.getValue() === "Received" ? "brand" : "default"}>{info.getValue()}</Badge>
-       )
+  const columns = useMemo((): DataTableColumn<ReceiptRow>[] => [
+    { key: "id", header: "Receipt ID", render: (row) => <span className="font-mono text-xs text-text-secondary">{row.id}</span> },
+    { key: "date", header: "Date" },
+    { key: "vendor", header: "Source/Vendor", render: (row) => <span className="font-medium">{row.vendor}</span> },
+    { key: "type", header: "Type", render: (row) => <Badge variant="outline">{row.type}</Badge> },
+    { key: "items", header: "Items Received" },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <Badge variant={row.status === "Received" ? "brand" : "default"}>{row.status}</Badge>
+      ),
     },
   ], []);
 
@@ -75,15 +76,17 @@ export default function Receiving() {
         </div>
 
         <Card className="flex-1 overflow-auto flex flex-col">
-          {isLoading ? (
-             <LoadingTable cols={6} rows={15} />
-          ) : isError ? (
-             <ErrorState />
-          ) : isEmpty ? (
-             <EmptyState icon={Package} title="No Incoming Shipments" description="Nothing is pending receipt." />
-          ) : (
-            <DataTable columns={columns} data={data} onRowClick={(row) => setSelectedId(row.id)} />
-          )}
+          <StateRenderer
+            state={resolveDataViewState(isLoading, isError, isEmpty)}
+            data={data}
+            loadingFallback={<LoadingTable cols={6} rows={15} />}
+            errorFallback={<ErrorState />}
+            emptyFallback={<EmptyState icon={Package} title="No Incoming Shipments" description="Nothing is pending receipt." />}
+          >
+            {(rows) => (
+              <DataTable columns={columns} data={rows} onRowClick={(row) => setSelectedId(row.id)} />
+            )}
+          </StateRenderer>
         </Card>
       </div>
 
@@ -148,8 +151,7 @@ export default function Receiving() {
                {selectedReceipt.status === "Quarantined" && (
                  <section className="bg-status-warn/10 p-4 rounded-xl border border-status-warn/20">
                     <h3 className="text-sm font-medium mb-2 text-status-warn">Currently in Quarantine</h3>
-                    <p className="text-sm text-text-secondary mb-4">Live plants must wait 14 days in isolation before moving to main inventory.</p>
-                    <Button variant="outline" className="w-full" disabled>Release from Quarantine (14 days left)</Button>
+                    <p className="text-sm text-text-secondary">Live plants must wait 14 days in isolation before moving to main inventory. Release timing is tracked outside this app for now.</p>
                  </section>
               )}
             </div>

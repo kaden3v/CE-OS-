@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router";
-import { DataTable } from "@/components/ui/DataTable";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Printer, CheckCircle2, FileSearch } from "lucide-react";
-import { CultivarName } from "@/components/ui/CultivarName";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
+import { EmptyState, StateRenderer } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 
 const INITIAL_QUEUE = [
@@ -16,8 +15,10 @@ const INITIAL_QUEUE = [
   { id: "LBL-105", type: "Shipping Label", target: "ORD-1200", status: "printed", time: "9:46 AM" },
 ];
 
+type PrintJobRow = (typeof INITIAL_QUEUE)[number];
+
 export default function PrintQueue() {
-  const [queue, setQueue] = useState(INITIAL_QUEUE);
+  const [queue, setQueue] = useState<PrintJobRow[]>(INITIAL_QUEUE);
   const [isPrinting, setIsPrinting] = useState(false);
   const { addToast } = useApp();
 
@@ -36,23 +37,23 @@ export default function PrintQueue() {
     }, 1500);
   };
 
-  const columns = useMemo(() => [
-    { accessorKey: "id", header: "ID", cell: (info: any) => <span className="font-mono text-xs">{info.getValue()}</span> },
-    { accessorKey: "type", header: "Document Type" },
-    { accessorKey: "target", header: "Related Order" },
-    { accessorKey: "time", header: "Time Queued", cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span> },
-    { 
-      accessorKey: "status", 
+  const columns = useMemo((): DataTableColumn<PrintJobRow>[] => [
+    { key: "id", header: "ID", render: (row) => <span className="font-mono text-xs">{row.id}</span> },
+    { key: "type", header: "Document Type" },
+    { key: "target", header: "Related Order" },
+    { key: "time", header: "Time Queued", render: (row) => <span className="text-text-secondary">{row.time}</span> },
+    {
+      key: "status",
       header: "Status",
-      cell: (info: any) => {
-        const isPending = info.getValue() === "pending";
+      render: (row) => {
+        const isPending = row.status === "pending";
         return (
           <div className={`flex items-center gap-2 ${isPending ? "text-status-warn" : "text-status-ok"}`}>
             {isPending ? <Printer className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            <span className="capitalize">{info.getValue()}</span>
+            <span className="capitalize">{row.status}</span>
           </div>
         );
-      }
+      },
     },
   ], []);
 
@@ -94,15 +95,19 @@ export default function PrintQueue() {
       </div>
 
       <Card className="flex-1 overflow-auto flex flex-col">
-        {isEmpty ? (
-          <EmptyState 
-            icon={Printer} 
-            title="Empty queue" 
-            description="Nothing is waiting to be printed." 
-          />
-        ) : (
-          <DataTable columns={columns} data={queue} />
-        )}
+        <StateRenderer
+          state={isEmpty ? "empty" : "ready"}
+          data={queue}
+          emptyFallback={(
+            <EmptyState
+              icon={Printer}
+              title="Empty queue"
+              description="Nothing is waiting to be printed."
+            />
+          )}
+        >
+          {(rows) => <DataTable columns={columns} data={rows} />}
+        </StateRenderer>
       </Card>
     </div>
   );

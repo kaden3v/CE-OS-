@@ -13,21 +13,22 @@ import {
   Store,
   FileSpreadsheet,
   FileBadge,
-  History,
   Settings,
   Bell,
   Search,
-  ChevronRight,
   ChevronDown,
   Clock,
   Menu,
   List,
   CheckSquare,
+  LogOut,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
-import { Input } from "./ui/Input";
+import { cn, operatorInitials } from "@/lib/utils";
+import { getRawItem } from "@/lib/storage";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { CommandPalette } from "./ui/CommandPalette";
 import { NotificationCenter } from "./ui/NotificationCenter";
 import { TasksPanel } from "./ui/TasksPanel";
 import { KeyboardReference } from "./ui/KeyboardReference";
@@ -64,9 +65,31 @@ export function Layout() {
   const [tasksOpen, setTasksOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [keyboardRefOpen, setKeyboardRefOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { setCommandPaletteOpen, notifications, tasks, settings, addToast } = useApp();
+  const { user, signOut } = useAuth();
+  const {
+    setCommandPaletteOpen,
+    notifications,
+    tasks,
+    settings,
+    addToast,
+    storageRecoveryIssues,
+    resolveStorageRecoveryIssue,
+  } = useApp();
+
+  const handleDownloadEntityBackup = (resource: string, backupKey: string) => {
+    const raw = getRawItem(backupKey);
+    const blob = new Blob([raw ?? ""], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${backupKey.replace(/[^\w.-]+/g, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    resolveStorageRecoveryIssue(resource);
+  };
 
   const isFinancesActive = location.pathname.startsWith("/finances");
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -129,11 +152,15 @@ export function Layout() {
     return parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ")).join(" / ");
   };
 
+  const operatorEmail = user?.email ?? "";
+  const initials = operatorEmail ? operatorInitials(operatorEmail) : "?";
+
   return (
     <div className={cn(
       "flex h-screen bg-bg-base text-text-primary overflow-hidden",
       settings.density === 'compact' ? 'font-compact' : '' 
     )}>
+      <CommandPalette />
       {/* Sidebar - hidden on mobile and when printing */}
       <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-20 no-print">
         <div className="p-6 pb-2">
@@ -218,18 +245,6 @@ export function Layout() {
           >
             <FileBadge className="w-5 h-5 opacity-70" strokeWidth={1.5} />
             Licenses
-          </NavLink>
-          <NavLink
-            to="/audit"
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors",
-                isActive ? "bg-bg-active text-text-primary border-l-2 border-accent-brand rounded-l-none" : "text-text-secondary"
-              )
-            }
-          >
-            <History className="w-5 h-5 opacity-70" strokeWidth={1.5} />
-            Audit Log
           </NavLink>
         </nav>
         
@@ -316,11 +331,77 @@ export function Layout() {
               )}
             </button>
             <NotificationCenter open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
-            <div className="hidden md:flex w-8 h-8 rounded bg-bg-active items-center justify-center border border-border-subtle font-medium text-sm text-text-primary select-none cursor-pointer hover:bg-bg-hover transition-colors">
-              KC
+            <div className="relative flex items-center">
+              <button
+                type="button"
+                aria-expanded={accountMenuOpen}
+                aria-haspopup="menu"
+                className="flex w-9 h-9 rounded-full bg-bg-active items-center justify-center border border-border-subtle font-medium text-xs text-text-primary select-none cursor-pointer hover:bg-bg-hover transition-colors"
+                onClick={() => setAccountMenuOpen((o) => !o)}
+              >
+                {initials}
+              </button>
+              {accountMenuOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default"
+                    aria-label="Close menu"
+                    onClick={() => setAccountMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-2 z-50 min-w-[200px] rounded-lg border border-border-subtle bg-bg-elevated shadow-lg py-1 text-sm"
+                  >
+                    <div className="px-3 py-2 border-b border-border-subtle text-xs text-text-tertiary truncate">
+                      {operatorEmail || "Signed in"}
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-text-primary hover:bg-bg-hover"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        void signOut();
+                      }}
+                    >
+                      <LogOut className="w-4 h-4 opacity-70" strokeWidth={1.5} />
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </header>
+
+        {storageRecoveryIssues.length > 0 && (
+          <div
+            role="alert"
+            className="flex-shrink-0 border-b border-status-warn/40 bg-status-warn/10 px-4 py-3 text-sm text-text-primary"
+          >
+            {storageRecoveryIssues.map((issue) => (
+              <div
+                key={issue.resource}
+                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <p className="text-pretty pr-2">
+                  Stored data for <span className="font-semibold">{issue.resource}</span> couldn&apos;t be read. A backup was saved locally.
+                  Loading defaults until you restore valid data.
+                </p>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md border border-status-warn/50 bg-bg-elevated px-3 py-2 text-xs font-medium hover:bg-bg-hover"
+                  onClick={() =>
+                    handleDownloadEntityBackup(issue.resource, issue.backupKey)
+                  }
+                >
+                  Download backup
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto relative z-0 pb-16 md:pb-0">
@@ -372,14 +453,13 @@ export function Layout() {
                   </div>
                </div>
                <div>
-                  <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Finances & Audit</h3>
+                  <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Finances</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/expenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Receipt className="w-4 h-4 text-text-secondary"/> Expenses</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/supplies" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><PackageOpen className="w-4 h-4 text-text-secondary"/> Supplies</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/vendors" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Store className="w-4 h-4 text-text-secondary"/> Vendors</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/tax-report" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileSpreadsheet className="w-4 h-4 text-text-secondary"/> Tax Report</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/licenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileBadge className="w-4 h-4 text-text-secondary"/> Licenses</NavLink>
-                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/audit" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><History className="w-4 h-4 text-text-secondary"/> Audit Log</NavLink>
                   </div>
                </div>
                <div>

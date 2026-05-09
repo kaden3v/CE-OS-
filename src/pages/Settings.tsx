@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { useApp } from "@/contexts/AppContext";
+import { useNavigate } from "react-router";
 import { Keyboard, TerminalSquare } from "lucide-react";
 
 export default function Settings() {
+  const navigate = useNavigate();
   const { settings, updateSettings, setCommandPaletteOpen, addToast } = useApp();
 
   const toggleSetting = (key: keyof typeof settings) => {
@@ -58,6 +60,15 @@ export default function Settings() {
         <section>
           <h2 className="text-lg font-medium mb-4">Display</h2>
           <Card className="divide-y divide-border-subtle p-0">
+            <div className="p-4 flex items-center justify-between hover:bg-bg-hover transition-colors cursor-pointer" onClick={() => toggleSetting('tissueCultureStagesEnabled')}>
+              <div>
+                <div className="font-medium text-sm">Tissue culture stages</div>
+                <div className="text-xs text-text-secondary mt-2">Show the Establishment column on the Propagation board for lab / TC workflow. When off, those batches appear under Division.</div>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-2 transition-colors ${settings.tissueCultureStagesEnabled ? 'bg-accent-brand' : 'bg-bg-active border border-border-strong'}`}>
+                <div className={`w-4 h-4 rounded-full bg-text-primary transition-transform ${settings.tissueCultureStagesEnabled ? 'translate-x-4' : ''}`}></div>
+              </div>
+            </div>
             <div className="p-4 flex items-center justify-between hover:bg-bg-hover transition-colors cursor-pointer" onClick={() => updateSettings({ density: settings.density === 'comfortable' ? 'compact' : 'comfortable' })}>
               <div>
                 <div className="font-medium text-sm">Compact Density</div>
@@ -66,6 +77,27 @@ export default function Settings() {
               <div className={`w-10 h-6 rounded-full p-2 transition-colors ${settings.density === 'compact' ? 'bg-accent-brand' : 'bg-bg-active border border-border-strong'}`}>
                 <div className={`w-4 h-4 rounded-full bg-text-primary transition-transform ${settings.density === 'compact' ? 'translate-x-4' : ''}`}></div>
               </div>
+            </div>
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="font-medium text-sm">Operator timezone</div>
+                <div className="text-xs text-text-secondary mt-2">
+                  Dates and times display in this zone (shop: America/Phoenix — MST, no DST).
+                </div>
+              </div>
+              <select
+                aria-label="Operator timezone"
+                className="bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm min-w-[240px] max-w-full"
+                value={settings.operatorTimezone}
+                onChange={(e) => updateSettings({ operatorTimezone: e.target.value })}
+              >
+                <option value="America/Phoenix">America/Phoenix (default)</option>
+                <option value="America/Los_Angeles">America/Los_Angeles</option>
+                <option value="America/Denver">America/Denver</option>
+                <option value="America/Chicago">America/Chicago</option>
+                <option value="America/New_York">America/New_York</option>
+                <option value="UTC">UTC</option>
+              </select>
             </div>
           </Card>
         </section>
@@ -173,6 +205,22 @@ export default function Settings() {
                 <Button variant="outline" className="h-8 px-2 flex items-center gap-2" onClick={() => setCommandPaletteOpen(true)}>
                   <kbd className="font-sans text-[10px] bg-bg-active px-2 rounded">⌘</kbd>
                   <kbd className="font-sans text-[10px] bg-bg-active px-2 rounded">K</kbd>
+                </Button>
+              </div>
+              <div className="p-4 flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-sm">Write history</div>
+                  <div className="text-xs text-text-secondary mt-2">
+                    Lightweight local write log for debugging (FIFO 1000 entries).
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="h-8"
+                  type="button"
+                  onClick={() => navigate("/dev/history")}
+                >
+                  Open
                 </Button>
               </div>
             </Card>

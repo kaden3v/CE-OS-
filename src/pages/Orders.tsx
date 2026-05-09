@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link } from "react-router";
-import { DataTable } from "@/components/ui/DataTable";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
@@ -8,120 +8,142 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { X, Search, Filter, Printer, PackageCheck, Send, Store, ShoppingBag, PackageSearch, Barcode, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CultivarName } from "@/components/ui/CultivarName";
 import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { useEntity } from "@/hooks/useEntity";
+import { LoadingTable, ErrorState, EmptyState, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
+import { ORDER_STATUSES, SALES_CHANNELS } from "@/lib/constants";
+import { seedOrders } from "@/lib/mockData";
+import { OrderSchema, type Order, type OrderLineItem } from "@/lib/schemas";
+import { formatUSD, lineSubtotalCents, orderSubtotalCents } from "@/lib/money";
+import { ConflictDialog } from "@/components/ConflictDialog";
+import { formatLocal } from "@/lib/dates";
 
-// Generate 30 realistic orders
-const CULTIVARS = [
-  "P. 'Pirouette'", "P. agnata 'El Lobo'", "P. 'Johanna'", "P. gigantea", 
-  "P. moranensis", "P. agnata", "P. debbertiana", "P. 'Tina'", "P. 'Sethos'", "P. esseriana", "D. capensis 'Red'"
-];
-const NAMES = ["Sarah Chen", "Marcus Aldana", "Priya Patel", "John Doe", "Alice Smith", "Bob Johnson", "Emma Wilson", "James Taylor", "Sophia Davis", "Luis Garcia"];
-const STATUSES = ["Pending", "Processing", "Packed", "Shipped", "Delivered", "Cancelled"];
-const CHANNELS = ["Etsy", "Shopify"];
+export type { Order, OrderLineItem };
 
-const getStatusColor = (status: string) => {
+/** Toggle to true locally to exercise optimistic UI + rollback; keep false before merge. */
+const DEBUG_FAKE_ORDER_COMMIT = false;
+
+const getStatusColor = (status: string): "alert" | "warn" | "info" | "ok" => {
   switch (status) {
-    case "Pending": return "alert";
-    case "Processing": return "warn";
-    case "Packed": return "info";
-    case "Shipped": return "ok";
-    case "Delivered": return "ok";
+    case ORDER_STATUSES[0]: return "alert";
+    case ORDER_STATUSES[1]: return "warn";
+    case ORDER_STATUSES[2]: return "info";
+    case ORDER_STATUSES[3]: return "ok";
+    case ORDER_STATUSES[4]: return "ok";
     default: return "warn";
   }
 };
 
-const fullMockOrders = Array.from({ length: 30 }).map((_, i) => ({
-  id: `ORD-${1200 + i}`,
-  channel: CHANNELS[Math.floor(Math.random() * CHANNELS.length)],
-  customer: NAMES[Math.floor(Math.random() * NAMES.length)],
-  items: Array.from({ length: Math.floor(Math.random() * 3) + 1 }).map(() => ({
-    name: CULTIVARS[Math.floor(Math.random() * CULTIVARS.length)],
-    qty: Math.floor(Math.random() * 2) + 1,
-    price: 15 + Math.floor(Math.random() * 20),
-  })),
-  status: STATUSES[Math.floor(Math.random() * STATUSES.length)],
-  created: new Date(Date.now() - Math.random() * 10000000000).toISOString().split('T')[0],
-}));
-
 export default function Orders() {
-  const { globalOrderViewId, setGlobalOrderViewId } = useApp();
-  const { data: orders, isLoading, isError, isEmpty } = useDataState(fullMockOrders);
+  const { globalOrderViewId, setGlobalOrderViewId, settings } = useApp();
+  const formatOrderCreated = useCallback(
+    (iso: string) =>
+      formatLocal(iso, "MMM d, yyyy", settings.operatorTimezone),
+    [settings.operatorTimezone]
+  );
+  const {
+    items: ordersSource,
+    update: updateOrder,
+    storageConflict,
+    resolveStorageConflict,
+    conflictEntityLabel,
+  } = useEntity<Order>("orders", OrderSchema, seedOrders, { entityLabel: "Order" });
+
+  const fakeOrderCommit = DEBUG_FAKE_ORDER_COMMIT
+    ? async () => {
+        await new Promise((r) => setTimeout(r, 1000));
+        if (Math.random() < 0.5) {
+          throw new Error("Simulated server rejection");
+        }
+      }
+    : undefined;
+  const { data: orders, isLoading, isError, isEmpty } = useDataState(ordersSource);
   const [activeTab, setActiveTab] = useState<"all" | "pack-queue">("all");
-  const [packingOrder, setPackingOrder] = useState<any | null>(null);
+  const [packingOrder, setPackingOrder] = useState<Order | null>(null);
   const [packStep, setPackStep] = useState(1);
-  
+
   const selectedOrder = useMemo(() => {
     if (!globalOrderViewId) return null;
-    return fullMockOrders.find(o => o.id === globalOrderViewId) || null;
-  }, [globalOrderViewId]);
+    return ordersSource.find(o => o.id === globalOrderViewId) || null;
+  }, [globalOrderViewId, ordersSource]);
 
-  const columns = useMemo(() => [
+  const columns = useMemo((): DataTableColumn<Order>[] => [
     {
-      accessorKey: "id",
+      key: "id",
       header: "Order #",
-      cell: (info: any) => <span className="font-medium text-text-primary hover:underline hover:text-text-secondary cursor-pointer" onClick={(e) => { e.stopPropagation(); setGlobalOrderViewId(info.getValue()); }}>{info.getValue()}</span>,
+      render: (row) => (
+        <span
+          className="font-medium text-text-primary hover:underline hover:text-text-secondary cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            setGlobalOrderViewId(row.id);
+          }}
+        >
+          {row.id}
+        </span>
+      ),
     },
     {
-      accessorKey: "channel",
+      key: "channel",
       header: "Channel",
-      cell: (info: any) => (
+      render: (row) => (
         <div className="flex items-center gap-2 text-text-secondary">
-          {info.getValue() === "Shopify" ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
-          {info.getValue()}
+          {row.channel === SALES_CHANNELS[1] ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
+          {row.channel}
         </div>
       ),
     },
     {
-      accessorKey: "customer",
+      key: "customer",
       header: "Customer",
-      cell: (info: any) => (
-        <Link 
-          to="/customers" 
-          onClick={(e) => e.stopPropagation()} 
+      render: (row) => (
+        <Link
+          to="/customers"
+          onClick={(e) => e.stopPropagation()}
           className="text-text-primary hover:underline decoration-text-secondary transition-colors"
         >
-          {info.getValue()}
+          {row.customer}
         </Link>
-      )
+      ),
     },
     {
-      accessorKey: "items",
+      key: "items",
       header: "Items",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue().length} items</span>,
+      render: (row) => <span className="text-text-secondary">{row.items.length} items</span>,
     },
     {
-      accessorKey: "status",
+      key: "status",
       header: "Status",
-      cell: (info: any) => (
+      render: (row) => (
         <div className="flex items-center gap-2">
-          <StatusDot status={getStatusColor(info.getValue()) as any} />
-          {info.getValue()}
+          <StatusDot status={getStatusColor(row.status)} />
+          {row.status}
         </div>
       ),
     },
     {
-      id: "subtotal",
+      key: "subtotal",
       header: "Subtotal",
-      cell: (info: any) => {
-        const total = info.row.original.items.reduce((acc: number, item: any) => acc + item.price * item.qty, 0);
-        return <span>${total.toFixed(2)}</span>;
-      },
+      render: (row) => <span>{formatUSD(orderSubtotalCents(row))}</span>,
     },
     {
-      accessorKey: "created",
+      key: "created",
       header: "Created",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => (
+        <span className="text-text-secondary">{formatOrderCreated(row.created)}</span>
+      ),
     },
-  ], [setGlobalOrderViewId]);
+  ], [setGlobalOrderViewId, formatOrderCreated]);
 
-  const queuedOrders = useMemo(() => orders.filter(o => o.status === "Processing" || o.status === "Pending").slice(0, 5), [orders]);
+  const queuedOrders = useMemo(
+    () => orders.filter(o => o.status === ORDER_STATUSES[1] || o.status === ORDER_STATUSES[0]).slice(0, 5),
+    [orders]
+  );
 
   const renderPackWorkflow = () => {
      if (!packingOrder) return null;
-     
+
      return (
         <div className="fixed inset-0 bg-bg-base/90 backdrop-blur-sm z-[100] p-4 flex items-center justify-center">
            <Card className="w-full max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col h-[500px] overflow-hidden relative">
@@ -152,7 +174,7 @@ export default function Orders() {
                     ].map((s) => (
                        <div key={s.step} className={cn(
                           "py-2 px-2 rounded-md text-sm font-medium mb-2 transition-colors flex items-center",
-                          packStep === s.step ? "bg-accent-brand text-text-primary shadow-sm" : 
+                          packStep === s.step ? "bg-accent-brand text-text-primary shadow-sm" :
                           packStep > s.step ? "text-status-ok" : "text-text-tertiary"
                        )}>
                           <div className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[9px] mr-2 shrink-0 border",
@@ -186,7 +208,7 @@ export default function Orders() {
                        <div className="flex-1 flex flex-col">
                           <h3 className="text-lg font-medium mb-4">Verify Inventory</h3>
                           <div className="space-y-2 flex-1 overflow-auto">
-                             {packingOrder.items.map((item: any, idx: number) => (
+                             {packingOrder.items.map((item, idx) => (
                                 <div key={idx} className="p-2 border border-border-subtle rounded-lg bg-bg-active flex items-center justify-between cursor-pointer hover:border-accent-brand focus:bg-accent-brand/10 transition-colors">
                                    <div className="flex items-center gap-2">
                                       <div className="w-5 h-5 rounded border border-border-strong flex items-center justify-center">
@@ -211,10 +233,15 @@ export default function Orders() {
               {/* Footer Actions */}
               <div className="p-4 border-t border-border-subtle flex items-center justify-between shrink-0 bg-bg-base">
                  <Button variant="outline" onClick={() => setPackStep(p => Math.max(1, p - 1))} disabled={packStep === 1}>Back</Button>
-                 <Button 
+                 <Button
                    onClick={() => {
                       if (packStep < 5) setPackStep(p => p + 1);
                       else {
+                         updateOrder(
+                           packingOrder.id,
+                           { status: ORDER_STATUSES[2] },
+                           fakeOrderCommit ? { commit: fakeOrderCommit } : undefined
+                         );
                          setPackingOrder(null);
                          setPackStep(1);
                       }
@@ -274,15 +301,17 @@ export default function Orders() {
 
         {activeTab === "all" ? (
            <Card className="flex-1 overflow-auto flex flex-col min-h-0">
-             {isLoading ? (
-               <LoadingTable cols={7} rows={12} />
-             ) : isError ? (
-               <ErrorState title="Couldn't load orders" description="Check your connection to Shopify and Etsy and try again." onRetry={() => window.location.reload()} />
-             ) : isEmpty ? (
-               <EmptyState icon={PackageSearch} title="No orders yet" description="Orders will appear here as they import from Etsy and Shopify." action={<Button variant="outline" className="mt-2">Refresh sync</Button>} />
-             ) : (
-               <DataTable columns={columns} data={orders} onRowClick={(row) => setGlobalOrderViewId(row.id)} />
-             )}
+             <StateRenderer
+               state={resolveDataViewState(isLoading, isError, isEmpty)}
+               data={orders}
+               loadingFallback={<LoadingTable cols={7} rows={12} />}
+               errorFallback={<ErrorState title="Couldn't load orders" description="Check your connection to Shopify and Etsy and try again." onRetry={() => window.location.reload()} />}
+               emptyFallback={<EmptyState icon={PackageSearch} title="No orders yet" description="Orders will appear here as they import from Etsy and Shopify." action={<Button variant="outline" className="mt-2">Refresh sync</Button>} />}
+             >
+               {(rows) => (
+                 <DataTable columns={columns} data={rows} onRowClick={(row) => setGlobalOrderViewId(row.id)} />
+               )}
+             </StateRenderer>
            </Card>
         ) : (
            <div className="flex-1 overflow-auto min-h-0">
@@ -305,7 +334,7 @@ export default function Orders() {
                         </div>
 
                         <div className="space-y-1 mb-4 flex-1 min-h-[60px]">
-                           {order.items.map((item: any, idx: number) => (
+                           {order.items.map((item, idx) => (
                               <div key={idx} className="flex justify-between text-sm">
                                  <span className="text-text-primary line-clamp-1">{item.name}</span>
                                  <span className="text-text-secondary font-mono w-8 text-right shrink-0">x{item.qty}</span>
@@ -313,8 +342,8 @@ export default function Orders() {
                            ))}
                         </div>
 
-                        <Button 
-                          variant="brand" 
+                        <Button
+                          variant="brand"
                           className="w-full shadow-[0_0_15px_rgba(194,113,79,0.15)] hover:shadow-[0_0_20px_rgba(194,113,79,0.25)] transition-shadow"
                           onClick={() => { setPackingOrder(order); setPackStep(1); }}
                         >
@@ -322,7 +351,7 @@ export default function Orders() {
                         </Button>
                      </Card>
                   ))}
-                  
+
                   <Card className="p-4 border-dashed border-border-strong bg-transparent flex flex-col items-center justify-center text-text-tertiary h-[220px]">
                      <CheckCircle2 className="w-8 h-8 mb-2 opacity-50" />
                      <p className="text-sm">No more orders in queue</p>
@@ -334,7 +363,7 @@ export default function Orders() {
       </div>
 
       {/* Slide-in Detail Panel */}
-      <div 
+      <div
         className={cn(
           "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col", selectedOrder ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in"
         )}
@@ -345,17 +374,17 @@ export default function Orders() {
                <div>
                   <div className="flex items-center gap-2 mb-2">
                      <h2 className="text-xl font-semibold">{selectedOrder.id}</h2>
-                     <Badge variant={selectedOrder.channel === "Shopify" ? "brand" : "default"}>
+                     <Badge variant={selectedOrder.channel === SALES_CHANNELS[1] ? "brand" : "default"}>
                         {selectedOrder.channel}
                      </Badge>
                      <div className="flex items-center gap-2 text-sm">
-                        <StatusDot status={getStatusColor(selectedOrder.status as string) as any} />
+                        <StatusDot status={getStatusColor(selectedOrder.status)} />
                         {selectedOrder.status}
                      </div>
                   </div>
-                  <div className="text-sm text-text-secondary">{selectedOrder.created}</div>
+                  <div className="text-sm text-text-secondary">{formatOrderCreated(selectedOrder.created)}</div>
                </div>
-               <button 
+               <button
                   onClick={() => setGlobalOrderViewId(null)}
                   className="p-2 -mr-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors"
                >
@@ -385,15 +414,15 @@ export default function Orders() {
                <section>
                   <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Line Items</h3>
                   <div className="space-y-3">
-                     {selectedOrder.items.map((item: any, idx: number) => (
+                     {selectedOrder.items.map((item, idx) => (
                         <div key={idx} className="flex justify-between items-center text-sm p-2 bg-bg-active rounded-lg border border-border-subtle hover:border-border-strong transition-colors cursor-default">
                            <div>
                               <Link to="/cultivars" className="font-medium hover:underline decoration-text-secondary transition-colors">{item.name}</Link>
                               <div className="text-text-secondary mt-2">Qty: {item.qty}</div>
                            </div>
                            <div className="font-medium tabular-nums text-right">
-                              ${(item.price * item.qty).toFixed(2)}
-                              <div className="text-xs text-text-secondary mt-2 font-normal">${item.price.toFixed(2)} ea</div>
+                              {formatUSD(lineSubtotalCents(item.priceCents, item.qty))}
+                              <div className="text-xs text-text-secondary mt-2 font-normal">{formatUSD(item.priceCents)} ea</div>
                            </div>
                         </div>
                      ))}
@@ -446,6 +475,17 @@ export default function Orders() {
 
       {/* Packing Overlay */}
       {renderPackWorkflow()}
+
+      {storageConflict && (
+        <ConflictDialog<Order>
+          open
+          resourceLabel={conflictEntityLabel}
+          mine={storageConflict.mine}
+          theirs={storageConflict.theirs}
+          onDiscard={() => resolveStorageConflict("discard")}
+          onOverwrite={() => resolveStorageConflict("overwrite")}
+        />
+      )}
     </div>
   );
 }

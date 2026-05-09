@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from "react";
-import { DataTable } from "@/components/ui/DataTable";
+import React, { useState, useMemo, useCallback } from "react";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Copy, Plus, RefreshCw, X, Store, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,19 +9,16 @@ import { CultivarName } from "@/components/ui/CultivarName";
 import { useDataState } from "@/hooks/useDataState";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
+import { seedListings } from "@/lib/mockData";
+import { LoadingTable, ErrorState, EmptyState, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 
-const LISTINGS = [
-  { id: "LST-001", cultivar: "Pinguicula 'Pirouette'", sku: "PING-PIR-01", price: 20.00, shopify: "active", etsy: "active", stock: 12 },
-  { id: "LST-002", cultivar: "Pinguicula agnata 'El Lobo'", sku: "PING-AGN-ELB", price: 25.00, shopify: "sold_out", etsy: "draft", stock: 0 },
-  { id: "LST-003", cultivar: "Pinguicula esseriana", sku: "PING-ESS-01", price: 15.00, shopify: "syncing", etsy: "active", stock: 45 },
-  { id: "LST-004", cultivar: "Drosera capensis 'Red'", sku: "DROS-CAP-RED", price: 10.00, shopify: "active", etsy: "active", stock: 54 },
-];
+type ListingRow = (typeof seedListings)[number];
 
 export default function Listings() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [channelTab, setChannelTab] = useState<"shopify" | "etsy">("shopify");
-  const [listingsData, setListingsData] = useState(LISTINGS);
-  const { data, isLoading } = useDataState(listingsData);
+  const [listingsData, setListingsData] = useState<ListingRow[]>(() => [...seedListings]);
+  const { data, isLoading, isError, isEmpty } = useDataState<ListingRow>(listingsData);
   const { addToast } = useApp();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newListing, setNewListing] = useState({ cultivar: "", sku: "", price: 0 });
@@ -47,7 +43,7 @@ export default function Listings() {
 
   const selectedListing = useMemo(() => data.find((l) => l.id === selectedId), [data, selectedId]);
 
-  const renderStatusBadge = (status: string) => {
+  const renderStatusBadge = useCallback((status: string) => {
     switch (status) {
       case "active": return <div className="flex items-center gap-2"><StatusDot status="ok" /> Active</div>;
       case "syncing": return <div className="flex items-center gap-2"><StatusDot status="info" className="animate-pulse" /> Syncing</div>;
@@ -55,16 +51,16 @@ export default function Listings() {
       case "draft": return <div className="flex items-center gap-2"><StatusDot status="alert" /> Draft</div>;
       default: return null;
     }
-  };
+  }, []);
 
-  const columns = useMemo(() => [
-    { accessorKey: "cultivar", header: "Cultivar", cell: (info: any) => <CultivarName name={info.getValue()} className="font-medium " /> },
-    { accessorKey: "sku", header: "SKU", cell: (info: any) => <span className="font-mono text-xs text-text-secondary">{info.getValue()}</span> },
-    { accessorKey: "price", header: "Price", cell: (info: any) => `$${info.getValue().toFixed(2)}` },
-    { accessorKey: "stock", header: "Inventory" },
-    { accessorKey: "shopify", header: "Shopify", cell: (info: any) => renderStatusBadge(info.getValue()) },
-    { accessorKey: "etsy", header: "Etsy", cell: (info: any) => renderStatusBadge(info.getValue()) },
-  ], []);
+  const columns = useMemo((): DataTableColumn<ListingRow>[] => [
+    { key: "cultivar", header: "Cultivar", render: (row) => <CultivarName name={row.cultivar} className="font-medium " /> },
+    { key: "sku", header: "SKU", render: (row) => <span className="font-mono text-xs text-text-secondary">{row.sku}</span> },
+    { key: "price", header: "Price", render: (row) => `$${row.price.toFixed(2)}` },
+    { key: "stock", header: "Inventory" },
+    { key: "shopify", header: "Shopify", render: (row) => renderStatusBadge(row.shopify) },
+    { key: "etsy", header: "Etsy", render: (row) => renderStatusBadge(row.etsy) },
+  ], [renderStatusBadge]);
 
   return (
     <div className="flex h-full relative p-4 md:p-8">
@@ -84,7 +80,17 @@ export default function Listings() {
         </div>
 
         <Card className="flex-1 overflow-auto flex flex-col">
-          {!isLoading && <DataTable columns={columns} data={data} onRowClick={(row) => setSelectedId(row.id)} />}
+          <StateRenderer
+            state={resolveDataViewState(isLoading, isError, isEmpty)}
+            data={data}
+            loadingFallback={<LoadingTable cols={6} rows={10} />}
+            errorFallback={<ErrorState />}
+            emptyFallback={<EmptyState title="No listings" description="Create a listing to sync inventory to channels." />}
+          >
+            {(rows) => (
+              <DataTable columns={columns} data={rows} onRowClick={(row) => setSelectedId(row.id)} />
+            )}
+          </StateRenderer>
         </Card>
       </div>
 

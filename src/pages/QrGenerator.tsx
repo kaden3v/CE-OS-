@@ -5,21 +5,17 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { useApp } from "@/contexts/AppContext";
-
-const CULTIVARS = [
-  "Pinguicula 'Pirouette'",
-  "P. agnata 'El Lobo'",
-  "Pinguicula 'Johanna'",
-  "Pinguicula gigantea",
-  "Pinguicula moranensis"
-];
+import { QR_GENERATOR_CULTIVARS } from "@/lib/constants";
+import { todayDateOnly } from "@/lib/dates";
 
 export default function QrGenerator() {
   const [activeTab, setActiveTab] = useState("Single QR");
-  const [cultivar, setCultivar] = useState(CULTIVARS[0]);
+  const [cultivar, setCultivar] = useState(QR_GENERATOR_CULTIVARS[0]);
   const [size, setSize] = useState("starter");
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const { addToast } = useApp();
+  const { addToast, settings } = useApp();
+  const [date, setDate] = useState(() =>
+    todayDateOnly(settings.operatorTimezone)
+  );
 
   // Mock URL generation logic
   const slug = cultivar.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -39,9 +35,6 @@ export default function QrGenerator() {
             <p className="text-sm text-text-secondary">Generate Rosette import codes for outgoing shipments.</p>
           </div>
         </div>
-        <Link to="/inventory/qr-codes/analytics">
-          <Button variant="outline">Analytics</Button>
-        </Link>
       </div>
 
       <div className="flex gap-6 border-b border-border-subtle mb-6">
@@ -69,7 +62,7 @@ export default function QrGenerator() {
                value={cultivar}
                onChange={e => setCultivar(e.target.value)}
              >
-                {CULTIVARS.map(c => <option key={c} value={c}>{c}</option>)}
+                {QR_GENERATOR_CULTIVARS.map(c => <option key={c} value={c}>{c}</option>)}
              </select>
            </div>
            

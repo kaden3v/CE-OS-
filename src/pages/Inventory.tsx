@@ -3,23 +3,56 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Search, Image as ImageIcon, Plus, X, ArrowLeft, History, AlertTriangle, QrCode, Camera } from "lucide-react";
-import React, { useState, useMemo } from "react";
+import { Search, Image as ImageIcon, Plus, X, ArrowLeft, AlertTriangle, QrCode, Camera } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router";
 import { useDataState } from "@/hooks/useDataState";
+import { useEntity } from "@/hooks/useEntity";
+import { useForm } from "@/hooks/useForm";
 import { ErrorState, EmptyState, ZeroResultState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
+import { AddItemModal, type AddItemField } from "@/components/AddItemModal";
+import { InventorySchema, type InventoryItem } from "@/lib/schemas";
 
-const INVENTORY = [
-  { id: 1, name: "Pinguicula 'Pirouette'", common: "Pirouette Butterwort", genus: "Pinguicula", stock: { juv: 45, mat: 12, flower: 4 }, lastUpdated: "2 hours ago" },
-  { id: 2, name: "Pinguicula agnata 'El Lobo'", common: "El Lobo", genus: "Pinguicula", stock: { juv: 12, mat: 3, flower: 0 }, lastUpdated: "1 day ago" },
-  { id: 3, name: "Pinguicula 'Johanna'", common: "Agnata x Debbertiana", genus: "Pinguicula", stock: { juv: 5, mat: 0, flower: 0 }, lastUpdated: "3 days ago" },
-  { id: 4, name: "Drosera capensis 'Red'", common: "Red Cape Sundew", genus: "Drosera", stock: { juv: 120, mat: 54, flower: 10 }, lastUpdated: "4 hours ago" },
-  { id: 5, name: "Pinguicula gigantea", common: "Giant Butterwort", genus: "Pinguicula", stock: { juv: 8, mat: 2, flower: 1 }, lastUpdated: "1 week ago" },
-  { id: 6, name: "Pinguicula moranensis", common: "Mexican Butterwort", genus: "Pinguicula", stock: { juv: 60, mat: 25, flower: 8 }, lastUpdated: "2 days ago" },
-  { id: 7, name: "Pinguicula 'Sethos'", common: "Sethos Butterwort", genus: "Pinguicula", stock: { juv: 30, mat: 15, flower: 5 }, lastUpdated: "5 hours ago" },
+export type { InventoryItem };
+
+type InventoryAddForm = {
+  name: string;
+  common: string;
+  genus: string;
+  juv: number;
+  mat: number;
+  flower: number;
+};
+
+const INVENTORY_ADD_INITIAL: InventoryAddForm = {
+  name: "",
+  common: "",
+  genus: "",
+  juv: 0,
+  mat: 0,
+  flower: 0,
+};
+
+const INVENTORY_ADD_FIELDS: AddItemField<InventoryAddForm>[] = [
+  { name: "name", label: "Cultivar Name", type: "text", required: true, placeholder: "P. agnata" },
+  { name: "common", label: "Common Name", type: "text", placeholder: "Butterwort" },
+  { name: "genus", label: "Genus", type: "text", required: true, placeholder: "Pinguicula" },
+  { name: "juv", label: "Juv.", type: "number", required: true, width: "third", labelClassName: "text-xs uppercase text-[#1A2E28]/75" },
+  { name: "mat", label: "Mat.", type: "number", required: true, width: "third", labelClassName: "text-xs uppercase text-[#1A2E28]/75" },
+  { name: "flower", label: "Flw.", type: "number", required: true, width: "third", labelClassName: "text-xs uppercase text-[#1A2E28]/75" },
+];
+
+export const seedInventory: InventoryItem[] = [
+  { id: "1", name: "Pinguicula 'Pirouette'", common: "Pirouette Butterwort", genus: "Pinguicula", stock: { juv: 45, mat: 12, flower: 4 }, lastUpdated: "2 hours ago" },
+  { id: "2", name: "Pinguicula agnata 'El Lobo'", common: "El Lobo", genus: "Pinguicula", stock: { juv: 12, mat: 3, flower: 0 }, lastUpdated: "1 day ago" },
+  { id: "3", name: "Pinguicula 'Johanna'", common: "Agnata x Debbertiana", genus: "Pinguicula", stock: { juv: 5, mat: 0, flower: 0 }, lastUpdated: "3 days ago" },
+  { id: "4", name: "Drosera capensis 'Red'", common: "Red Cape Sundew", genus: "Drosera", stock: { juv: 120, mat: 54, flower: 10 }, lastUpdated: "4 hours ago" },
+  { id: "5", name: "Pinguicula gigantea", common: "Giant Butterwort", genus: "Pinguicula", stock: { juv: 8, mat: 2, flower: 1 }, lastUpdated: "1 week ago" },
+  { id: "6", name: "Pinguicula moranensis", common: "Mexican Butterwort", genus: "Pinguicula", stock: { juv: 60, mat: 25, flower: 8 }, lastUpdated: "2 days ago" },
+  { id: "7", name: "Pinguicula 'Sethos'", common: "Sethos Butterwort", genus: "Pinguicula", stock: { juv: 30, mat: 15, flower: 5 }, lastUpdated: "5 hours ago" },
 ];
 
 function TimelineTab() {
@@ -85,9 +118,13 @@ function TimelineTab() {
 }
 
 export default function Inventory() {
-  const [inventory, setInventory] = useState(INVENTORY);
+  const { items: inventory, add: addInventoryItem } = useEntity<InventoryItem>(
+    "inventory",
+    InventorySchema,
+    seedInventory
+  );
   const [lowStockFilter, setLowStockFilter] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("Stock");
   
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
@@ -99,24 +136,34 @@ export default function Inventory() {
 
   const selectedItem = useMemo(() => inventory.find(i => i.id === selectedId), [inventory, selectedId]);
 
-  // Modal logic
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", juv: 0, mat: 0, flower: 0 });
   const { addToast } = useApp();
 
-  const handleAddPlant = (e: React.FormEvent) => {
-    e.preventDefault();
-    const plant = {
-      id: Math.max(...inventory.map(i => i.id)) + 1,
+  const addForm = useForm<InventoryAddForm>(
+    { ...INVENTORY_ADD_INITIAL },
+    {
+      name: (v) => (typeof v === "string" && !v.trim() ? "Required" : undefined),
+      genus: (v) => (typeof v === "string" && !v.trim() ? "Required" : undefined),
+    }
+  );
+
+  const { reset: resetAddForm } = addForm;
+  useEffect(() => {
+    if (isAddModalOpen) {
+      resetAddForm({ ...INVENTORY_ADD_INITIAL });
+    }
+  }, [isAddModalOpen, resetAddForm]);
+
+  const handleAddPlant = (newPlant: InventoryAddForm) => {
+    addInventoryItem({
       name: newPlant.name,
       common: newPlant.common || "Unknown",
       genus: newPlant.genus || "Unknown",
       stock: { juv: newPlant.juv, mat: newPlant.mat, flower: newPlant.flower },
-      lastUpdated: "Just now"
-    };
-    setInventory([plant, ...inventory]);
+      lastUpdated: "Just now",
+    });
     setIsAddModalOpen(false);
-    setNewPlant({ name: "", common: "", genus: "", juv: 0, mat: 0, flower: 0 });
+    addForm.reset({ ...INVENTORY_ADD_INITIAL });
     addToast("Plant added to inventory", "success");
   };
 
@@ -317,10 +364,10 @@ export default function Inventory() {
                         <span className="text-sm font-medium">Active Propagation</span>
                         <Badge variant="brand">2 batches</Badge>
                       </Link>
-                      <Link to={`/inventory/${selectedItem.id}/mortality`} className="flex justify-between items-center p-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-border-subtle hover:bg-bg-hover transition-colors">
+                      <div className="flex justify-between items-center p-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-border-subtle hover:bg-bg-hover transition-colors">
                         <span className="text-sm font-medium border-b border-transparent">Mortality Log</span>
                         <span className="text-xs text-status-alert flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> 2 events</span>
-                      </Link>
+                      </div>
                     </div>
                   </section>
 
@@ -345,52 +392,19 @@ export default function Inventory() {
         )}
       </div>
 
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-             <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 className="text-lg font-semibold">Add to Inventory</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
-              <form id="add-plant-form" onSubmit={handleAddPlant} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Cultivar Name</label>
-                  <Input required placeholder="P. agnata" value={newPlant.name} onChange={(e) => setNewPlant({...newPlant, name: e.target.value})} className="w-full" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Common Name</label>
-                  <Input placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({...newPlant, common: e.target.value})} className="w-full" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Genus</label>
-                  <Input required placeholder="Pinguicula" value={newPlant.genus} onChange={(e) => setNewPlant({...newPlant, genus: e.target.value})} className="w-full" />
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-2">
-                   <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase">Juv.</label>
-                     <Input type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
-                   </div>
-                   <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase">Mat.</label>
-                     <Input type="number" min="0" required value={newPlant.mat} onChange={(e) => setNewPlant({...newPlant, mat: parseInt(e.target.value) || 0})} className="w-full" />
-                   </div>
-                   <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase">Flw.</label>
-                     <Input type="number" min="0" required value={newPlant.flower} onChange={(e) => setNewPlant({...newPlant, flower: parseInt(e.target.value) || 0})} className="w-full" />
-                   </div>
-                </div>
-              </form>
-            </div>
-            <div className="p-4 border-t border-border-subtle bg-bg-base/50 flex justify-end gap-2 shrink-0">
-               <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-               <Button variant="brand" type="submit" form="add-plant-form">Save Plant</Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      <AddItemModal<InventoryAddForm>
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="Add to Inventory"
+        submitLabel="Save Plant"
+        fields={INVENTORY_ADD_FIELDS}
+        initialValues={{ ...INVENTORY_ADD_INITIAL }}
+        values={addForm.values}
+        setField={addForm.setField}
+        errors={addForm.errors}
+        validate={addForm.validate}
+        onSubmit={handleAddPlant}
+      />
     </div>
   );
 }

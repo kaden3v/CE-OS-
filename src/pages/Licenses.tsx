@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { StatusDot } from "@/components/ui/StatusDot";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
-import { FileBadge, Plus, AlertTriangle, Calendar, Building2, Search, Filter, ShieldCheck, FileText, Trash2, Edit } from "lucide-react";
+import { FileBadge, Plus, AlertTriangle, Calendar, Building2, Search, ShieldCheck, FileText, Trash2, Edit } from "lucide-react";
 import { EmptyState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
+import { useApp } from "@/contexts/AppContext";
+import { calendarDaysUntilExpiry } from "@/lib/dates";
 
 type LicenseType = "Federal" | "State" | "Local" | "Business";
 
@@ -27,11 +28,11 @@ const INITIAL_LICENSES: License[] = [
   { id: "4", name: "LLC Annual Report", number: "L-29183492", body: "AZ Corporation Commission", type: "Business", expires: "2027-02-12" },
 ];
 
-function getDaysRemaining(expiresStr: string): number {
-  const expires = new Date(expiresStr);
-  const now = new Date();
-  const diffTime = expires.getTime() - now.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+function getDaysRemaining(
+  expiresStr: string,
+  operatorTimezone: string
+): number {
+  return calendarDaysUntilExpiry(expiresStr, operatorTimezone);
 }
 
 function getStatusInfo(daysRemaining: number) {
@@ -41,6 +42,7 @@ function getStatusInfo(daysRemaining: number) {
 }
 
 export default function Licenses() {
+  const { settings } = useApp();
   const [licenses, setLicenses] = useState<License[]>(INITIAL_LICENSES);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<LicenseType | "All">("All");
@@ -101,8 +103,12 @@ export default function Licenses() {
                             l.body.toLowerCase().includes(search.toLowerCase());
       const matchesType = filterType === "All" || l.type === filterType;
       return matchesSearch && matchesType;
-    }).sort((a, b) => getDaysRemaining(a.expires) - getDaysRemaining(b.expires));
-  }, [licenses, search, filterType]);
+    }).sort(
+      (a, b) =>
+        getDaysRemaining(a.expires, settings.operatorTimezone) -
+        getDaysRemaining(b.expires, settings.operatorTimezone)
+    );
+  }, [licenses, search, filterType, settings.operatorTimezone]);
 
   const metrics = useMemo(() => {
     let active = 0;
@@ -110,14 +116,14 @@ export default function Licenses() {
     let expired = 0;
     
     licenses.forEach(l => {
-      const days = getDaysRemaining(l.expires);
+      const days = getDaysRemaining(l.expires, settings.operatorTimezone);
       if (days < 0) expired++;
       else if (days <= 60) expiring++;
       else active++;
     });
     
     return { active, expiring, expired, total: licenses.length };
-  }, [licenses]);
+  }, [licenses, settings.operatorTimezone]);
 
   return (
     <div className="p-8 max-w-7xl mx-auto h-full flex flex-col space-y-8">
@@ -216,7 +222,10 @@ export default function Licenses() {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredLicenses.map((lic) => {
-                const daysRemaining = getDaysRemaining(lic.expires);
+                const daysRemaining = getDaysRemaining(
+                  lic.expires,
+                  settings.operatorTimezone
+                );
                 const info = getStatusInfo(daysRemaining);
                 
                 return (

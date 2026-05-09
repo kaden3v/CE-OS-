@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { DataTable } from "@/components/ui/DataTable";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Plus, Receipt, FileText, X } from "lucide-react";
 import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, ErrorState, EmptyState, StateRenderer, resolveDataViewState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 
@@ -18,6 +18,8 @@ const INITIAL_EXPENSES = [
   { id: 5, category: "Marketing", vendor: "Instagram Ads", amount: 25.00, date: "3 weeks ago", desc: "Boosted post", receipt: false, deductible: false },
   { id: 6, category: "Permits and licenses", vendor: "AZ Dept of Ag", amount: 150.00, date: "1 month ago", desc: "Nursery annual renewal", receipt: true, deductible: true },
 ];
+
+type ExpenseRow = (typeof INITIAL_EXPENSES)[number];
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
@@ -54,39 +56,39 @@ export default function Expenses() {
     addToast({ title: "Expense Added", description: `Added $${newAmount} to ${newVendor}.`, status: "success" });
   };
 
-  const columns = useMemo(() => [
+  const columns = useMemo((): DataTableColumn<ExpenseRow>[] => [
     {
-      accessorKey: "date",
+      key: "date",
       header: "Date",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.date}</span>,
     },
     {
-      accessorKey: "category",
+      key: "category",
       header: "Category",
-      cell: (info: any) => <Badge>{info.getValue()}</Badge>,
+      render: (row) => <Badge>{row.category}</Badge>,
     },
     {
-      accessorKey: "vendor",
+      key: "vendor",
       header: "Vendor",
-      cell: (info: any) => <span className="font-medium">{info.getValue()}</span>,
+      render: (row) => <span className="font-medium">{row.vendor}</span>,
     },
     {
-      accessorKey: "desc",
+      key: "desc",
       header: "Description",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
+      render: (row) => <span className="text-text-secondary">{row.desc}</span>,
     },
     {
-      accessorKey: "amount",
+      key: "amount",
       header: "Amount",
-      cell: (info: any) => <span className="font-medium tabular-nums">${info.getValue().toFixed(2)}</span>,
+      render: (row) => <span className="font-medium tabular-nums">${row.amount.toFixed(2)}</span>,
     },
     {
-      id: "actions",
+      key: "flags",
       header: "Flags",
-      cell: (info: any) => (
+      render: (row) => (
         <div className="flex items-center gap-2">
-          {info.row.original.receipt && <Receipt className="w-4 h-4 text-text-secondary" />}
-          {info.row.original.deductible && <Badge variant="brand">Tax Deductible</Badge>}
+          {row.receipt && <Receipt className="w-4 h-4 text-text-secondary" />}
+          {row.deductible && <Badge variant="brand">Tax Deductible</Badge>}
         </div>
       ),
     },
@@ -115,17 +117,22 @@ export default function Expenses() {
       </div>
 
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
-        {isLoading && <LoadingTable cols={6} rows={8} />}
-        {isError && <ErrorState />}
-        {!isLoading && !isError && isEmpty && (
-          <EmptyState 
-            icon={FileText} 
-            title="No expenses yet" 
-            description="Track operating costs and manage receipts." 
-            action={<Button variant="outline" onClick={() => setIsAddModalOpen(true)}>Add Expense</Button>}
-          />
-        )}
-        {!isLoading && !isError && !isEmpty && <DataTable columns={columns} data={data} />}
+        <StateRenderer
+          state={resolveDataViewState(isLoading, isError, isEmpty)}
+          data={data}
+          loadingFallback={<LoadingTable cols={6} rows={8} />}
+          errorFallback={<ErrorState />}
+          emptyFallback={(
+            <EmptyState
+              icon={FileText}
+              title="No expenses yet"
+              description="Track operating costs and manage receipts."
+              action={<Button variant="outline" onClick={() => setIsAddModalOpen(true)}>Add Expense</Button>}
+            />
+          )}
+        >
+          {(rows) => <DataTable columns={columns} data={rows} />}
+        </StateRenderer>
       </Card>
 
       {/* Add Expense Modal */}

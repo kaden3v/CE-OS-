@@ -4,5 +4,6 @@ dist/
 coverage/
 .DS_Store
 *.log
+# Secrets — never commit real values (covers .env, .env.local, .env.*.local, …)
 .env*
 !.env.example
