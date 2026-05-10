@@ -6,10 +6,12 @@ export function Button({
   variant = "default",
   size = "default",
   children,
+  ref,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "default" | "ghost" | "outline" | "brand";
   size?: "default" | "sm" | "icon";
+  ref?: React.Ref<HTMLButtonElement>;
 }) {
   const variants = {
     default: "bg-bg-elevated hover:bg-bg-hover text-text-primary border border-border-subtle",
@@ -24,6 +26,7 @@ export function Button({
   };
   return (
     <button
+      ref={ref}
       className={cn(
         "rounded-[8px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2",
         variants[variant],

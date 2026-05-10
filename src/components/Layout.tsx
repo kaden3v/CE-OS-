@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation, useNavigate } from "react-router";
+import { Outlet, NavLink, Navigate, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -13,6 +13,7 @@ import {
   Store,
   FileSpreadsheet,
   FileBadge,
+  ShieldCheck,
   History,
   Settings,
   Bell,
@@ -28,6 +29,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "./ui/Input";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { NotificationCenter } from "./ui/NotificationCenter";
 import { TasksPanel } from "./ui/TasksPanel";
 import { KeyboardReference } from "./ui/KeyboardReference";
@@ -36,7 +38,6 @@ const NAV_ITEMS = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Orders", href: "/orders", icon: ShoppingCart },
   { name: "Inventory", href: "/inventory", icon: PackageSearch },
-  { name: "Receiving", href: "/receiving", icon: PackageOpen },
   { name: "Propagation", href: "/propagation", icon: Sprout },
   { name: "Cultivars", href: "/cultivars", icon: Flower2 },
   { name: "Listings", href: "/listings", icon: List },
@@ -67,6 +68,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setCommandPaletteOpen, notifications, tasks, settings, addToast } = useApp();
+  const { isAdmin, user, onboardedAt, profileChecked } = useAuth();
 
   const isFinancesActive = location.pathname.startsWith("/finances");
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -129,6 +131,13 @@ export function Layout() {
     return parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ")).join(" / ");
   };
 
+  // First-login onboarding gate — must come AFTER all hooks above so we don't
+  // change the hook count between renders. Unauthed users are already handled
+  // by RequireAuth.
+  if (user && profileChecked && !onboardedAt) {
+    return <Navigate to="/welcome" replace />;
+  }
+
   return (
     <div className={cn(
       "flex h-screen bg-bg-base text-text-primary overflow-hidden",
@@ -137,13 +146,8 @@ export function Layout() {
       {/* Sidebar - hidden on mobile and when printing */}
       <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-20 no-print">
         <div className="p-6 pb-2">
-          <div className="text-xl font-semibold tracking-tight h-8 flex items-center justify-between">
+          <div className="text-xl font-semibold tracking-tight h-8 flex items-center">
             <span>CEOS</span>
-            {settings.demoMode && (
-              <span className="text-[10px] font-medium bg-status-info/20 text-status-info px-2 py-2 rounded tracking-wide">
-                DEMO
-              </span>
-            )}
           </div>
           <div className="text-xs text-text-tertiary">Canyon Exotics</div>
         </div>
@@ -219,18 +223,20 @@ export function Layout() {
             <FileBadge className="w-5 h-5 opacity-70" strokeWidth={1.5} />
             Licenses
           </NavLink>
-          <NavLink
-            to="/audit"
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors",
-                isActive ? "bg-bg-active text-text-primary border-l-2 border-accent-brand rounded-l-none" : "text-text-secondary"
-              )
-            }
-          >
-            <History className="w-5 h-5 opacity-70" strokeWidth={1.5} />
-            Audit Log
-          </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/admin/access-requests"
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors",
+                  isActive ? "bg-bg-active text-text-primary border-l-2 border-accent-brand rounded-l-none" : "text-text-secondary",
+                )
+              }
+            >
+              <ShieldCheck className="w-5 h-5 opacity-70" strokeWidth={1.5} />
+              Access Requests
+            </NavLink>
+          )}
         </nav>
         
         <div className="p-2 border-t border-border-subtle space-y-1">
@@ -264,7 +270,6 @@ export function Layout() {
         {/* Topbar - hidden when printing */}
         <header className="h-[56px] flex-shrink-0 bg-bg-elevated backdrop-blur-md border-b border-border-subtle flex items-center px-4 md:px-6 justify-between z-10 no-print">
           <div className="flex items-center text-sm text-text-secondary truncate pr-4">
-            {settings.demoMode && <span className="md:hidden text-[10px] font-medium bg-status-info/20 text-status-info px-2 py-2 rounded tracking-wide mr-2">DEMO</span>}
             {getBreadcrumb()}
           </div>
           <div className="hidden md:block flex-1 max-w-md mx-6">
@@ -379,7 +384,6 @@ export function Layout() {
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/vendors" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Store className="w-4 h-4 text-text-secondary"/> Vendors</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/tax-report" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileSpreadsheet className="w-4 h-4 text-text-secondary"/> Tax Report</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/licenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileBadge className="w-4 h-4 text-text-secondary"/> Licenses</NavLink>
-                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/audit" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><History className="w-4 h-4 text-text-secondary"/> Audit Log</NavLink>
                   </div>
                </div>
                <div>

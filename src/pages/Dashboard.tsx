@@ -1,13 +1,16 @@
 import { StatTile } from "@/components/ui/StatTile";
 import { Card } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { mockOrders } from "@/lib/mockData";
-import { Store, ShoppingBag, ThermometerSun, CheckCircle2, BarChart3, LayoutGrid } from "lucide-react";
+import { Store, ShoppingBag, CheckCircle2, BarChart3, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RechartsChart } from "@/components/ui/RechartsChart";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { useState } from "react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { useApp } from "@/contexts/AppContext";
+import { useOrders } from "@/hooks/useOrders";
+import { useEntity } from "@/hooks/useEntity";
+import type { Tables } from "@/lib/database.types";
 
 const REVENUE_DATA = [
   { name: 'Jan', value: 2400 }, { name: 'Feb', value: 1398 }, { name: 'Mar', value: 4800 },
@@ -24,10 +27,31 @@ const CULTIVAR_DATA = [
 ];
 const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
 
+type Inventory = Tables<"inventory">;
+type Shipment = Tables<"shipments">;
+
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"operations" | "reporting">("operations");
   const { tasks, toggleTask } = useApp();
-  const pendingTasks = tasks.filter(t => !t.completed).slice(0, 5); // limit to 5 on dash
+  const pendingTasks = tasks.filter(t => !t.completed).slice(0, 5);
+
+  const { data: orders } = useOrders();
+  const { data: inventory } = useEntity<Inventory>("inventory", []);
+  const { data: shipments } = useEntity<Shipment>("shipments", []);
+
+  const stats = useMemo(() => {
+    const activeOrders = orders.filter((o) => ["pending", "processing", "packed"].includes(o.status)).length;
+    const plantsInStock = inventory.reduce((s, p) => s + (p.stock_juv ?? 0) + (p.stock_mat ?? 0) + (p.stock_flower ?? 0), 0);
+    const pendingShipments = shipments.filter((s) => s.status === "pending" || s.status === "ready").length;
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const revenueMtd = orders
+      .filter((o) => new Date(o.placed_at) >= monthStart && o.status !== "cancelled" && o.status !== "refunded")
+      .reduce((s, o) => s + Number(o.total), 0);
+    return { activeOrders, plantsInStock, pendingShipments, revenueMtd };
+  }, [orders, inventory, shipments]);
+
+  const recent = orders.slice(0, 5);
+  const watch = shipments.filter((s) => s.status === "pending" || s.status === "ready").slice(0, 3);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 flex flex-col h-full">
@@ -56,109 +80,89 @@ export default function Dashboard() {
         <>
           {/* Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
-            <StatTile
-              label="Active Orders"
-              value="42"
-              trend={{ value: "3", direction: "up", label: "from last week" }}
-            />
-            <StatTile
-              label="Plants in Stock"
-              value="1,248"
-            />
-            <StatTile
-              label="Pending Shipments"
-              value="18"
-              trend={{ value: "Heat advisory", direction: "down", label: "in 2 zips" }}
-            />
-            <StatTile
-              label="Revenue (MTD)"
-              value="$3,240"
-              trend={{ value: "12%", direction: "up", sparklineData: [210, 240, 260, 245, 290, 310, 305, 340, 420] }}
-            />
+            <StatTile label="Active Orders" value={stats.activeOrders.toString()} />
+            <StatTile label="Plants in Stock" value={stats.plantsInStock.toLocaleString()} />
+            <StatTile label="Pending Shipments" value={stats.pendingShipments.toString()} />
+            <StatTile label="Revenue (MTD)" value={`$${stats.revenueMtd.toFixed(2)}`} />
           </div>
 
           {/* Middle Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 shrink-0">
             {/* Recent Orders */}
             <div className="col-span-2 space-y-4">
-              <h2 className="text-base font-medium">Recent Orders</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-medium">Recent Orders</h2>
+                <Link to="/orders" className="text-xs text-text-secondary hover:text-text-primary">View all →</Link>
+              </div>
               <Card>
                 <div className="p-0">
-                  {mockOrders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 border-b border-border-subtle last:border-0 hover:bg-bg-hover transition-colors cursor-pointer">
+                  {recent.length === 0 && (
+                    <div className="p-6 text-sm text-text-tertiary text-center">No orders yet. <Link to="/orders" className="text-accent-brand hover:underline">Create one</Link>.</div>
+                  )}
+                  {recent.map((order) => (
+                    <Link key={order.id} to="/orders" className="flex items-center justify-between p-4 border-b border-border-subtle last:border-0 hover:bg-bg-hover transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-bg-active flex items-center justify-center text-sm font-medium border border-border-subtle shrink-0">
-                          {order.customer.split(" ").map(n => n[0]).join("")}
+                          {(order.customer?.name ?? "??").split(" ").map((n) => n[0]).join("").slice(0, 2)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{order.customer}</span>
+                            <span className="font-medium">{order.customer?.name ?? "Direct"}</span>
                             <StatusDot
                               status={
-                                order.status === "Pending" ? "alert" :
-                                order.status === "Processing" ? "warn" :
-                                order.status === "Packed" ? "info" : "ok"
+                                order.status === "pending" ? "alert" :
+                                order.status === "processing" ? "warn" :
+                                order.status === "packed" ? "info" : "ok"
                               }
                             />
                           </div>
-                          <div className="text-xs text-text-secondary mt-2 flex items-center gap-2">
+                          <div className="text-xs text-text-secondary mt-2 flex items-center gap-2 capitalize">
                             <span className="flex items-center gap-2">
-                              {order.channel === "Shopify" ? <Store className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+                              {order.channel === "shopify" ? <Store className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
                               {order.channel}
                             </span>
-                            <span>&middot;</span>
-                            <span>{order.id}</span>
-                            <span>&middot;</span>
-                            <span>{order.created}</span>
+                            <span>·</span>
+                            <span className="font-mono text-[11px]">{order.id.slice(0, 8)}</span>
+                            <span>·</span>
+                            <span>{new Date(order.placed_at).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium whitespace-nowrap">${order.subtotal.toFixed(2)}</div>
-                        <div className="text-xs text-text-secondary mt-2">{order.items} item{order.items !== 1 ? 's' : ''}</div>
+                        <div className="font-medium whitespace-nowrap">${Number(order.total).toFixed(2)}</div>
+                        <div className="text-xs text-text-secondary mt-2">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </Card>
             </div>
 
-            {/* Ship Window Watch */}
+            {/* Pending Shipments */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-medium">Ship-Window Watch</h2>
-                <div className="text-xs text-text-tertiary">Next Ship: Monday</div>
+                <h2 className="text-base font-medium">Pending Shipments</h2>
+                <Link to="/shipping" className="text-xs text-text-secondary hover:text-text-primary">All →</Link>
               </div>
               <div className="space-y-3">
-                {[
-                  { id: "ORD-1198", zip: "85001", dest: "Phoenix, AZ", temp: 95, cond: "Sunny", rec: "Hold", windowOpen: false },
-                  { id: "ORD-1199", zip: "98101", dest: "Seattle, WA", temp: 65, cond: "Cloudy", rec: "Ship", windowOpen: true },
-                  { id: "ORD-1200", zip: "10001", dest: "New York, NY", temp: 72, cond: "Clear", rec: "Ship", windowOpen: true },
-                ].map((watch) => (
-                  <Card key={watch.id} className="p-4">
+                {watch.length === 0 && (
+                  <Card className="p-4 text-sm text-text-tertiary text-center">No shipments queued.</Card>
+                )}
+                {watch.map((sh) => (
+                  <Card key={sh.id} className="p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <div className="text-sm font-medium">{watch.dest}</div>
-                        <div className="text-xs text-text-tertiary">{watch.id}</div>
+                        <div className="text-sm font-medium font-mono">{sh.id.slice(0, 8)}</div>
+                        <div className="text-xs text-text-tertiary">{sh.ship_to_state ? `${sh.ship_to_zip ?? ""} ${sh.ship_to_state}` : sh.carrier ?? "—"}</div>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <ThermometerSun className="w-3.5 h-3.5 text-text-secondary" />
-                          {watch.temp}&deg;F
-                        </div>
-                        <div className="text-xs text-text-secondary">{watch.cond}</div>
-                      </div>
+                      <Link to="/shipping" className="text-xs text-text-secondary hover:text-text-primary">Open</Link>
                     </div>
-                    <div className="flex items-center justify-between text-xs pt-3 border-t border-border-subtle mt-1">
+                    <div className="flex items-center justify-between text-xs pt-3 border-t border-border-subtle mt-1 capitalize">
                       <div className="flex items-center gap-2">
-                        <StatusDot status={watch.windowOpen ? "ok" : "alert"} />
-                        <span className="text-text-secondary">
-                          {watch.windowOpen ? "Window Open this Mon" : "Hold—Window Closed"}
-                        </span>
+                        <StatusDot status={sh.weather_hold ? "warn" : "info"} />
+                        <span className="text-text-secondary">{sh.status}</span>
                       </div>
-                      <div className={cn("font-medium", watch.windowOpen ? "text-status-ok" : "text-status-alert")}>
-                        {watch.rec}
-                      </div>
+                      {sh.weather_hold && <span className="text-status-warn">Weather hold</span>}
                     </div>
                   </Card>
                 ))}

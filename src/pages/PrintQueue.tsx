@@ -1,107 +1,116 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Printer, CheckCircle2, FileSearch } from "lucide-react";
-import { CultivarName } from "@/components/ui/CultivarName";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
+import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
+import { useEntity } from "@/hooks/useEntity";
+import { friendlyDbError } from "@/lib/dbErrors";
+import type { Tables } from "@/lib/database.types";
 
-const INITIAL_QUEUE = [
-  { id: "LBL-101", type: "Shipping Label", target: "ORD-1198", status: "pending", time: "10:00 AM" },
-  { id: "LBL-102", type: "Packing Slip", target: "ORD-1198", status: "pending", time: "10:00 AM" },
-  { id: "LBL-103", type: "Phyto Certificate", target: "ORD-1198", status: "pending", time: "10:01 AM" },
-  { id: "LBL-104", type: "Shipping Label", target: "ORD-1199", status: "printed", time: "9:45 AM" },
-  { id: "LBL-105", type: "Shipping Label", target: "ORD-1200", status: "printed", time: "9:46 AM" },
-];
+type PrintJob = Tables<"print_jobs">;
+
+const KIND_LABEL: Record<string, string> = {
+  label: "Shipping Label",
+  invoice: "Invoice / Packing Slip",
+  "care-card": "Care Card",
+  qr: "QR Code",
+  other: "Other",
+};
 
 export default function PrintQueue() {
-  const [queue, setQueue] = useState(INITIAL_QUEUE);
-  const [isPrinting, setIsPrinting] = useState(false);
+  const { data: jobs, update, remove, isLoading } = useEntity<PrintJob>("print_jobs", [], {
+    toRow: (j) => ({
+      shipment_id: j.shipment_id,
+      kind: j.kind,
+      status: j.status,
+      payload: j.payload,
+      printed_at: j.printed_at,
+    }),
+  });
   const { addToast } = useApp();
 
-  const handleClearCompleted = () => {
-    setQueue(prev => prev.filter(item => item.status !== "printed"));
-    addToast("Completed items cleared from queue.", "info");
+  const handlePrintAll = async () => {
+    addToast({ title: "Sending pending jobs…", status: "info" });
+    const pending = jobs.filter((j) => j.status === "pending");
+    await Promise.all(pending.map((j) => update(j.id, { status: "printed", printed_at: new Date().toISOString() } as Partial<PrintJob>)));
+    addToast({ title: "Marked as printed", description: `${pending.length} job(s)`, status: "ok" });
   };
 
-  const handlePrintAll = () => {
-    setIsPrinting(true);
-    addToast("Sending jobs to printer...", "info");
-    setTimeout(() => {
-      setQueue(prev => prev.map(item => ({ ...item, status: "printed" })));
-      setIsPrinting(false);
-      addToast("Successfully printed pending documents.", "success");
-    }, 1500);
-  };
-
-  const columns = useMemo(() => [
-    { accessorKey: "id", header: "ID", cell: (info: any) => <span className="font-mono text-xs">{info.getValue()}</span> },
-    { accessorKey: "type", header: "Document Type" },
-    { accessorKey: "target", header: "Related Order" },
-    { accessorKey: "time", header: "Time Queued", cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span> },
-    { 
-      accessorKey: "status", 
-      header: "Status",
-      cell: (info: any) => {
-        const isPending = info.getValue() === "pending";
-        return (
-          <div className={`flex items-center gap-2 ${isPending ? "text-status-warn" : "text-status-ok"}`}>
-            {isPending ? <Printer className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            <span className="capitalize">{info.getValue()}</span>
-          </div>
-        );
+  const handleClearCompleted = async () => {
+    const printed = jobs.filter((j) => j.status === "printed");
+    for (const j of printed) {
+      const result = await remove(j.id);
+      if (result.ok === false) {
+        addToast({ title: "Couldn't clear all", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+        return;
       }
-    },
-  ], []);
+    }
+    addToast({ title: "Queue cleared", description: `${printed.length} job(s)`, status: "info" });
+  };
 
-  const hasPending = queue.some(item => item.status === "pending");
-  const hasCompleted = queue.some(item => item.status === "printed");
-  const isEmpty = queue.length === 0;
+  const columns = useMemo(
+    () => [
+      { accessorKey: "id", header: "ID", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
+      { accessorKey: "kind", header: "Type", cell: (info: any) => KIND_LABEL[info.getValue()] ?? info.getValue() },
+      { accessorKey: "shipment_id", header: "Shipment", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ? info.getValue().slice(0, 8) : "—"}</span> },
+      { accessorKey: "created_at", header: "Queued", cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleTimeString()}</span> },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: (info: any) => {
+          const v = info.getValue();
+          const pending = v === "pending" || v === "printing";
+          return (
+            <div className={`flex items-center gap-2 ${pending ? "text-status-warn" : v === "failed" ? "text-status-alert" : "text-status-ok"}`}>
+              {pending ? <Printer className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              <span className="capitalize">{v}</span>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  const hasPending = jobs.some((j) => j.status === "pending" || j.status === "printing");
+  const hasCompleted = jobs.some((j) => j.status === "printed");
+  const isEmpty = !isLoading && jobs.length === 0;
 
   return (
     <div className="p-8 max-w-7xl mx-auto flex flex-col h-full">
       <div className="mb-6 flex items-center gap-4 shrink-0 justify-between">
         <div className="flex items-center gap-4">
           <Link to="/shipping">
-            <Button variant="outline" className="w-10 px-0">
+            <Button variant="outline" className="w-10 px-0" aria-label="Back to shipping">
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
           <div>
             <h1 className="text-2xl font-semibold">Print Queue</h1>
-            <p className="text-sm text-text-secondary">Manage labels, packing slips, and certificates pending print.</p>
+            <p className="text-sm text-text-secondary">Labels, slips, and certificates queued for printing.</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button 
-             variant="outline" 
-             onClick={handleClearCompleted}
-             disabled={!hasCompleted}
-          >
+          <Button variant="outline" onClick={handleClearCompleted} disabled={!hasCompleted}>
             Clear Completed
           </Button>
-          <Button 
-            variant="brand" 
-            onClick={handlePrintAll}
-            disabled={!hasPending || isPrinting}
-          >
-            <Printer className={`w-4 h-4 mr-2 ${isPrinting ? 'animate-pulse' : ''}`} />
-            {isPrinting ? "Printing..." : "Print All Pending"}
+          <Button variant="brand" onClick={handlePrintAll} disabled={!hasPending}>
+            <Printer className="w-4 h-4 mr-2" />
+            Mark All Printed
           </Button>
         </div>
       </div>
 
       <Card className="flex-1 overflow-auto flex flex-col">
-        {isEmpty ? (
-          <EmptyState 
-            icon={Printer} 
-            title="Empty queue" 
-            description="Nothing is waiting to be printed." 
-          />
+        {isLoading ? (
+          <LoadingTable cols={5} rows={6} />
+        ) : isEmpty ? (
+          <EmptyState icon={Printer} title="Queue empty" description="Print jobs queued from shipments will appear here." />
         ) : (
-          <DataTable columns={columns} data={queue} />
+          <DataTable columns={columns} data={jobs} />
         )}
       </Card>
     </div>
