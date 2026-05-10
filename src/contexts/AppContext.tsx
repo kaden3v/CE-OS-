@@ -15,6 +15,8 @@ type Toast = {
   description?: string;
   status: 'ok' | 'info' | 'warn' | 'alert';
   duration?: number;
+  /** Action shown inline on the toast (undo, retry, etc.). */
+  action?: { label: string; run: () => void };
 };
 
 type Notification = {

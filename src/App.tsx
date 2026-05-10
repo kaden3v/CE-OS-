@@ -25,15 +25,13 @@ import Licenses from "./pages/Licenses";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import { AppProvider } from "./contexts/AppContext";
-import { Toasts } from "./components/ui/Toasts";
-import { CommandPalette } from "./components/ui/CommandPalette";
+import { Toaster } from "./components/ui/Toaster";
 
 export default function App() {
   return (
     <AppProvider>
-      <Toasts />
+      <Toaster />
       <BrowserRouter>
-        <CommandPalette />
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
