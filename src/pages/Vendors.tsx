@@ -1,162 +1,178 @@
-import React, { useMemo, useState } from "react";
-import { DataTable } from "@/components/ui/DataTable";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
-import { Store, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { useApp } from "@/contexts/AppContext";
-import { Input } from "@/components/ui/Input";
+import { useMemo, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router';
+import { Download, ExternalLink } from 'lucide-react';
+import { DataTable } from '@/components/data/DataTable';
+import { RecordDrawer } from '@/components/record/RecordDrawer';
+import { Topbar } from '@/components/nav/Topbar';
+import { PeriodPicker } from '@/components/finance/PeriodPicker';
+import { vendorConfig, type VendorRecord } from '@/components/record/configs/vendor';
+import type { ColumnDef } from '@/components/data/types';
+import { listTransactions, listVendors } from '@/lib/finance/store';
+import { defaultPeriod } from '@/lib/finance/period';
+import { accountName } from '@/lib/finance/accounts';
+import { formatCents, type PeriodSelection } from '@/lib/finance/types';
+import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
+import { useApp } from '@/contexts/AppContext';
 
-const INITIAL_VENDORS = [
-  { id: 1, name: "Mountain Crest Gardens", category: "Plants", ytd: 450.00, lastOrder: "2 months ago", contact: "wholesale@example.com" },
-  { id: 2, name: "Carnivero", category: "Plants", ytd: 820.00, lastOrder: "4 months ago", contact: "sales@example.com" },
-  { id: 3, name: "USPS", category: "Shipping", ytd: 1450.50, lastOrder: "1 week ago", contact: "N/A" },
-  { id: 4, name: "Amazon Business", category: "Supplies", ytd: 340.25, lastOrder: "3 weeks ago", contact: "N/A" },
-  { id: 5, name: "Sphagnum Moss Co.", category: "Media", ytd: 290.00, lastOrder: "2 months ago", contact: "orders@moss.com" },
-];
-
+/**
+ * Vendors are projections of the ledger — there's no separate "vendor"
+ * entity yet. Every distinct `vendor` string on a journal entry rolls up
+ * into one row here. Pass 3 will introduce a real vendor record with
+ * contact info, payment terms, etc.
+ */
 export default function Vendors() {
-  const [vendors, setVendors] = useState(INITIAL_VENDORS);
-  const { data, isLoading, isError, isEmpty } = useDataState(vendors);
-  const { addToast } = useApp();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { settings, addToast } = useApp();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const [period, setPeriod] = useState<PeriodSelection>(() => defaultPeriod(settings.fiscalYearStartMonth));
 
-  // Form State
-  const [newName, setNewName] = useState("");
-  const [newCategory, setNewCategory] = useState("Supplies");
-  const [newContact, setNewContact] = useState("");
+  const periodArg = { start: period.current.start, end: period.current.end };
 
-  const handleAddVendor = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName) return;
+  const vendors = useMemo<VendorRecord[]>(() => {
+    const rolled = listVendors({ period: periodArg, method: settings.accountingMethod });
+    return rolled.map(v => {
+      const transactions = listTransactions({
+        period: periodArg,
+        method: settings.accountingMethod,
+        vendors: [v.name],
+      });
+      return {
+        id: slug(v.name),
+        name: v.name,
+        primaryAccount: v.categoryCode,
+        totalCents: v.totalCents,
+        lastDate: v.lastDate,
+        transactionCount: transactions.length,
+        transactions,
+      };
+    });
+  }, [period, settings.accountingMethod]);
 
-    setVendors([{
-      id: Date.now(),
-      name: newName,
-      category: newCategory,
-      ytd: 0,
-      lastOrder: "Never",
-      contact: newContact || "N/A"
-    }, ...vendors]);
-    
-    setIsModalOpen(false);
-    setNewName("");
-    setNewCategory("Supplies");
-    setNewContact("");
-    addToast({ title: "Vendor Added", description: `${newName} has been added to your directory.`, status: "success" });
+  // Drill-down
+  const openId = params.get('id');
+  const openIndex = useMemo(() => vendors.findIndex(v => v.id === openId), [vendors, openId]);
+  const openVendor = openIndex >= 0 ? vendors[openIndex] : null;
+  const openRecord = (id: string) => { const n = new URLSearchParams(params); n.set('id', id); setParams(n, { replace: false }); };
+  const closeRecord = () => { const n = new URLSearchParams(params); n.delete('id'); setParams(n, { replace: true }); };
+
+  // Drawer actions
+  const config = useMemo(() => vendorConfig({
+    onNewExpense: (v) => {
+      addToast({ title: `Open Expenses → New, pre-fill ${v.name}`, status: 'info' });
+      navigate(`/finances/expenses?vendor=${encodeURIComponent(v.name)}`);
+    },
+    onFlag: (v) => addToast({ title: `Flagged ${v.name} for review`, status: 'warn' }),
+    onOpenTransaction: (tx) => {
+      closeRecord();
+      navigate(`/finances/expenses?id=${tx.id}`);
+    },
+  }), [navigate, addToast]);
+
+  // Columns
+  const columns: ColumnDef<VendorRecord>[] = useMemo(() => [
+    {
+      id: 'name', accessor: 'name', header: 'Vendor', width: 220, pin: 'left',
+      cell: (v) => <span className="font-medium text-text-primary">{v.name}</span>,
+    },
+    {
+      id: 'primaryAccount', accessor: 'primaryAccount', header: 'Primary GL', width: 220, filterable: true, groupable: true,
+      cell: (v) => (
+        <span className="text-text-secondary">
+          <span className="font-mono text-text-tertiary text-[11px] mr-2">{v.primaryAccount}</span>
+          {accountName(v.primaryAccount)}
+        </span>
+      ),
+    },
+    {
+      id: 'totalCents', accessor: 'totalCents', header: 'Total spent', width: 120, numeric: true,
+      cell: (v) => <span className="tabular-nums font-medium text-text-primary">{formatCents(v.totalCents)}</span>,
+    },
+    {
+      id: 'transactionCount', accessor: 'transactionCount', header: 'Txns', width: 80, numeric: true,
+      cell: (v) => <span className="tabular-nums text-text-secondary">{v.transactionCount}</span>,
+    },
+    {
+      id: 'lastDate', accessor: 'lastDate', header: 'Last activity', width: 130,
+      cell: (v) => <span className="tabular-nums text-text-secondary">{v.lastDate}</span>,
+    },
+    {
+      id: 'drill', header: '', width: 60, sortable: false, filterable: false,
+      cell: (v) => (
+        <button
+          data-table-cell-stop
+          onClick={(e) => { e.stopPropagation(); navigate(`/finances/expenses?vendor=${encodeURIComponent(v.name)}`); }}
+          aria-label={`See expenses for ${v.name}`}
+          className="text-text-tertiary hover:text-text-primary p-1 rounded hover:bg-bg-hover transition-colors duration-[120ms]"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+        </button>
+      ),
+    },
+  ], [navigate]);
+
+  const onExportCsv = () => {
+    const csv = toCsv(vendors, [
+      { header: 'Vendor',         value: v => v.name },
+      { header: 'Primary GL',     value: v => v.primaryAccount },
+      { header: 'Primary GL Name', value: v => accountName(v.primaryAccount) },
+      { header: 'Total Spent',    value: v => (v.totalCents / 100).toFixed(2) },
+      { header: 'Transactions',   value: v => v.transactionCount },
+      { header: 'Last Activity',  value: v => v.lastDate },
+    ]);
+    downloadCsv(csv, timestampedFilename(`vendors-${period.current.label.replace(/\s+/g, '-').toLowerCase()}`));
+    addToast({ title: `Exported ${vendors.length} vendors`, status: 'ok' });
   };
 
-  const columns = useMemo(() => [
-    {
-      accessorKey: "name",
-      header: "Name",
-      cell: (info: any) => <span className="font-medium">{info.getValue()}</span>,
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      cell: (info: any) => <Badge>{info.getValue()}</Badge>,
-    },
-    {
-      accessorKey: "ytd",
-      header: "Total Spent YTD",
-      cell: (info: any) => <span className="tabular-nums">${info.getValue().toFixed(2)}</span>,
-    },
-    {
-      accessorKey: "lastOrder",
-      header: "Last Order",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
-    },
-    {
-      accessorKey: "contact",
-      header: "Contact",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
-    },
-  ], []);
-
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full flex flex-col relative">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold mb-2">Vendors</h1>
-          <p className="text-sm text-text-secondary">Directory of suppliers, nurseries, and service providers.</p>
-        </div>
-        <Button variant="brand" onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Vendor
-        </Button>
+    <>
+      <Topbar
+        actions={
+          <>
+            <PeriodPicker value={period} onChange={setPeriod} accountingMethod={settings.accountingMethod} fiscalYearStartMonth={settings.fiscalYearStartMonth} />
+            <button
+              onClick={onExportCsv}
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+            >
+              <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+              Export CSV
+            </button>
+          </>
+        }
+      />
+
+      <div className="p-4 md:p-6 space-y-4">
+        <p className="text-[12px] text-text-tertiary">
+          Vendors are projected from the ledger. Every expense that names a vendor rolls up here.
+          A real vendor directory with contact + payment terms ships in Pass 3.
+        </p>
+
+        <DataTable<VendorRecord>
+          storageKey="vendors.v2"
+          rows={vendors}
+          columns={columns}
+          getRowId={(v) => v.id}
+          onRowOpen={(v) => openRecord(v.id)}
+          emptyState={{
+            title: 'No vendors in this period',
+            description: 'As you log expenses, vendors appear here grouped by name.',
+            action: { label: 'Log an expense', onClick: () => navigate('/finances/expenses') },
+          }}
+          rowLabel={(v) => `${v.name}, ${formatCents(v.totalCents)} across ${v.transactionCount} transactions`}
+        />
       </div>
 
-      <Card className="flex-1 overflow-auto flex flex-col">
-        {isLoading && <LoadingTable cols={5} rows={8} />}
-        {isError && <ErrorState />}
-        {!isLoading && !isError && isEmpty && (
-          <EmptyState 
-            icon={Store} 
-            title="No vendors yet" 
-            description="Directory of suppliers, nurseries, and service providers." 
-            action={<Button variant="outline" onClick={() => setIsModalOpen(true)}>Add Vendor</Button>}
-          />
-        )}
-        {!isLoading && !isError && !isEmpty && <DataTable columns={columns} data={data} />}
-      </Card>
-
-      {/* Add Vendor Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-             <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 className="text-lg font-semibold">New Vendor</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleAddVendor} className="flex-1 overflow-y-auto p-4 space-y-4">
-               <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Company Name</label>
-                  <Input 
-                    type="text" 
-                    required
-                    placeholder="E.g. XYZ Nursery" 
-                    value={newName}
-                    onChange={e => setNewName(e.target.value)}
-                  />
-               </div>
-               <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Category</label>
-                  <select 
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong transition-colors"
-                    value={newCategory}
-                    onChange={e => setNewCategory(e.target.value)}
-                  >
-                    <option>Plants</option>
-                    <option>Seeds</option>
-                    <option>Media</option>
-                    <option>Supplies</option>
-                    <option>Shipping</option>
-                    <option>Other</option>
-                  </select>
-               </div>
-               <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Contact Info</label>
-                  <Input 
-                    type="text" 
-                    placeholder="Email or phone" 
-                    value={newContact}
-                    onChange={e => setNewContact(e.target.value)}
-                  />
-               </div>
-               <div className="mt-8 pt-4 flex justify-end gap-3 border-t border-border-subtle">
-                <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                <Button type="submit">Save Vendor</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
-    </div>
+      <RecordDrawer
+        open={!!openVendor}
+        record={openVendor}
+        config={config}
+        onClose={closeRecord}
+        onPrev={openIndex > 0 ? () => openRecord(vendors[openIndex - 1].id) : undefined}
+        onNext={openIndex >= 0 && openIndex < vendors.length - 1 ? () => openRecord(vendors[openIndex + 1].id) : undefined}
+      />
+    </>
   );
+}
+
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }

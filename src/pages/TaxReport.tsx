@@ -1,137 +1,301 @@
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Download, BarChart2 } from "lucide-react";
-import { useApp } from "@/contexts/AppContext";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { Download, ChevronRight, Lock, AlertTriangle } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Topbar } from '@/components/nav/Topbar';
+import { PeriodPicker } from '@/components/finance/PeriodPicker';
+import { resolve, pctChange } from '@/lib/finance/period';
+import {
+  listTransactions, listRevenue, totalsByAccount, revenueTotalCents, totalCents, monthlyCashFlow,
+} from '@/lib/finance/store';
+import { CHART_OF_ACCOUNTS, accountByCode } from '@/lib/finance/accounts';
+import { formatCents, type PeriodSelection } from '@/lib/finance/types';
+import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
+import { useApp } from '@/contexts/AppContext';
+import { cn } from '@/lib/utils';
 
-const MONTHLY_DATA = [
-  { name: 'Jan', income: 4200, expense: 1200 },
-  { name: 'Feb', income: 3800, expense: 1398 },
-  { name: 'Mar', income: 2900, expense: 800 },
-  { name: 'Apr', income: 3100, expense: 908 },
-  { name: 'May', income: 3890, expense: 1100 },
-  { name: 'Jun', income: 4390, expense: 800 },
-  { name: 'Jul', income: 5490, expense: 1300 },
-  { name: 'Aug', income: 4900, expense: 900 },
-  { name: 'Sep', income: 3400, expense: 800 },
-  { name: 'Oct', income: 3100, expense: 900 },
-  { name: 'Nov', income: 4900, expense: 1800 },
-  { name: 'Dec', income: 6800, expense: 2300 },
-];
-
+/**
+ * The tax report is a projection of the ledger. Every number is computed,
+ * and every line is a drill-down into Expenses (or Orders for revenue).
+ * No more hand-typed "$24,560" string literals.
+ */
 export default function TaxReport() {
-  const { addToast } = useApp();
+  const navigate = useNavigate();
+  const { settings, addToast } = useApp();
+  // Default to the current calendar year for the tax report.
+  const currentYear = new Date().getFullYear();
+  const [period, setPeriod] = useState<PeriodSelection>(resolve({ kind: 'year', year: currentYear }));
 
-  const handleExport = () => {
-    addToast({ title: "Export Started", description: "Your 2026 Tax Report PDF is generating.", status: "info" });
+  const periodArg = { start: period.current.start, end: period.current.end };
+  const prevArg   = period.previous ? { start: period.previous.start, end: period.previous.end } : null;
+
+  // ── Computed totals ────────────────────────────────────────────────────────
+  const revenueCents = useMemo(() => revenueTotalCents({ period: periodArg, method: settings.accountingMethod }), [period, settings.accountingMethod]);
+  const expensesCents = useMemo(() => totalCents({ period: periodArg, method: settings.accountingMethod }), [period, settings.accountingMethod]);
+  const netCents = revenueCents - expensesCents;
+
+  const prevRevenue  = useMemo(() => prevArg ? revenueTotalCents({ period: prevArg, method: settings.accountingMethod }) : null, [prevArg, settings.accountingMethod]);
+  const prevExpenses = useMemo(() => prevArg ? totalCents({ period: prevArg, method: settings.accountingMethod }) : null, [prevArg, settings.accountingMethod]);
+  const prevNet      = prevRevenue != null && prevExpenses != null ? prevRevenue - prevExpenses : null;
+
+  // Breakdown
+  const revenueBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of listRevenue({ period: periodArg, method: settings.accountingMethod })) {
+      map.set(r.account, (map.get(r.account) ?? 0) + r.amountCents);
+    }
+    return Array.from(map.entries())
+      .map(([code, cents]) => ({ code, name: accountByCode(code)?.name ?? code, cents }))
+      .sort((a, b) => b.cents - a.cents);
+  }, [period, settings.accountingMethod]);
+
+  const expenseTotals = useMemo(() => totalsByAccount({ period: periodArg, method: settings.accountingMethod }), [period, settings.accountingMethod]);
+
+  // Group expense rows by Schedule C line for the deductions panel.
+  const expenseBySchedC = useMemo(() => {
+    const groups = new Map<string, Array<{ code: string; name: string; cents: number }>>();
+    for (const t of expenseTotals.values()) {
+      const sc = t.scheduleC ?? '—';
+      if (!groups.has(sc)) groups.set(sc, []);
+      groups.get(sc)!.push(t);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([scheduleC, items]) => ({
+        scheduleC,
+        items: items.sort((a, b) => b.cents - a.cents),
+        subtotal: items.reduce((s, i) => s + i.cents, 0),
+      }));
+  }, [expenseTotals]);
+
+  // Monthly chart data
+  const chartData = useMemo(() => {
+    return monthlyCashFlow({ period: periodArg, method: settings.accountingMethod }).map(m => ({
+      month: m.month.slice(5) + '/' + m.month.slice(2, 4), // MM/YY
+      income: m.income / 100,
+      expense: m.expense / 100,
+    }));
+  }, [period, settings.accountingMethod]);
+
+  // ── Drill-down ─────────────────────────────────────────────────────────────
+  const drillRevenue = (code: string) => {
+    addToast({ title: `Revenue drill-down (${code}) → Orders by channel will live here`, status: 'info' });
+    // Pass 4: navigate to Orders with channel filter
   };
 
+  const drillExpense = (code: string) => {
+    navigate(`/finances/expenses?account=${code}`);
+  };
+
+  // ── Quarterly estimated tax (federal SE + income approximation) ────────────
+  // 30% blended is a placeholder; real safe-harbor calc lands in Pass 4.
+  const estimatedTaxCents = Math.max(0, Math.round(netCents * 0.30));
+
+  // ── CSV export ─────────────────────────────────────────────────────────────
+  const onExportCsv = () => {
+    const rows: Array<{ section: string; code: string; name: string; cents: number; scheduleC?: string }> = [];
+    for (const r of revenueBreakdown) rows.push({ section: 'Revenue', code: r.code, name: r.name, cents: r.cents });
+    for (const t of expenseTotals.values())   rows.push({ section: 'Expense', code: t.code, name: t.name, cents: t.cents, scheduleC: t.scheduleC });
+
+    const csv = toCsv(rows, [
+      { header: 'Section',     value: r => r.section },
+      { header: 'GL Code',     value: r => r.code },
+      { header: 'Account',     value: r => r.name },
+      { header: 'Amount',      value: r => (r.cents / 100).toFixed(2) },
+      { header: 'Schedule C',  value: r => r.scheduleC ?? '' },
+    ]);
+    downloadCsv(csv, timestampedFilename(`tax-report-${period.current.label.replace(/\s+/g, '-').toLowerCase()}`));
+    addToast({ title: 'Tax report exported', status: 'ok' });
+  };
+
+  // ── Year-end snapshot link ─────────────────────────────────────────────────
+  const isFullYear = period.current.label === String(currentYear) || /^\d{4}$/.test(period.current.label);
+  const snapshotYear = isFullYear ? Number(period.current.label) : null;
+
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col overflow-y-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold mb-2">Tax Report</h1>
-          <p className="text-sm text-text-secondary">Year-end summary for 2026.</p>
-        </div>
-        <Button variant="outline" onClick={handleExport}>
-          <Download className="w-4 h-4 mr-2" />
-          Export PDF
-        </Button>
-      </div>
+    <>
+      <Topbar
+        actions={
+          <>
+            <PeriodPicker value={period} onChange={setPeriod} accountingMethod={settings.accountingMethod} fiscalYearStartMonth={settings.fiscalYearStartMonth} />
+            {snapshotYear && (
+              <button
+                onClick={() => navigate(`/finances/tax-report/year-end/${snapshotYear}`)}
+                className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+              >
+                <Lock className="w-3.5 h-3.5" strokeWidth={1.5} />
+                Year-end snapshot
+              </button>
+            )}
+            <button
+              onClick={onExportCsv}
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+            >
+              <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+              Export CSV
+            </button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="p-6">
-            <h2 className="text-lg font-medium mb-4 pb-4 border-b border-border-subtle">Income</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Shopify Gross Sales</span>
-                <span className="tabular-nums">$24,560.00</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Etsy Gross Sales</span>
-                <span className="tabular-nums">$18,420.50</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-border-subtle font-medium">
-                <span>Total Gross Income</span>
-                <span className="tabular-nums text-status-ok">$42,980.50</span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-lg font-medium mb-4 pb-4 border-b border-border-subtle">Expenses & Deductions</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Cost of Goods Sold (Plants/Seeds)</span>
-                <span className="tabular-nums">$2,140.00</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Supplies & Media</span>
-                <span className="tabular-nums">$1,850.25</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Shipping & Postage</span>
-                <span className="tabular-nums">$4,120.00</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Home Office / Utilities</span>
-                <span className="tabular-nums">$1,200.00</span>
-              </div>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-text-secondary">Licenses & Permits</span>
-                <span className="tabular-nums">$350.00</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-border-subtle font-medium">
-                <span>Total Deductible Expenses</span>
-                <span className="tabular-nums text-status-alert">$9,660.25</span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 border-border-strong relative overflow-hidden bg-bg-active">
-            <div className="absolute inset-0 bg-gradient-to-br from-accent-brand/10 to-transparent pointer-events-none"></div>
-            <h2 className="text-lg font-medium mb-4 pb-4 border-b border-border-subtle text-accent-brand relative z-10">Summary</h2>
-            <div className="space-y-3 relative z-10">
-              <div className="flex justify-between items-center font-medium text-lg text-text-primary">
-                <span>Net Profit</span>
-                <span className="tabular-nums">$33,320.25</span>
-              </div>
-              <div className="flex justify-between items-center text-sm pt-2">
-                <span className="text-text-secondary">Estimated Quarterly Tax (30%)</span>
-                <span className="tabular-nums font-medium text-status-alert">$9,996.07</span>
-              </div>
-            </div>
-          </Card>
+      <div className="p-4 md:p-6 space-y-4">
+        {/* Tiles */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Tile label="Gross income" value={formatCents(revenueCents)} delta={prevRevenue != null ? pctChange(revenueCents, prevRevenue) : null} deltaLabel={period.previous?.label} positiveIsGood />
+          <Tile label="Deductible expenses" value={formatCents(expensesCents)} delta={prevExpenses != null ? pctChange(expensesCents, prevExpenses) : null} deltaLabel={period.previous?.label} positiveIsGood={false} />
+          <Tile label="Net profit" value={formatCents(netCents)} delta={prevNet != null ? pctChange(netCents, prevNet) : null} deltaLabel={period.previous?.label} tone={netCents >= 0 ? 'ok' : 'alert'} positiveIsGood />
+          <Tile label="Est. tax (30%)" value={formatCents(estimatedTaxCents)} tone="warn" hint="Placeholder — Pass 4 wires real safe-harbor calc" />
         </div>
 
-        <Card className="lg:col-span-2 p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-border-subtle">
-             <h2 className="text-lg font-medium">Monthly Cash Flow</h2>
-             <BarChart2 className="w-5 h-5 text-text-tertiary" />
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          {/* Income breakdown */}
+          <div className="lg:col-span-2 rounded-lg border border-border-subtle bg-bg-base">
+            <header className="h-10 px-4 flex items-center justify-between border-b border-border-subtle">
+              <h2 className="text-[13px] font-semibold text-text-primary">Income</h2>
+              <span className="text-[11px] text-text-tertiary tabular-nums">{revenueBreakdown.length} {revenueBreakdown.length === 1 ? 'account' : 'accounts'}</span>
+            </header>
+            {revenueBreakdown.length === 0 ? (
+              <p className="px-4 py-6 text-[12px] text-text-tertiary text-center">No revenue posted in this period.</p>
+            ) : (
+              <ul className="divide-y divide-border-subtle">
+                {revenueBreakdown.map(r => (
+                  <LineRow key={r.code} code={r.code} name={r.name} cents={r.cents} onClick={() => drillRevenue(r.code)} positive />
+                ))}
+                <li className="h-10 px-4 flex items-center justify-between bg-bg-elevated/40">
+                  <span className="text-[13px] font-medium text-text-primary">Total revenue</span>
+                  <span className="tabular-nums font-semibold text-status-ok">{formatCents(revenueCents)}</span>
+                </li>
+              </ul>
+            )}
           </div>
-          <div className="flex-1 w-full min-h-[400px] relative">
-             <div className="absolute inset-0">
-                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={MONTHLY_DATA} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                       <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
-                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--color-text-tertiary)', fontSize: 12}} dy={10} />
-                       <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--color-text-tertiary)', fontSize: 12}} tickFormatter={(val) => `$${val}`} />
-                       <Tooltip 
-                         cursor={{fill: 'var(--color-bg-active)'}}
-                         contentStyle={{backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-strong)', borderRadius: '8px'}}
-                         itemStyle={{fontSize: '14px', fontWeight: 500}}
-                         labelStyle={{color: 'var(--color-text-secondary)', marginBottom: '8px'}}
-                       />
-                       <Legend wrapperStyle={{paddingTop: '20px'}} />
-                       <Bar dataKey="income" name="Gross Income" fill="var(--color-status-ok)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                       <Bar dataKey="expense" name="Expenses" fill="var(--color-status-alert)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                    </BarChart>
-                 </ResponsiveContainer>
-             </div>
+
+          {/* Deductions grouped by Schedule C */}
+          <div className="lg:col-span-3 rounded-lg border border-border-subtle bg-bg-base">
+            <header className="h-10 px-4 flex items-center justify-between border-b border-border-subtle">
+              <h2 className="text-[13px] font-semibold text-text-primary">Deductible expenses — by Schedule C line</h2>
+              <span className="text-[11px] text-text-tertiary tabular-nums">{expenseTotals.size} {expenseTotals.size === 1 ? 'account' : 'accounts'}</span>
+            </header>
+            {expenseBySchedC.length === 0 ? (
+              <p className="px-4 py-6 text-[12px] text-text-tertiary text-center">No expenses in this period.</p>
+            ) : (
+              <ul>
+                {expenseBySchedC.map(group => (
+                  <li key={group.scheduleC} className="border-b border-border-subtle last:border-0">
+                    <div className="px-4 h-8 flex items-center justify-between bg-bg-elevated/40 border-b border-border-subtle">
+                      <span className="text-[11px] uppercase tracking-wider font-medium text-text-tertiary">
+                        {group.scheduleC === '—' ? 'Uncategorized' : `Schedule C — Line ${group.scheduleC}`}
+                      </span>
+                      <span className="tabular-nums text-[12px] text-text-secondary">{formatCents(group.subtotal)}</span>
+                    </div>
+                    <ul className="divide-y divide-border-subtle/60">
+                      {group.items.map(t => (
+                        <LineRow key={t.code} code={t.code} name={t.name} cents={t.cents} onClick={() => drillExpense(t.code)} />
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+                <li className="h-10 px-4 flex items-center justify-between bg-bg-elevated/40">
+                  <span className="text-[13px] font-medium text-text-primary">Total deductions</span>
+                  <span className="tabular-nums font-semibold text-status-alert">{formatCents(expensesCents)}</span>
+                </li>
+              </ul>
+            )}
           </div>
-        </Card>
+        </div>
+
+        {/* Chart */}
+        <div className="rounded-lg border border-border-subtle bg-bg-base">
+          <header className="h-10 px-4 flex items-center justify-between border-b border-border-subtle">
+            <h2 className="text-[13px] font-semibold text-text-primary">Monthly cash flow</h2>
+            <span className="text-[11px] text-text-tertiary">{period.current.label}</span>
+          </header>
+          <div className="p-3 h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-subtle)" vertical={false} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }} dy={8} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--color-text-tertiary)', fontSize: 11 }} tickFormatter={(v) => `$${v}`} width={60} />
+                <Tooltip
+                  cursor={{ fill: 'var(--color-bg-active)' }}
+                  contentStyle={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)', borderRadius: '8px', fontSize: '12px' }}
+                  formatter={(v: number) => `$${v.toFixed(2)}`}
+                />
+                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+                <Bar dataKey="income"  name="Income"   fill="var(--color-status-ok)"    radius={[2, 2, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="expense" name="Expenses" fill="var(--color-status-alert)" radius={[2, 2, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Caveat banner */}
+        <div className="rounded-lg border border-status-warn/30 bg-status-warn/[0.06] p-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-status-warn flex-shrink-0 mt-0.5" strokeWidth={1.5} />
+          <div className="text-[12px] text-text-secondary leading-[1.6]">
+            <strong className="text-text-primary">Draft only.</strong> These numbers come from the in-memory ledger and are not reviewed by a CPA. Estimated tax is a flat 30% placeholder; real safe-harbor calculation arrives in Pass 4 alongside the Schedule C export. Use this as a planning view, not a filing document.
+          </div>
+        </div>
       </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function Tile({ label, value, delta, deltaLabel, tone, hint, positiveIsGood }: {
+  label: string;
+  value: string;
+  delta?: number | null;
+  deltaLabel?: string;
+  tone?: 'ok' | 'warn' | 'alert';
+  hint?: string;
+  positiveIsGood?: boolean;
+}) {
+  const toneClass = tone === 'ok' ? 'text-status-ok' : tone === 'warn' ? 'text-status-warn' : tone === 'alert' ? 'text-status-alert' : 'text-text-primary';
+  const deltaTone = delta == null ? 'text-text-tertiary'
+    : positiveIsGood
+      ? (delta > 0 ? 'text-status-ok' : 'text-status-alert')
+      : (delta > 0 ? 'text-status-alert' : 'text-status-ok');
+  return (
+    <div className="p-3 rounded-lg bg-bg-elevated border border-border-subtle">
+      <div className="text-[11px] uppercase tracking-wider font-medium text-text-tertiary mb-1">{label}</div>
+      <div className={cn('text-[22px] font-semibold tabular-nums', toneClass)}>{value}</div>
+      {delta != null && deltaLabel && (
+        <div className={cn('text-[11px] mt-0.5 tabular-nums', deltaTone)}>
+          {delta > 0 ? '+' : ''}{delta.toFixed(1)}% vs {deltaLabel}
+        </div>
+      )}
+      {hint && <div className="text-[11px] mt-0.5 text-text-tertiary italic">{hint}</div>}
     </div>
+  );
+}
+
+function LineRow({ code, name, cents, onClick, positive }: {
+  code: string;
+  name: string;
+  cents: number;
+  onClick: () => void;
+  positive?: boolean;
+}) {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className={cn(
+          'w-full h-9 px-4 flex items-center justify-between gap-2 hover:bg-bg-hover transition-colors duration-[120ms] group/r',
+          'text-left',
+        )}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="font-mono text-[11px] text-text-tertiary flex-shrink-0">{code}</span>
+          <span className="text-[13px] text-text-primary truncate">{name}</span>
+        </span>
+        <span className="flex items-center gap-1.5 flex-shrink-0">
+          <span className={cn('tabular-nums text-[13px]', positive ? 'text-status-ok' : 'text-text-primary')}>
+            {formatCents(cents)}
+          </span>
+          <ChevronRight className="w-3 h-3 text-text-tertiary opacity-0 group-hover/r:opacity-100 transition-opacity duration-[120ms]" />
+        </span>
+      </button>
+    </li>
   );
 }

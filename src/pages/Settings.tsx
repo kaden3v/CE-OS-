@@ -71,6 +71,53 @@ export default function Settings() {
         </section>
 
         <section>
+          <h2 className="text-lg font-medium mb-4">Finance</h2>
+          <Card className="divide-y divide-border-subtle p-0">
+            <div className="p-4 flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">Accounting method</div>
+                <div className="text-xs text-text-secondary mt-2">
+                  Cash recognizes events when money moves. Accrual recognizes when work is done.
+                  Changing this re-projects every period filter — make sure your books are reconciled before switching.
+                </div>
+              </div>
+              <div className="flex items-center rounded-md border border-border-subtle bg-bg-base p-0.5 flex-shrink-0 ml-4">
+                {(['accrual', 'cash'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => updateSettings({ accountingMethod: m })}
+                    className={`h-7 px-3 rounded text-xs font-medium uppercase tracking-wider transition-colors ${
+                      settings.accountingMethod === m
+                        ? 'bg-bg-elevated text-text-primary'
+                        : 'text-text-tertiary hover:text-text-secondary'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm">Fiscal year start</div>
+                <div className="text-xs text-text-secondary mt-2">
+                  Calendar year (Jan) is the default. Change only if your business operates on a non-calendar fiscal year.
+                </div>
+              </div>
+              <select
+                value={settings.fiscalYearStartMonth}
+                onChange={(e) => updateSettings({ fiscalYearStartMonth: Number(e.target.value) })}
+                className="h-8 px-2 rounded-md bg-bg-base border border-border-subtle text-sm text-text-primary focus:outline-none focus:border-accent-brand transition-colors"
+              >
+                {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                  <option key={m} value={i + 1}>{m}</option>
+                ))}
+              </select>
+            </div>
+          </Card>
+        </section>
+
+        <section>
           <h2 className="text-lg font-medium mb-4">Notifications</h2>
           <Card className="divide-y divide-border-subtle p-0">
             {[

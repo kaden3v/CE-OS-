@@ -131,13 +131,13 @@ export const routes: Route[] = [
 
   { id: 'cultivar-profit', label: 'Cultivar Profit', href: '/cultivars/profit', icon: TrendingUp, section: 'reports' },
   { id: 'qr-analytics',    label: 'QR Analytics',     href: '/inventory/qr-codes/analytics', icon: BarChart3, section: 'reports' },
-  { id: 'tax-report',      label: 'Tax Report',       href: '/finances/tax-report', icon: FileSpreadsheet, section: 'reports', goto: 'r' },
-  { id: 'year-end',        label: 'Year-End Snapshot', href: '/finances/tax-report/year-end', icon: Calendar, section: 'reports' },
-  { id: 'expenses',        label: 'Expenses', href: '/finances/expenses', icon: Receipt, section: 'reports', goto: 'f' },
-  { id: 'supplies',        label: 'Supplies', href: '/finances/supplies', icon: PackageOpen, section: 'reports' },
-  { id: 'vendors',         label: 'Vendors',  href: '/finances/vendors',  icon: Store,    section: 'reports' },
+  { id: 'tax-report',      label: 'Tax Report',       href: '/finances/tax-report', icon: FileSpreadsheet, section: 'reports', goto: 'r', keywords: ['taxes', 'p&l', 'profit', 'loss', 'income statement', 'schedule c'] },
+  { id: 'year-end',        label: 'Year-End Snapshot', href: '/finances/tax-report/year-end', icon: Calendar, section: 'reports', keywords: ['closed period', 'historical', 'archive'] },
+  { id: 'expenses',        label: 'Expenses', href: '/finances/expenses', icon: Receipt, section: 'reports', goto: 'f', keywords: ['spending', 'receipts', 'deductions', 'ledger', 'transactions'] },
+  { id: 'supplies',        label: 'Supplies', href: '/finances/supplies', icon: PackageOpen, section: 'reports', keywords: ['inventory', 'reorder', 'stock', 'pots', 'media'] },
+  { id: 'vendors',         label: 'Vendors',  href: '/finances/vendors',  icon: Store,    section: 'reports', keywords: ['suppliers', 'merchants', 'payees'] },
   { id: 'licenses',        label: 'Licenses', href: '/licenses', icon: FileBadge, section: 'reports' },
-  { id: 'audit-log',       label: 'Audit Log', href: '/audit', icon: History, section: 'reports' },
+  { id: 'audit-log',       label: 'Audit Log', href: '/audit', icon: History, section: 'reports', keywords: ['history', 'changelog', 'who changed'] },
 
   { id: 'settings', label: 'Settings', href: '/settings', icon: Settings, section: 'settings' },
 ];
@@ -175,6 +175,26 @@ export const actions: Action[] = [
     group: 'create',
     keywords: ['report bug', 'new bug', 'issue'],
     run: (ctx) => ctx.toast('New bug report drafted', 'info'),
+  },
+  {
+    id: 'create.expense',
+    label: 'Log a new expense',
+    group: 'create',
+    keywords: ['expense', 'receipt', 'spend', 'add expense'],
+    run: (ctx) => { ctx.navigate('/finances/expenses'); ctx.toast('Open the New expense modal at the top right', 'info'); },
+  },
+  {
+    id: 'finance.drill.expenses',
+    label: 'Drill into expenses by GL account',
+    group: 'navigation',
+    keywords: ['filter expenses', 'account', 'GL', 'category', 'schedule c'],
+    takesArgument: true,
+    argumentPlaceholder: '4-digit GL code (e.g. 6170 for shipping)…',
+    run: (ctx, arg) => {
+      const code = (arg ?? '').trim();
+      if (!/^\d{4}$/.test(code)) { ctx.toast('Enter a 4-digit GL code', 'warn'); return; }
+      ctx.navigate(`/finances/expenses?account=${code}`);
+    },
   },
   {
     id: 'agent.run',

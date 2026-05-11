@@ -7,6 +7,10 @@ type SettingsState = {
   errorMode: boolean;
   emptyMode: boolean;
   density: 'comfortable' | 'compact';
+  /** Cash recognizes events when money moves. Accrual recognizes when work is done. */
+  accountingMethod: 'cash' | 'accrual';
+  /** Fiscal year start month (1-12). Calendar year = 1 (default). */
+  fiscalYearStartMonth: number;
 };
 
 type Toast = {
@@ -71,6 +75,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     errorMode: false,
     emptyMode: false,
     density: 'comfortable',
+    accountingMethod: 'accrual',
+    fiscalYearStartMonth: 1,
   });
 
   const [toasts, setToasts] = useState<Toast[]>([]);

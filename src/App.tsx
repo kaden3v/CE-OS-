@@ -55,6 +55,7 @@ export default function App() {
             <Route path="/finances/vendors" element={<Vendors />} />
             <Route path="/finances/tax-report" element={<TaxReport />} />
             <Route path="/finances/tax-report/year-end" element={<YearEndSnapshot />} />
+            <Route path="/finances/tax-report/year-end/:year" element={<YearEndSnapshot />} />
             <Route path="/licenses" element={<Licenses />} />
             <Route path="/audit" element={<AuditLog />} />
             <Route path="/settings" element={<Settings />} />
