@@ -102,11 +102,20 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: () => void }) 
   return (
     <div className="rounded-lg border border-border-subtle bg-bg-base overflow-hidden">
       <header className="px-4 h-12 flex items-center justify-between border-b border-border-subtle">
-        <div>
-          <h3 className="text-[14px] font-medium text-text-primary">{asset.name}</h3>
-          <p className="text-[11px] text-text-tertiary tabular-nums">
-            {asset.id} · acquired {asset.acquiredOn} · {asset.usefulLifeYears}-year SL · cost {formatCents(asset.costCents)} · annual {formatCents(schedule.annualDepreciationCents)}
-          </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[14px] font-medium text-text-primary truncate">{asset.name}</h3>
+              {asset.taxElection && asset.taxElection !== 'straight-line' && (
+                <span className="text-[11px] uppercase tracking-wider font-medium px-1.5 h-5 inline-flex items-center rounded border border-accent-brand/30 bg-accent-brand/[0.06] text-accent-brand flex-shrink-0">
+                  {asset.taxElection === 'section-179' ? 'Section 179' : 'Bonus'}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-text-tertiary tabular-nums">
+              {asset.id} · acquired {asset.acquiredOn} · {asset.usefulLifeYears}-year SL · cost {formatCents(asset.costCents)} · annual {formatCents(schedule.annualDepreciationCents)}
+            </p>
+          </div>
         </div>
         <button
           onClick={onDelete}
@@ -161,15 +170,25 @@ function AddAssetDialog({ onClose, onCreate }: { onClose: () => void; onCreate: 
   const [cost, setCost] = useState('');
   const [life, setLife] = useState('5');
   const [notes, setNotes] = useState('');
+  const [election, setElection] = useState<'straight-line' | 'section-179' | 'bonus'>('straight-line');
+  const [electedAmount, setElectedAmount] = useState('');
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    const costCents = Math.round(parseFloat(cost) * 100);
+    const elected = election === 'straight-line'
+      ? 0
+      : electedAmount.trim() === ''
+        ? costCents
+        : Math.min(costCents, Math.round(parseFloat(electedAmount) * 100));
     onCreate({
       name: name.trim(),
       acquiredOn,
-      costCents: Math.round(parseFloat(cost) * 100),
+      costCents,
       usefulLifeYears: Number(life),
       notes: notes.trim() || undefined,
+      taxElection: election,
+      electedAmountCents: election === 'straight-line' ? undefined : elected,
     });
   };
 
@@ -211,6 +230,45 @@ function AddAssetDialog({ onClose, onCreate }: { onClose: () => void; onCreate: 
           <Field label="Notes">
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" className="w-full h-8 px-2 rounded bg-bg-base border border-border-subtle text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent-brand" />
           </Field>
+
+          <div className="border-t border-border-subtle pt-3 space-y-3">
+            <div className="text-[11px] uppercase tracking-wider font-medium text-text-tertiary">Tax election (year one)</div>
+            <div className="grid grid-cols-3 gap-2">
+              {(['straight-line', 'section-179', 'bonus'] as const).map(o => (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => setElection(o)}
+                  className={cn(
+                    'h-8 px-2 rounded text-[12px] border transition-colors duration-[120ms]',
+                    election === o
+                      ? 'border-accent-brand bg-accent-brand/[0.06] text-accent-brand'
+                      : 'border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-hover',
+                  )}
+                >
+                  {o === 'straight-line' ? 'Straight-line' : o === 'section-179' ? 'Section 179' : 'Bonus'}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-text-tertiary leading-[1.6]">
+              {election === 'straight-line' && 'Spread the cost evenly across the useful life.'}
+              {election === 'section-179' && 'Deduct up to the full cost in the year placed in service. Subject to the IRS 179 cap ($1.22M in 2024) and the business-income limitation. Form 4562 Part I.'}
+              {election === 'bonus'       && 'Bonus depreciation in year one. The bonus rate is phasing down — 60% in 2024, 40% in 2025, 20% in 2026 — confirm with a CPA. Form 4562 Part II.'}
+            </p>
+            {election !== 'straight-line' && (
+              <Field label="Elected amount (USD, blank = full cost)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={electedAmount}
+                  onChange={(e) => setElectedAmount(e.target.value)}
+                  placeholder={cost || '0.00'}
+                  className="w-full h-8 px-2 rounded bg-bg-base border border-border-subtle text-[13px] text-text-primary tabular-nums focus:outline-none focus:border-accent-brand"
+                />
+              </Field>
+            )}
+          </div>
           <footer className="flex justify-end gap-2 pt-3 border-t border-border-subtle">
             <button type="button" onClick={onClose} className="h-8 px-3 rounded text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]">Cancel</button>
             <button type="submit" className="h-8 px-3 rounded bg-accent-brand text-bg-base text-[13px] font-medium hover:opacity-90 transition-opacity duration-[120ms]">Capitalize</button>

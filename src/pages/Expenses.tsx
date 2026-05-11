@@ -459,6 +459,8 @@ function NewExpenseModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [hasReceipt, setHasReceipt] = useState(false);
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const [ocrNotes, setOcrNotes] = useState<string | null>(null);
 
   const onVendorBlur = () => {
     const suggestion = suggestAccountForVendor(vendor);
@@ -466,9 +468,9 @@ function NewExpenseModal({ onClose, onCreated }: { onClose: () => void; onCreate
   };
 
   const onReceiptDrop = async (file: File) => {
-    setOcrRunning(true); setOcrError(null);
+    setOcrRunning(true); setOcrError(null); setOcrConfidence(null); setOcrNotes(null);
     try {
-      const { vendor: v, amountCents, date: d } = await ocrReceiptFile(file);
+      const { vendor: v, amountCents, date: d, confidence, notes } = await ocrReceiptFile(file);
       if (v) setVendor(v);
       if (amountCents != null) setAmount((amountCents / 100).toFixed(2));
       if (d) setDate(d);
@@ -476,6 +478,8 @@ function NewExpenseModal({ onClose, onCreated }: { onClose: () => void; onCreate
         const suggestion = suggestAccountForVendor(v);
         if (suggestion) setAccount(suggestion);
       }
+      setOcrConfidence(confidence);
+      setOcrNotes(notes);
       setHasReceipt(true);
     } catch (e: any) {
       setOcrError(e.message ?? 'OCR failed');
@@ -537,6 +541,17 @@ function NewExpenseModal({ onClose, onCreated }: { onClose: () => void; onCreate
             />
           </label>
           {ocrError && <p className="text-[11px] text-status-warn">{ocrError}</p>}
+          {ocrConfidence != null && (
+            <div className={cn(
+              'flex items-center gap-2 px-2 py-1.5 rounded text-[11px]',
+              ocrConfidence >= 0.85 ? 'bg-status-ok/[0.08] text-status-ok'
+                : ocrConfidence >= 0.6 ? 'bg-status-info/[0.08] text-status-info'
+                : 'bg-status-warn/[0.08] text-status-warn',
+            )}>
+              <span className="font-medium tabular-nums">{Math.round(ocrConfidence * 100)}% confidence</span>
+              {ocrConfidence < 0.85 && <span>· double-check the fields below{ocrNotes ? ` — ${ocrNotes}` : ''}</span>}
+            </div>
+          )}
 
           <Field label="Date">
             <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="w-full h-8 px-2 rounded bg-bg-base border border-border-subtle text-[13px] text-text-primary focus:outline-none focus:border-accent-brand" />

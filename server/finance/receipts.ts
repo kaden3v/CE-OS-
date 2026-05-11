@@ -78,6 +78,13 @@ export type OcrResult = {
   amountCents: number | null;
   /** Service date in YYYY-MM-DD. */
   date: string | null;
+  /**
+   * Model's self-reported confidence in the extraction, 0..1.
+   * Operators should re-check anything below ~0.75.
+   */
+  confidence: number | null;
+  /** Free-text reason from the model when confidence is low (e.g. "Image blurry, total partially obscured."). */
+  notes: string | null;
   /** Raw text response from the model, for debugging / fallback display. */
   rawText: string;
 };
@@ -98,14 +105,18 @@ export async function ocrImage(buffer: Buffer, mimeType: string): Promise<OcrRes
     throw Object.assign(new Error('GEMINI_API_KEY not set — OCR unavailable'), { status: 503 });
   }
   const genAI = new GoogleGenAI({ apiKey });
-  const prompt = `Extract three fields from this receipt:
-  vendor  — the merchant's name
-  amount  — the TOTAL amount paid, in cents (e.g. "$14.50" → 1450)
-  date    — the service / purchase date, in YYYY-MM-DD
+  const prompt = `Extract bookkeeping fields from this receipt:
+  vendor      — the merchant's name
+  amountCents — the TOTAL amount paid, in cents (e.g. "$14.50" → 1450)
+  date        — the service / purchase date, in YYYY-MM-DD
+  confidence  — your overall confidence in the three values above, 0..1
+                (1.0 = "I'm certain", 0.5 = "best guess", <0.3 = "do not trust")
+  notes       — if confidence < 0.85, a one-line reason ("image blurry",
+                "currency ambiguous", "no date visible"). Else null.
 
-Reply with ONLY a single JSON object on one line, no markdown fences, no commentary.
-Use null for any field you can't confidently extract.
-Example: {"vendor":"USPS","amountCents":1450,"date":"2025-05-08"}`;
+Reply with ONLY one JSON object on one line. No markdown fences, no commentary.
+Use null for any field you can't extract.
+Example: {"vendor":"USPS","amountCents":1450,"date":"2025-05-08","confidence":0.94,"notes":null}`;
 
   const response = await genAI.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -123,16 +134,23 @@ function tryParse(text: string): Omit<OcrResult, 'rawText'> {
   // Strip code fences if the model added them despite instructions.
   const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   try {
-    const parsed = JSON.parse(cleaned) as { vendor?: string; amountCents?: number; date?: string };
+    const parsed = JSON.parse(cleaned) as {
+      vendor?: string; amountCents?: number; date?: string;
+      confidence?: number; notes?: string | null;
+    };
     return {
       vendor: typeof parsed.vendor === 'string' ? parsed.vendor : null,
       amountCents: typeof parsed.amountCents === 'number' ? Math.round(parsed.amountCents) : null,
       date: typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
+      confidence: typeof parsed.confidence === 'number' ? clamp01(parsed.confidence) : null,
+      notes: typeof parsed.notes === 'string' && parsed.notes.trim().length > 0 ? parsed.notes.trim() : null,
     };
   } catch {
-    return { vendor: null, amountCents: null, date: null };
+    return { vendor: null, amountCents: null, date: null, confidence: null, notes: null };
   }
 }
+
+function clamp01(n: number): number { return Math.max(0, Math.min(1, n)); }
 
 function extToMime(ext: string): string {
   if (ext === '.pdf')  return 'application/pdf';

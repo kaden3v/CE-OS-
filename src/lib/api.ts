@@ -111,6 +111,8 @@ export type OcrResult = {
   vendor: string | null;
   amountCents: number | null;
   date: string | null;
+  confidence: number | null;
+  notes: string | null;
   rawText: string;
 };
 

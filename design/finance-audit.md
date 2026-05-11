@@ -241,21 +241,60 @@ PLAID_WEBHOOK_SECRET=""        # HMAC shared secret for webhook verification
 
 Also: `data/` and `uploads/` are now both in `.gitignore`.
 
-## What's NOT done yet — pass 6
+## Pass 6 (landed) — closing the finance loop
 
-### Pass 6: multi-user + the remaining tax-prep machinery
+This pass closes most of the loose ends. The deferred items are noted at the bottom; they're each their own significant scope.
 
-These are the things genuinely waiting on either external partner setup or a real backend database:
+### Plaid Link in-app flow
 
-- **Server-side database** — replace client localStorage + server JSON files with Postgres. The store API stays put; only the implementation changes. Single biggest unlock for multi-user, audit log integrity, and reliable concurrent edits.
-- **Auto-match payouts ↔ bank deposits** — the [`Payouts`](../src/pages/Payouts.tsx) page shows the data side-by-side but matching is still operator-confirmed. The same scoring used by `ReconcileModal` can run here too.
-- **Etsy 1099-K auto-pull** — needs Etsy OAuth approval per shop. Etsy doesn't have a sandbox; setup is heavier than Plaid/Stripe. Today the Etsy row on Form1099K shows "unavailable".
-- **Multi-currency** — every cents value would gain a `currency` field; FX-rate snapshot table for period-end translation. Affects every aggregation function.
-- **Per-state sales-tax remittance log** — if you sell into nexus states, the sales-tax payable account (2010) needs a sub-ledger by jurisdiction with monthly/quarterly remittance schedules.
-- **Section 179 / bonus depreciation** — an election that lets you write off the full asset cost in the year placed in service instead of straight-lining. UI choice on each asset; modifies the Schedule C export.
-- **Plaid Link UI component** — endpoints exist (`/plaid/link-token`, `/plaid/exchange`) but there's no in-app component to drive the Link flow. Either build a thin wrapper around `react-plaid-link` or add a server-rendered popup.
-- **OCR confidence + correction loop** — Gemini sometimes returns nulls or wrong fields. The current modal just pre-fills and trusts the user to review. A "Confidence: 0.78 — looks low, double-check" badge would catch errors.
-- **Webhook JWT verification** — current Plaid webhook uses shared-secret HMAC; production should validate the JWT in `Plaid-Verification` against Plaid's JWKS endpoint.
+- New [`ConnectBankButton`](../src/components/finance/ConnectBankButton.tsx) loads Plaid's hosted `link-initialize.js` lazily (no new npm dep), fetches a link token, opens the Link UI, and exchanges the public token. The exchange response surfaces the long-lived access token through a sticky toast with a copy button — the operator pastes it into `PLAID_ACCESS_TOKEN` until Pass 7's persistent storage handles that automatically.
+- The button shows live state: `Connect bank` → `Opening Plaid…` → `Bank connected` (or `Plaid not configured` when env vars are missing).
+- Mounted in the [`Payouts`](../src/pages/Payouts.tsx) topbar; can be dropped anywhere with one import.
+
+### Auto-match payouts ↔ bank deposits
+
+- [`Payouts.tsx`](../src/pages/Payouts.tsx) now pulls the bank feed in parallel with the payouts (window extended +3 days to cover deposit arrival).
+- A `bestBankMatch()` scoring function (amount must match exactly; date proximity within 5 days as the soft signal) runs per payout.
+- New `<BankMatchChip>` on each row: `Bank match · 92%` (green), `· 71%` (info), `· 50%` (warn), or `No bank match` (warn). Hover shows the matching bank-line description + date.
+- The Plaid bank-feed `source` is reflected too — `mock` when not configured — so you know when the chip can't be trusted.
+- Closes the three-way match conversation: Shopify order → Stripe charge → Stripe payout → bank deposit, all visible side-by-side.
+
+### Section 179 / bonus depreciation
+
+- [`Asset`](../src/lib/finance/assets.ts) gained `taxElection: 'straight-line' | 'section-179' | 'bonus'` + `electedAmountCents`.
+- `depreciationSchedule()` now writes off the elected amount in year one, then straight-lines the remaining basis over the useful life.
+- AddAssetDialog has a three-button election selector with a short description of each path and an "Elected amount" field (blank = full cost, capped at cost).
+- AssetCard surfaces a small `Section 179` / `Bonus` chip in the header so the election is visible at a glance.
+- Year-end depreciation auto-posting picks up the schedule unchanged — Section 179's larger year-one number flows through to a debit to 6050 Depreciation automatically.
+
+### OCR confidence + correction loop
+
+- The Gemini prompt now asks for `confidence` (0..1) and `notes` (one-line reason when below 0.85).
+- [`OcrResult`](../src/lib/api.ts) extended; the New Expense modal renders a confidence badge:
+  - ≥ 85% — green "confidence" pill
+  - 60–84% — info "double-check" pill with the model's notes
+  - < 60% — warn pill, explicit "do not trust" copy
+- Catches the most common failure modes (blurry photos, partial totals, ambiguous currency) without forcing the operator to second-guess every read.
+
+### Plaid webhook — JWT verification
+
+- New [`server/plaid/verify.ts`](../server/plaid/verify.ts) verifies the `Plaid-Verification` JWT using Plaid's `/webhook_verification_key/get` endpoint.
+- ES256 signature check + body-hash check (the JWT body contains a SHA-256 of the request body) + 5-minute age check (replay limiter).
+- JWKS cache keyed by `kid` so we don't fetch the key on every event.
+- HMAC shared-secret path (Pass 5) retained as a fallback for sandbox testing. In `NODE_ENV=production`, the server refuses webhooks without a valid JWT — no quiet-accept.
+
+## What's NOT done yet — pass 7
+
+### Pass 7: the truly-multi-user / international cuts
+
+- **Server-side database** — replace localStorage + server JSON files with Postgres. The store API stays put; only the implementation changes. Single biggest unlock for multi-user, audit log integrity, concurrent edits, and persisting Plaid access tokens. ~1 day of focused work.
+- **Multi-currency** — every cents value gains a `currency` field; FX-rate snapshot table for period-end translation. Touches every aggregation.
+- **Per-state sales-tax sub-ledger** — sub-account structure under 2010 Sales Tax Payable, by jurisdiction, with monthly/quarterly remittance schedules tied to filing deadlines.
+- **Etsy 1099-K auto-pull** — Etsy OAuth approval per shop. Heavier setup than Plaid/Stripe; no sandbox.
+- **Plaid access-token persistence** — Pass 6 surfaces the token through a copy button in a toast. Pass 7 persists it server-side (per workspace) after exchange, so the bank stays connected across restarts.
+- **OCR self-correction** — let the user click any auto-filled field to "Re-OCR" with a tighter prompt focused on that one field. Useful when confidence is mid-band.
+- **Inventory cost tracking (FIFO / weighted average)** — the COGS accounts (5001/5010/5020) currently get debited at purchase; a real cost system would value inventory and recognize COGS at the moment of sale.
+- **Cash basis / accrual switch consequences** — the toggle exists but a real switch between methods at year-end requires producing a Section 481(a) adjustment. Out of scope for an in-app feature; needs a CPA conversation.
 
 ---
 

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { ChevronRight, AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react';
 import { Topbar } from '@/components/nav/Topbar';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
+import { ConnectBankButton } from '@/components/finance/ConnectBankButton';
 import { defaultPeriod } from '@/lib/finance/period';
-import { fetchPayouts, type Payout } from '@/lib/api';
+import { fetchPayouts, fetchBankFeed, type Payout, type BankLine } from '@/lib/api';
 import { formatCents, type PeriodSelection } from '@/lib/finance/types';
 import { useApp } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
@@ -21,17 +22,28 @@ export default function Payouts() {
   const { settings } = useApp();
   const [period, setPeriod] = useState<PeriodSelection>(() => defaultPeriod(settings.fiscalYearStartMonth));
   const [data, setData] = useState<{ payouts: Payout[]; source: 'stripe' | 'mock' } | null>(null);
+  const [bank, setBank] = useState<{ lines: BankLine[]; source: 'plaid' | 'cache' | 'mock' } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setLoading(true); setError(null);
-    fetchPayouts({ start: period.current.start, end: period.current.end })
-      .then(setData)
+    Promise.all([
+      fetchPayouts({ start: period.current.start, end: period.current.end }),
+      // Pull a slightly-wider bank window — deposits arrive 1–2 days after the payout's arrival_date.
+      fetchBankFeed({ start: period.current.start, end: addDays(period.current.end, 3) }),
+    ])
+      .then(([payouts, bankFeed]) => { setData(payouts); setBank(bankFeed); })
       .catch((e: any) => setError(e.message ?? 'Could not load payouts'))
       .finally(() => setLoading(false));
   }, [period]);
+
+  // Match every payout to its likely bank line. Mutates a map keyed by payout id.
+  const matches = (data?.payouts ?? []).reduce<Record<string, { line: BankLine | null; confidence: number }>>((acc, p) => {
+    acc[p.id] = bestBankMatch(p, bank?.lines ?? []);
+    return acc;
+  }, {});
 
   const toggle = (id: string) => setExpanded(s => {
     const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n;
@@ -46,6 +58,7 @@ export default function Payouts() {
         actions={
           <>
             <PeriodPicker value={period} onChange={setPeriod} accountingMethod={settings.accountingMethod} fiscalYearStartMonth={settings.fiscalYearStartMonth} />
+            <ConnectBankButton />
             {data?.source === 'mock' && (
               <span className="h-7 px-2 inline-flex items-center rounded border border-status-warn/30 bg-status-warn/10 text-status-warn text-[11px]">
                 Mock data — Stripe key not configured
@@ -96,7 +109,7 @@ export default function Payouts() {
 
         <div className="space-y-2">
           {(data?.payouts ?? []).map(p => (
-            <PayoutCard key={p.id} payout={p} expanded={expanded.has(p.id)} onToggle={() => toggle(p.id)} />
+            <PayoutCard key={p.id} payout={p} match={matches[p.id]} bankSource={bank?.source} expanded={expanded.has(p.id)} onToggle={() => toggle(p.id)} />
           ))}
         </div>
       </div>
@@ -104,7 +117,33 @@ export default function Payouts() {
   );
 }
 
-function PayoutCard({ payout, expanded, onToggle }: { payout: Payout; expanded: boolean; onToggle: () => void }) {
+// ── Match scoring (payout → bank deposit) ────────────────────────────────────
+function bestBankMatch(payout: Payout, bank: BankLine[]): { line: BankLine | null; confidence: number } {
+  const arrival = new Date(payout.arrivalDate * 1000);
+  let best: { line: BankLine; score: number } | null = null;
+  for (const line of bank) {
+    // Exact amount match required as the gating signal.
+    if (line.amountCents !== payout.amountCents) continue;
+    const days = Math.abs(new Date(line.date).getTime() - arrival.getTime()) / 86_400_000;
+    if (days > 5) continue;
+    const score = 0.6 + 0.4 * (1 - Math.min(days, 5) / 5); // 1.0 same day, ~0.6 five days off
+    if (!best || score > best.score) best = { line, score };
+  }
+  return { line: best?.line ?? null, confidence: best?.score ?? 0 };
+}
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(iso); d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+function PayoutCard({ payout, match, bankSource, expanded, onToggle }: {
+  payout: Payout;
+  match?: { line: BankLine | null; confidence: number };
+  bankSource?: 'plaid' | 'cache' | 'mock';
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const arrival = new Date(payout.arrivalDate * 1000).toISOString().split('T')[0];
   const charges = payout.lines.filter(l => l.type === 'charge');
   const fees    = payout.lines.filter(l => l.type === 'stripe_fee').reduce((s, l) => s + Math.abs(l.amountCents), 0);
@@ -125,6 +164,7 @@ function PayoutCard({ payout, expanded, onToggle }: { payout: Payout; expanded: 
             {arrival} · {charges.length} {charges.length === 1 ? 'charge' : 'charges'} · {formatCents(fees)} in fees · {payout.status}
           </div>
         </div>
+        <BankMatchChip match={match} bankSource={bankSource} />
         <span className="text-[16px] font-semibold tabular-nums text-status-ok flex-shrink-0">{formatCents(payout.amountCents)}</span>
       </button>
       {expanded && (
@@ -152,6 +192,35 @@ function PayoutCard({ payout, expanded, onToggle }: { payout: Payout; expanded: 
         </table>
       )}
     </div>
+  );
+}
+
+function BankMatchChip({ match, bankSource }: {
+  match?: { line: BankLine | null; confidence: number };
+  bankSource?: 'plaid' | 'cache' | 'mock';
+}) {
+  if (!match || !bankSource) return null;
+  if (!match.line) {
+    return (
+      <span className="text-[11px] px-2 h-6 inline-flex items-center rounded border border-status-warn/30 bg-status-warn/[0.06] text-status-warn flex-shrink-0 mr-2">
+        No bank match
+      </span>
+    );
+  }
+  const tone = match.confidence >= 0.9 ? 'ok' : match.confidence >= 0.7 ? 'info' : 'warn';
+  const toneClasses = {
+    ok:   'border-status-ok/30   bg-status-ok/[0.06]   text-status-ok',
+    info: 'border-status-info/30 bg-status-info/[0.06] text-status-info',
+    warn: 'border-status-warn/30 bg-status-warn/[0.06] text-status-warn',
+  } as const;
+  return (
+    <span
+      title={`Bank: ${match.line.description} on ${match.line.date}${bankSource === 'mock' ? ' (mock feed)' : ''}`}
+      className={cn('text-[11px] px-2 h-6 inline-flex items-center gap-1 rounded border flex-shrink-0 mr-2 tabular-nums', toneClasses[tone])}
+    >
+      <CheckCircle2 className="w-3 h-3" strokeWidth={1.5} />
+      Bank match · {Math.round(match.confidence * 100)}%
+    </span>
   );
 }
 

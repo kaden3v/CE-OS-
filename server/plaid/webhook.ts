@@ -18,10 +18,10 @@
  *      paste the same value into the Plaid dashboard's signing secret field.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { fetchTransactions } from './client.js';
 import { ingestBankLinesFromWebhook } from '../finance/bankFeed.js';
+import { verifyPlaidWebhook } from './verify.js';
 
 export async function plaidWebhookHandler(req: Request, res: Response) {
   // Body is raw (Buffer) — required for signature verification.
@@ -30,18 +30,16 @@ export async function plaidWebhookHandler(req: Request, res: Response) {
     return res.status(400).json({ error: 'Expected raw body — register the route with express.raw().' });
   }
 
-  const secret = process.env.PLAID_WEBHOOK_SECRET;
-  if (secret) {
-    const provided = req.headers['plaid-verification'] || req.headers['x-plaid-signature'];
-    const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-    if (typeof provided !== 'string' || !equalConstantTime(provided, expected)) {
-      return res.status(401).json({ error: 'Invalid Plaid signature' });
-    }
+  const verification = await verifyPlaidWebhook({
+    rawBody,
+    jwtHeader: typeof req.headers['plaid-verification'] === 'string' ? req.headers['plaid-verification'] : undefined,
+    hmacHeader: typeof req.headers['x-plaid-signature'] === 'string' ? req.headers['x-plaid-signature'] : undefined,
+  });
+  if (!verification.ok) {
+    console.warn('[plaid.webhook] verification failed:', verification.reason);
+    return res.status(401).json({ error: `Invalid Plaid signature: ${verification.reason}` });
   }
-  // If no secret is configured, accept (dev-only; production should refuse).
-  // For full JWT-based verification, fetch https://production.plaid.com/webhook_verification_key/get
-  // and validate the JWT in Plaid-Verification. That's worth doing before
-  // production but adds another network hop and a JWKS cache layer.
+  console.log(`[plaid.webhook] verified via ${verification.method}`);
 
   const body = JSON.parse(rawBody.toString('utf8'));
 
@@ -64,10 +62,4 @@ export async function plaidWebhookHandler(req: Request, res: Response) {
   }
 
   res.json({ ok: true });
-}
-
-function equalConstantTime(a: string, b: string): boolean {
-  const ab = Buffer.from(a); const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
 }

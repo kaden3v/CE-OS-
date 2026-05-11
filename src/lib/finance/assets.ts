@@ -30,6 +30,17 @@ export type Asset = {
   salvageCents?: number;
   /** Free-text description / asset class. */
   notes?: string;
+  /**
+   * Tax election applied in the year placed in service.
+   *   'straight-line' — depreciate over useful life (default)
+   *   'section-179'   — write off up to the full cost in year one (Form 4562 Part I)
+   *   'bonus'         — bonus depreciation (Form 4562 Part II); for tax years
+   *                     after 2026 the bonus rate phases down — verify with a CPA.
+   * If 'section-179' or 'bonus' is chosen, `electedAmountCents` controls
+   * how much is written off in year one (capped at costCents).
+   */
+  taxElection?: 'straight-line' | 'section-179' | 'bonus';
+  electedAmountCents?: number;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,11 +108,18 @@ export type AssetSchedule = {
 export function depreciationSchedule(asset: Asset): AssetSchedule {
   const cost = asset.costCents;
   const salvage = asset.salvageCents ?? 0;
-  const depreciableBasis = Math.max(0, cost - salvage);
-  // Straight-line: annual = basis / life. Round to whole cents on the last
-  // year to absorb rounding drift.
-  const annualCents = Math.floor(depreciableBasis / asset.usefulLifeYears);
   const acquiredYear = Number(asset.acquiredOn.slice(0, 4));
+
+  // Section 179 / bonus election → write off `electedAmount` in year one,
+  // then straight-line the remaining basis (if any) over the useful life.
+  const election = asset.taxElection ?? 'straight-line';
+  const electedY1Cents = election === 'straight-line'
+    ? 0
+    : Math.min(asset.electedAmountCents ?? cost, cost);
+  const remainingDepreciableBasis = Math.max(0, cost - salvage - electedY1Cents);
+  const annualCents = asset.usefulLifeYears > 0
+    ? Math.floor(remainingDepreciableBasis / asset.usefulLifeYears)
+    : 0;
 
   const rows: ScheduleRow[] = [];
   let book = cost;
@@ -109,7 +127,17 @@ export function depreciationSchedule(asset: Asset): AssetSchedule {
   for (let i = 0; i < asset.usefulLifeYears; i++) {
     const year = acquiredYear + i;
     const isLast = i === asset.usefulLifeYears - 1;
-    const dep = isLast ? Math.max(0, book - salvage) : annualCents;
+    const isFirst = i === 0;
+    let dep: number;
+    if (isLast) {
+      // Last year absorbs rounding drift.
+      dep = Math.max(0, book - salvage);
+    } else if (isFirst && electedY1Cents > 0) {
+      // Year one: elected write-off + first slice of remaining basis.
+      dep = electedY1Cents + annualCents;
+    } else {
+      dep = annualCents;
+    }
     const opening = book;
     book = Math.max(salvage, book - dep);
     acc += dep;
