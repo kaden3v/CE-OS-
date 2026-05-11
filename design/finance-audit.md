@@ -190,22 +190,72 @@ Without these, the relevant endpoints fall back to sensible mocks or report `sou
 3. **Shopify gross totals** — already wired via the existing Shopify GraphQL client from the earlier Shopify slice. Make sure the admin app has `read_orders` scope.
 4. **Receipts** — no extra setup. Dev writes to `uploads/receipts/` (gitignored). Production: replace the body of `storeReceipt()` with an S3/Vercel Blob writer.
 
-## What's NOT done yet — pass 5
+## Pass 5 (landed) — production hardening
 
-### Pass 5: production hardening
+The bookkeeping panel now survives a refresh, ingests bank events asynchronously, OCRs receipts, auto-posts depreciation, lists Stripe payouts, and exports to four bookkeeping suites. Honest framing first: the store is still **client-side localStorage**, not a server database. That's the right ceiling for a single operator; multi-user moves the store to Postgres which is roughly a half-day refactor.
 
-These are the gaps you'll feel only once Plaid + Stripe + receipts are live and the data volume grows past a few hundred transactions:
+### Persistence
 
-- **Persistent storage** — the in-memory `JOURNAL`, `AUDIT`, `PERIODS`, and `ASSETS` need to live somewhere durable. The shape is right for a 1:1 mapping to Postgres or SQLite tables. Replace the module-scoped arrays with a DB client.
-- **Receipt OCR** — pipe uploads through a vision model to auto-extract vendor + amount + date, pre-filling the expense form. (Anthropic, Mindee, AWS Textract are all reasonable.)
-- **Plaid webhook** — `POST /api/finance/plaid/webhook` for `TRANSACTIONS_UPDATE` events. Pushes candidate matches into a queue so the operator sees new bank lines without manual refresh.
-- **Stripe payout three-way match** — Shopify order → Stripe charge → Stripe payout → bank deposit. The hardest part of e-commerce books and the most common source of "where did this $X come from" pain.
-- **Etsy 1099-K auto-pull** — needs Etsy OAuth approval per shop. Etsy doesn't have a sandbox; setup is heavier than Plaid/Stripe.
-- **Depreciation auto-posting** — extend the period-close routine to journal each asset's annual depreciation to 6050 Depreciation / 1600 Accumulated Depreciation. Today the schedule is informational only.
-- **Multi-currency** — every cents value would gain a `currency` field; FX-rate snapshot table for period-end translation.
-- **Wave / FreshBooks / Cash App / Quicken adapters** — additional export targets on top of the same data, following the QuickBooks/Xero pattern.
-- **Per-state sales-tax remittance log** — if you sell into nexus states, the sales-tax payable account (2010) needs a sub-ledger by jurisdiction.
-- **Section 179 / bonus depreciation** — for the year the asset is placed in service. A tax-prep choice rather than a bookkeeping one, but the Schedule C export should be able to model it.
+- New [`src/lib/finance/persist.ts`](../src/lib/finance/persist.ts) — load/save/clearAll keyed under `ce-os.finance.v1.*`.
+- [`store.ts`](../src/lib/finance/store.ts) hydrates `JOURNAL`, `AUDIT`, `PERIODS` from localStorage at module init. Every mutator now calls `commit()` (persist + bump) instead of just `bump()`. Refresh-safe.
+- [`assets.ts`](../src/lib/finance/assets.ts) does the same for the asset register.
+- New `resetFinanceStore()` + Settings → Finance → **"Wipe & reseed"** button. Useful after testing or before switching to live Plaid/Stripe data.
+
+### Plaid webhook → server cache
+
+- New [`server/finance/cache.ts`](../server/finance/cache.ts) — file-backed key/value store under `data/` (gitignored). One JSON file per key. Same API shape will work against Postgres later.
+- New [`server/plaid/webhook.ts`](../server/plaid/webhook.ts) — `POST /api/finance/plaid/webhook`. HMAC-SHA256 signature verification against `PLAID_WEBHOOK_SECRET`. On `TRANSACTIONS` events, pulls the recent 30-day window and merges into the cache via `ingestBankLinesFromWebhook()`.
+- [`server/finance/bankFeed.ts`](../server/finance/bankFeed.ts) now checks the cache first; falls through to a live Plaid pull on miss; falls back to the deterministic mock fixture if Plaid isn't configured. The `source` field in the response (`'plaid' | 'cache' | 'mock'`) shows up on the ReconcileModal header chip.
+
+### Receipt OCR via Gemini
+
+- [`server/finance/receipts.ts`](../server/finance/receipts.ts) gained `ocrImage(buffer, mimeType)` (pure) and `ocrReceipt({ journalId, filename })` (reads from disk + calls `ocrImage`).
+- Two endpoints: `POST /api/finance/receipts/ocr` (after-the-fact, for already-uploaded receipts) and `POST /api/finance/receipts/ocr-only` (raw image, no storage — used by the New Expense modal).
+- Uses `@google/genai` (already a dep) calling `gemini-2.5-flash` with `responseSchema`-style prompting to return strict JSON `{ vendor, amountCents, date }`.
+- New Expense modal: a "Drop a receipt to auto-fill" zone at the top. Drop an image, the vendor / amount / service date are pre-filled. GL category auto-suggested via the existing `suggestAccountForVendor()`. The expense drawer's receipt panel still works for after-the-fact attachment.
+
+### Depreciation auto-posting
+
+- `closePeriod()` on a `'year'` kind now walks the asset register and posts an auto-generated journal entry per asset for that year's depreciation: debit 6050 Depreciation, credit 1600 Accumulated Depreciation.
+- Idempotent — checks the audit log for an existing `depreciation:<assetId>:<year>` tag before posting.
+- Entries are marked `reviewed` by `System (year-end close)` so they don't sit in the unreconciled queue.
+
+### Stripe payouts page
+
+- New [`server/finance/payouts.ts`](../server/finance/payouts.ts) — `listPayoutsForUI()` calls Stripe `/v1/payouts` + `/v1/balance_transactions`, groups balance txns under their payout, and falls back to a mock fixture when `STRIPE_SECRET_KEY` isn't set.
+- New endpoint `GET /api/finance/payouts?start&end`.
+- New page [`/finances/payouts`](../src/pages/Payouts.tsx) — period-scoped list of payouts, each expandable to show the charges and fees that fed into it. Three-tile header (count / total deposited / fees). Stripe vs Mock chip in the topbar.
+- This is the **third leg of the three-way match**: Shopify order → Stripe charge → Stripe payout → bank deposit. Manual confirmation for now; auto-match against Plaid bank lines is Pass 6.
+
+### Two more export adapters
+
+- [`exports/wave.ts`](../src/lib/finance/exports/wave.ts) — Wave Transactions CSV. Each journal flattens to one row (expense or revenue). Signed amounts (outflow negative).
+- [`exports/freshbooks.ts`](../src/lib/finance/exports/freshbooks.ts) — FreshBooks Expenses CSV. GL accounts → FreshBooks categories via a mapping table; revenue rows skipped (FreshBooks invoices are a separate import).
+- Both show up in the TaxReport **Export** dropdown alongside QuickBooks and Xero.
+
+### env additions
+
+```env
+PLAID_WEBHOOK_SECRET=""        # HMAC shared secret for webhook verification
+```
+
+Also: `data/` and `uploads/` are now both in `.gitignore`.
+
+## What's NOT done yet — pass 6
+
+### Pass 6: multi-user + the remaining tax-prep machinery
+
+These are the things genuinely waiting on either external partner setup or a real backend database:
+
+- **Server-side database** — replace client localStorage + server JSON files with Postgres. The store API stays put; only the implementation changes. Single biggest unlock for multi-user, audit log integrity, and reliable concurrent edits.
+- **Auto-match payouts ↔ bank deposits** — the [`Payouts`](../src/pages/Payouts.tsx) page shows the data side-by-side but matching is still operator-confirmed. The same scoring used by `ReconcileModal` can run here too.
+- **Etsy 1099-K auto-pull** — needs Etsy OAuth approval per shop. Etsy doesn't have a sandbox; setup is heavier than Plaid/Stripe. Today the Etsy row on Form1099K shows "unavailable".
+- **Multi-currency** — every cents value would gain a `currency` field; FX-rate snapshot table for period-end translation. Affects every aggregation function.
+- **Per-state sales-tax remittance log** — if you sell into nexus states, the sales-tax payable account (2010) needs a sub-ledger by jurisdiction with monthly/quarterly remittance schedules.
+- **Section 179 / bonus depreciation** — an election that lets you write off the full asset cost in the year placed in service instead of straight-lining. UI choice on each asset; modifies the Schedule C export.
+- **Plaid Link UI component** — endpoints exist (`/plaid/link-token`, `/plaid/exchange`) but there's no in-app component to drive the Link flow. Either build a thin wrapper around `react-plaid-link` or add a server-rendered popup.
+- **OCR confidence + correction loop** — Gemini sometimes returns nulls or wrong fields. The current modal just pre-fills and trusts the user to review. A "Confidence: 0.78 — looks low, double-check" badge would catch errors.
+- **Webhook JWT verification** — current Plaid webhook uses shared-secret HMAC; production should validate the JWT in `Plaid-Verification` against Plaid's JWKS endpoint.
 
 ---
 

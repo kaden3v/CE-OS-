@@ -24,6 +24,7 @@ import YearEndSnapshot from "./pages/YearEndSnapshot";
 import Form1099K from "./pages/Form1099K";
 import ScheduleCPrint from "./pages/ScheduleCPrint";
 import Assets from "./pages/Assets";
+import Payouts from "./pages/Payouts";
 import Licenses from "./pages/Licenses";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="/finances/tax-report/year-end/:year" element={<YearEndSnapshot />} />
             <Route path="/finances/tax-report/1099k" element={<Form1099K />} />
             <Route path="/finances/assets" element={<Assets />} />
+            <Route path="/finances/payouts" element={<Payouts />} />
             <Route path="/licenses" element={<Licenses />} />
             <Route path="/audit" element={<AuditLog />} />
             <Route path="/settings" element={<Settings />} />

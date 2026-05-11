@@ -16,6 +16,7 @@
 import { useSyncExternalStore } from 'react';
 import { accountByCode, accountName, expenseAccounts } from './accounts';
 import { withinPeriod } from './period';
+import { load, save } from './persist';
 import type {
   JournalEntry, TransactionView, AccountingMethod, ReconciliationStatus,
   FiscalPeriod,
@@ -28,6 +29,16 @@ import type {
 let version = 0;
 const listeners = new Set<() => void>();
 function bump() { version++; listeners.forEach(l => l()); }
+/** Persist + notify. Use after every mutation. */
+function commit() {
+  // Defer persist when called before hydration completes (module-init code paths).
+  if (typeof window !== 'undefined') {
+    save('journal', JOURNAL);
+    save('audit',   AUDIT);
+    save('periods', PERIODS);
+  }
+  bump();
+}
 function subscribe(l: () => void) { listeners.add(l); return () => listeners.delete(l); }
 function getSnapshot() { return version; }
 
@@ -238,7 +249,7 @@ export function postExpense(input: NewExpenseInput): JournalEntry {
     entryId: e.id,
     summary: `Posted expense ${e.vendor} ${formatAmount(input.amountCents)} → ${input.accountCode}`,
   });
-  bump();
+  commit();
   return e;
 }
 
@@ -269,7 +280,7 @@ export function correctExpense(args: {
     reason: args.reason,
     summary: `Corrected ${original.vendor} entry (was ${formatAmount(sumDebits(original))} → ${formatAmount(args.next.amountCents)})`,
   });
-  bump();
+  commit();
   return correction;
 }
 
@@ -288,7 +299,7 @@ export function updateReconciliation(journalId: string, next: ReconciliationStat
     entryId: journalId,
     summary: `Reconciliation: ${prev} → ${next.state}`,
   });
-  bump();
+  commit();
   return updated;
 }
 
@@ -478,6 +489,65 @@ export function getEntryChain(entryId: string): JournalEntry[] {
 
 let PERIODS: FiscalPeriod[] = [];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hydration from localStorage. Runs once at module load. If persisted state
+// exists, it overrides the seed. Otherwise the seed becomes the baseline and
+// is written to localStorage on the next mutation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const persistedJournal = load<JournalEntry[] | null>('journal', null);
+const persistedAudit   = load<AuditEntry[]   | null>('audit',   null);
+const persistedPeriods = load<FiscalPeriod[] | null>('periods', null);
+if (persistedJournal) JOURNAL = persistedJournal;
+if (persistedAudit)   AUDIT   = persistedAudit;
+if (persistedPeriods) PERIODS = persistedPeriods;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Depreciation auto-posting (called by closePeriod for yearly closes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { listAssets, depreciationSchedule } from './assets';
+
+function postYearEndDepreciation(periodId: string, year: number): void {
+  for (const asset of listAssets()) {
+    const row = depreciationSchedule(asset).rows.find(r => r.year === year);
+    if (!row || row.depreciationCents <= 0) continue;
+
+    // Skip if we've already posted depreciation for this asset/year — check
+    // the audit log for an entry whose memo references this asset + year.
+    const tag = `depreciation:${asset.id}:${year}`;
+    if (AUDIT.some(a => a.summary.includes(tag))) continue;
+
+    const je: JournalEntry = entry({
+      serviceDate: `${year}-12-31`,
+      cashDate: null,                   // depreciation is non-cash
+      memo: `Annual depreciation — ${asset.name} [${tag}]`,
+      vendor: 'Depreciation',
+      channel: 'Manual',
+      lines: [
+        { account: '6050', debitCents: row.depreciationCents,  creditCents: 0 }, // Depreciation expense
+        { account: '1600', debitCents: 0, creditCents: row.depreciationCents },  // Accumulated Depreciation (contra-asset)
+      ],
+      reconciliation: { state: 'reviewed', reviewedAt: new Date().toISOString(), reviewedBy: 'System (year-end close)' },
+    });
+    JOURNAL = [je, ...JOURNAL];
+    logAudit({
+      kind: 'post',
+      entryId: je.id,
+      summary: `Auto-posted ${tag} ${formatAmount(row.depreciationCents)} (closing ${periodId})`,
+    });
+  }
+}
+
+/** Wipe everything and reseed from defaults. Surfaced in Settings → Finance. */
+export function resetFinanceStore(): void {
+  JOURNAL = []; AUDIT = []; PERIODS = [];
+  commit();
+  // Force reload to bring seed data back (the seed is constructed at module
+  // init, so simply clearing wouldn't restore it).
+  if (typeof window !== 'undefined') window.location.reload();
+}
+
 export function listPeriods(): FiscalPeriod[] {
   return PERIODS;
 }
@@ -522,7 +592,9 @@ export function closePeriod(args: {
     ? PERIODS.map(p => (p.id === args.id ? next : p))
     : [...PERIODS, next];
   logAudit({ kind: 'close-period', summary: `Closed ${args.id}`, reason: 'period close' });
-  bump();
+  // Year close also auto-posts depreciation entries for assets in service.
+  if (args.kind === 'year') postYearEndDepreciation(args.id, Number(args.start.slice(0, 4)));
+  commit();
   return next;
 }
 
@@ -533,6 +605,6 @@ export function reopenPeriod(periodId: string, reason: string): FiscalPeriod {
   const next: FiscalPeriod = { ...existing, status: 'open', closedAt: undefined, closedBy: undefined };
   PERIODS = PERIODS.map(p => (p.id === periodId ? next : p));
   logAudit({ kind: 'reopen-period', summary: `Reopened ${periodId}`, reason });
-  bump();
+  commit();
   return next;
 }

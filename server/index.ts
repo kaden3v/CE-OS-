@@ -14,9 +14,11 @@ import dotenv from 'dotenv';
 import { listOrders } from './shopify/orders.js';
 import { grossSales } from './shopify/sales.js';
 import { listBankLines } from './finance/bankFeed.js';
-import { storeReceipt, RECEIPTS_ROOT } from './finance/receipts.js';
+import { storeReceipt, RECEIPTS_ROOT, ocrReceipt, ocrImage } from './finance/receipts.js';
 import { createLinkToken, exchangePublicToken, plaidEnabled } from './plaid/client.js';
 import { grossChargesInRange, stripeEnabled } from './stripe/client.js';
+import { listPayoutsForUI } from './finance/payouts.js';
+import { plaidWebhookHandler } from './plaid/webhook.js';
 
 dotenv.config();
 
@@ -132,6 +134,47 @@ app.post('/api/finance/receipts', raw({ type: ['application/pdf', 'image/*'], li
 });
 
 app.use('/api/finance/receipts', express.static(RECEIPTS_ROOT));
+
+// OCR — extract vendor/amount/date from an already-uploaded receipt.
+app.post('/api/finance/receipts/ocr', express.json(), async (req: Request, res: Response) => {
+  try {
+    const journalId = String(req.body?.journalId ?? '');
+    const filename  = String(req.body?.filename ?? '');
+    if (!journalId || !filename) return res.status(400).json({ error: 'journalId and filename required' });
+    const result = await ocrReceipt({ journalId, filename });
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+// OCR — extract directly from a raw image body (no storage). For the
+// New Expense modal: drop an image, get fields pre-filled.
+app.post('/api/finance/receipts/ocr-only', raw({ type: ['application/pdf', 'image/*'], limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const buffer = req.body as Buffer;
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return res.status(400).json({ error: 'No file body received' });
+    const mimeType = req.headers['content-type'] ?? 'application/octet-stream';
+    const result = await ocrImage(buffer, mimeType);
+    res.json(result);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ── Stripe payouts ─────────────────────────────────────────────────────────
+app.get('/api/finance/payouts', async (req: Request, res: Response) => {
+  try {
+    const start = String(req.query.start ?? '');
+    const end   = String(req.query.end ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+      return res.status(400).json({ error: 'start and end (YYYY-MM-DD) required' });
+    }
+    const since = Math.floor(new Date(start).getTime() / 1000);
+    const until = Math.floor(new Date(end).getTime() / 1000) + 86399;
+    const data = await listPayoutsForUI({ since, until });
+    res.json(data);
+  } catch (err) { handleErr(res, err); }
+});
+
+// ── Plaid webhook ──────────────────────────────────────────────────────────
+app.post('/api/finance/plaid/webhook', raw({ type: 'application/json', limit: '1mb' }), plaidWebhookHandler);
 
 // ── Error helper ────────────────────────────────────────────────────────────
 function handleErr(res: Response, err: unknown) {

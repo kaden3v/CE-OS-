@@ -105,3 +105,56 @@ export async function uploadReceipt(args: { journalId: string; file: File }): Pr
   if (!res.ok) throw new ApiFetchError(res.status, body.error ?? 'Upload failed', body);
   return body as ReceiptUpload;
 }
+
+// ── Finance: receipt OCR ────────────────────────────────────────────────────
+export type OcrResult = {
+  vendor: string | null;
+  amountCents: number | null;
+  date: string | null;
+  rawText: string;
+};
+
+export async function ocrReceiptFile(file: File): Promise<OcrResult> {
+  const res = await fetch('/api/finance/receipts/ocr-only', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: await file.arrayBuffer(),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiFetchError(res.status, body.error ?? 'OCR failed', body);
+  return body as OcrResult;
+}
+
+export async function ocrUploadedReceipt(args: { journalId: string; filename: string }): Promise<OcrResult> {
+  return getJSON<OcrResult>('/api/finance/receipts/ocr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+}
+
+// ── Finance: Stripe payouts ─────────────────────────────────────────────────
+export type PayoutLine = {
+  id: string;
+  type: string;
+  amountCents: number;
+  netCents: number;
+  feeCents: number;
+  description: string | null;
+  created: number;
+};
+
+export type Payout = {
+  id: string;
+  arrivalDate: number;
+  status: string;
+  amountCents: number;
+  currency: string;
+  description: string | null;
+  lines: PayoutLine[];
+};
+
+export function fetchPayouts(params: { start: string; end: string }): Promise<{ payouts: Payout[]; source: 'stripe' | 'mock' }> {
+  const q = new URLSearchParams({ start: params.start, end: params.end });
+  return getJSON(`/api/finance/payouts?${q}`);
+}

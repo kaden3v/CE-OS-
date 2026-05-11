@@ -16,6 +16,7 @@
  */
 
 import { useSyncExternalStore } from 'react';
+import { load, save } from './persist';
 
 export type Asset = {
   id: string;
@@ -49,11 +50,14 @@ export function useAssetStore<T>(selector: () => T): T {
 // Seed (so the page demonstrates real numbers immediately)
 // ─────────────────────────────────────────────────────────────────────────────
 
-let ASSETS: Asset[] = [
+const SEED_ASSETS: Asset[] = [
   { id: 'AS-001', name: 'LED grow lights (full system)', acquiredOn: '2023-04-01', costCents: 480_000, usefulLifeYears: 5, notes: 'Two 4-bar rigs, 8 fixtures total' },
   { id: 'AS-002', name: 'Greenhouse climate controller',  acquiredOn: '2023-07-15', costCents: 280_000, usefulLifeYears: 7, notes: 'Senmatic — 4-zone' },
   { id: 'AS-003', name: 'Mobile potting bench',           acquiredOn: '2024-02-20', costCents:  85_000, usefulLifeYears: 7, notes: 'Stainless steel, w/ tray' },
 ];
+
+let ASSETS: Asset[] = load<Asset[] | null>('assets', null) ?? SEED_ASSETS;
+function persist() { save('assets', ASSETS); }
 
 export function listAssets(): Asset[] {
   return ASSETS;
@@ -63,13 +67,13 @@ export function addAsset(input: Omit<Asset, 'id'>): Asset {
   const id = `AS-${String(ASSETS.length + 1).padStart(3, '0')}`;
   const next: Asset = { id, ...input };
   ASSETS = [...ASSETS, next];
-  bump();
+  persist(); bump();
   return next;
 }
 
 export function removeAsset(id: string): void {
   ASSETS = ASSETS.filter(a => a.id !== id);
-  bump();
+  persist(); bump();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

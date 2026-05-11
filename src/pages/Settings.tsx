@@ -7,6 +7,13 @@ import { Keyboard, TerminalSquare } from "lucide-react";
 
 export default function Settings() {
   const { settings, updateSettings, setCommandPaletteOpen, addToast } = useApp();
+  const onResetFinance = async () => {
+    if (!window.confirm('Wipe all locally-stored finance data (journal, audit, periods, assets)? This re-seeds the demo data on reload.')) return;
+    const { resetFinanceStore } = await import('@/lib/finance/store');
+    const { clearAll } = await import('@/lib/finance/persist');
+    clearAll();
+    resetFinanceStore();
+  };
 
   const toggleSetting = (key: keyof typeof settings) => {
     if (typeof settings[key] === 'boolean') {
@@ -151,6 +158,20 @@ export default function Settings() {
                   className="w-32 h-8 px-2 rounded bg-bg-base border border-border-subtle text-sm text-text-primary tabular-nums text-right focus:outline-none focus:border-accent-brand"
                 />
               </div>
+            </div>
+            <div className="p-4 flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="font-medium text-sm">Reset finance data</div>
+                <div className="text-xs text-text-secondary mt-2">
+                  Wipes the locally-stored journal, audit log, period closures, and asset register. Re-seeds the demo data on the next page load. Use after testing or before connecting your real Plaid/Stripe accounts.
+                </div>
+              </div>
+              <button
+                onClick={onResetFinance}
+                className="h-8 px-3 rounded-md border border-status-alert/30 bg-status-alert/[0.06] text-status-alert text-sm hover:bg-status-alert/10 transition-colors"
+              >
+                Wipe & reseed
+              </button>
             </div>
           </Card>
         </section>

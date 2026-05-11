@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { Plus, Download, CheckCircle, AlertTriangle, Trash2, Lock, Link2 } from 'lucide-react';
+import { Plus, Download, CheckCircle, AlertTriangle, Trash2, Lock, Link2, Sparkles, Loader2 } from 'lucide-react';
 import { DataTable } from '@/components/data/DataTable';
 import { RecordDrawer } from '@/components/record/RecordDrawer';
 import { ReasonModal } from '@/components/record/ReasonModal';
@@ -18,6 +18,7 @@ import { defaultPeriod, pctChange } from '@/lib/finance/period';
 import { expenseAccounts, suggestAccountForVendor, accountByCode } from '@/lib/finance/accounts';
 import { formatCents, type PeriodSelection, type TransactionView } from '@/lib/finance/types';
 import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
+import { ocrReceiptFile } from '@/lib/api';
 import { useApp } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
 
@@ -456,10 +457,32 @@ function NewExpenseModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [memo, setMemo]       = useState('');
   const [date, setDate]       = useState(() => new Date().toISOString().split('T')[0]);
   const [hasReceipt, setHasReceipt] = useState(false);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   const onVendorBlur = () => {
     const suggestion = suggestAccountForVendor(vendor);
     if (suggestion) setAccount(suggestion);
+  };
+
+  const onReceiptDrop = async (file: File) => {
+    setOcrRunning(true); setOcrError(null);
+    try {
+      const { vendor: v, amountCents, date: d } = await ocrReceiptFile(file);
+      if (v) setVendor(v);
+      if (amountCents != null) setAmount((amountCents / 100).toFixed(2));
+      if (d) setDate(d);
+      if (v) {
+        const suggestion = suggestAccountForVendor(v);
+        if (suggestion) setAccount(suggestion);
+      }
+      setHasReceipt(true);
+    } catch (e: any) {
+      setOcrError(e.message ?? 'OCR failed');
+      setHasReceipt(true); // they still attached it
+    } finally {
+      setOcrRunning(false);
+    }
   };
 
   const submit = (e: React.FormEvent) => {
@@ -498,6 +521,23 @@ function NewExpenseModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <button onClick={onClose} aria-label="Close" className="w-7 h-7 rounded flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]">✕</button>
         </header>
         <form onSubmit={submit} className="p-4 space-y-3">
+          {/* OCR drop-zone — pre-fills the rest of the form */}
+          <label className={`w-full flex items-center justify-center gap-2 p-3 rounded border border-dashed cursor-pointer transition-colors duration-[120ms] text-[12px] ${
+            ocrRunning
+              ? 'border-accent-brand/40 bg-accent-brand/[0.06] text-accent-brand'
+              : 'border-border-subtle bg-bg-elevated/40 hover:border-border-strong hover:bg-bg-hover text-text-secondary'
+          }`}>
+            {ocrRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" strokeWidth={1.5} />}
+            <span>{ocrRunning ? 'Reading receipt…' : 'Drop a receipt to auto-fill (image or PDF)'}</span>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onReceiptDrop(f); }}
+            />
+          </label>
+          {ocrError && <p className="text-[11px] text-status-warn">{ocrError}</p>}
+
           <Field label="Date">
             <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="w-full h-8 px-2 rounded bg-bg-base border border-border-subtle text-[13px] text-text-primary focus:outline-none focus:border-accent-brand" />
           </Field>

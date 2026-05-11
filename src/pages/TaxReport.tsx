@@ -13,6 +13,8 @@ import { CHART_OF_ACCOUNTS, accountByCode } from '@/lib/finance/accounts';
 import { buildScheduleC, scheduleCCsvRows } from '@/lib/finance/scheduleC';
 import { buildQuickBooksIIF } from '@/lib/finance/exports/quickbooks';
 import { buildXeroCsv } from '@/lib/finance/exports/xero';
+import { buildWaveCsv } from '@/lib/finance/exports/wave';
+import { buildFreshBooksCsv } from '@/lib/finance/exports/freshbooks';
 import { safeHarbor, annualizeYtd } from '@/lib/finance/tax';
 import { formatCents, type PeriodSelection } from '@/lib/finance/types';
 import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
@@ -146,6 +148,16 @@ export default function TaxReport() {
     downloadCsv(csv, `canyon-exotics-xero-${period.current.label.replace(/\s+/g, '-').toLowerCase()}.csv`);
     addToast({ title: 'Xero manual journals exported', status: 'ok' });
   };
+  const onExportWave = () => {
+    const csv = buildWaveCsv({ period: periodArg, method: settings.accountingMethod });
+    downloadCsv(csv, `canyon-exotics-wave-${period.current.label.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    addToast({ title: 'Wave transactions exported', status: 'ok' });
+  };
+  const onExportFreshBooks = () => {
+    const csv = buildFreshBooksCsv({ period: periodArg, method: settings.accountingMethod });
+    downloadCsv(csv, `canyon-exotics-freshbooks-${period.current.label.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    addToast({ title: 'FreshBooks expenses exported', status: 'ok' });
+  };
 
   // Schedule C PDF — opens a print-ready view in a new tab.
   const onPrintScheduleC = () => {
@@ -189,6 +201,8 @@ export default function TaxReport() {
                 { label: 'Full tax report — CSV',       onClick: onExportCsv },
                 { label: 'QuickBooks Desktop — IIF',    onClick: onExportQuickBooks },
                 { label: 'Xero — Manual Journals CSV',  onClick: onExportXero },
+                { label: 'Wave — Transactions CSV',     onClick: onExportWave },
+                { label: 'FreshBooks — Expenses CSV',   onClick: onExportFreshBooks },
               ]}
             />
           </>
