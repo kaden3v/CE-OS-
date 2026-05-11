@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Download, ChevronRight, Lock, AlertTriangle, FileText } from 'lucide-react';
+import { Download, ChevronRight, Lock, AlertTriangle, FileText, ChevronDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Topbar } from '@/components/nav/Topbar';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
@@ -11,6 +11,9 @@ import {
 } from '@/lib/finance/store';
 import { CHART_OF_ACCOUNTS, accountByCode } from '@/lib/finance/accounts';
 import { buildScheduleC, scheduleCCsvRows } from '@/lib/finance/scheduleC';
+import { buildQuickBooksIIF } from '@/lib/finance/exports/quickbooks';
+import { buildXeroCsv } from '@/lib/finance/exports/xero';
+import { safeHarbor, annualizeYtd } from '@/lib/finance/tax';
 import { formatCents, type PeriodSelection } from '@/lib/finance/types';
 import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
 import { useApp } from '@/contexts/AppContext';
@@ -87,9 +90,13 @@ export default function TaxReport() {
     navigate(`/finances/expenses?account=${code}`);
   };
 
-  // ── Quarterly estimated tax (federal SE + income approximation) ────────────
-  // 30% blended is a placeholder; real safe-harbor calc lands in Pass 4.
-  const estimatedTaxCents = Math.max(0, Math.round(netCents * 0.30));
+  // ── Quarterly estimated tax (federal SE + income, safe-harbor) ────────────
+  const safeHarborResult = useMemo(() => safeHarbor({
+    projectedNetProfitCents: annualizeYtd(netCents),
+    priorYearTaxCents:        settings.priorYearTaxCents,
+    priorYearAgiCents:        settings.priorYearAgiCents,
+  }), [netCents, settings.priorYearTaxCents, settings.priorYearAgiCents]);
+  const estimatedTaxCents = safeHarborResult.quarterlyPaymentCents;
 
   // ── CSV export ─────────────────────────────────────────────────────────────
   const onExportCsv = () => {
@@ -125,6 +132,30 @@ export default function TaxReport() {
     });
   };
 
+  const onExportQuickBooks = () => {
+    const iif = buildQuickBooksIIF({ period: periodArg, method: settings.accountingMethod });
+    const blob = new Blob([iif], { type: 'application/x-qbo' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `canyon-exotics-${period.current.label.replace(/\s+/g, '-').toLowerCase()}.iif`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    addToast({ title: 'QuickBooks IIF exported', status: 'ok' });
+  };
+  const onExportXero = () => {
+    const csv = buildXeroCsv({ period: periodArg, method: settings.accountingMethod });
+    downloadCsv(csv, `canyon-exotics-xero-${period.current.label.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    addToast({ title: 'Xero manual journals exported', status: 'ok' });
+  };
+
+  // Schedule C PDF — opens a print-ready view in a new tab.
+  const onPrintScheduleC = () => {
+    if (!snapshotYear) {
+      addToast({ title: 'Pick a full year', description: 'Schedule C is a yearly form. Select a year in the period picker.', status: 'warn' });
+      return;
+    }
+    window.open(`/finances/tax-report/schedule-c-print/${snapshotYear}?print=1`, '_blank');
+  };
+
   // ── Year-end snapshot link ─────────────────────────────────────────────────
   const isFullYear = period.current.label === String(currentYear) || /^\d{4}$/.test(period.current.label);
   const snapshotYear = isFullYear ? Number(period.current.label) : null;
@@ -151,20 +182,15 @@ export default function TaxReport() {
             >
               1099-K
             </button>
-            <button
-              onClick={onExportScheduleC}
-              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
-            >
-              <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />
-              Schedule C draft
-            </button>
-            <button
-              onClick={onExportCsv}
-              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
-            >
-              <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
-              Export CSV
-            </button>
+            <ExportMenu
+              items={[
+                { label: 'Schedule C — PDF',            onClick: onPrintScheduleC, hint: snapshotYear ? undefined : 'pick a full year' },
+                { label: 'Schedule C — CSV',            onClick: onExportScheduleC },
+                { label: 'Full tax report — CSV',       onClick: onExportCsv },
+                { label: 'QuickBooks Desktop — IIF',    onClick: onExportQuickBooks },
+                { label: 'Xero — Manual Journals CSV',  onClick: onExportXero },
+              ]}
+            />
           </>
         }
       />
@@ -175,7 +201,11 @@ export default function TaxReport() {
           <Tile label="Gross income" value={formatCents(revenueCents)} delta={prevRevenue != null ? pctChange(revenueCents, prevRevenue) : null} deltaLabel={period.previous?.label} positiveIsGood />
           <Tile label="Deductible expenses" value={formatCents(expensesCents)} delta={prevExpenses != null ? pctChange(expensesCents, prevExpenses) : null} deltaLabel={period.previous?.label} positiveIsGood={false} />
           <Tile label="Net profit" value={formatCents(netCents)} delta={prevNet != null ? pctChange(netCents, prevNet) : null} deltaLabel={period.previous?.label} tone={netCents >= 0 ? 'ok' : 'alert'} positiveIsGood />
-          <Tile label="Est. tax (30%)" value={formatCents(estimatedTaxCents)} tone="warn" hint="Placeholder — Pass 4 wires real safe-harbor calc" />
+          <Tile label="Quarterly est. tax" value={formatCents(estimatedTaxCents)} tone="warn" hint={
+            settings.priorYearTaxCents === 0
+              ? 'Enter last year\'s tax in Settings for safe-harbor calc'
+              : `${safeHarborResult.basis === 'prior-year' ? 'Safe harbor: prior year' : 'Safe harbor: current year 90%'}`
+          } />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -263,7 +293,9 @@ export default function TaxReport() {
         <div className="rounded-lg border border-status-warn/30 bg-status-warn/[0.06] p-3 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-status-warn flex-shrink-0 mt-0.5" strokeWidth={1.5} />
           <div className="text-[12px] text-text-secondary leading-[1.6]">
-            <strong className="text-text-primary">Draft only.</strong> These numbers come from the in-memory ledger and are not reviewed by a CPA. Estimated tax is a flat 30% placeholder; real safe-harbor calculation arrives in Pass 4 alongside the Schedule C export. Use this as a planning view, not a filing document.
+            <strong className="text-text-primary">Draft only.</strong> Numbers come from the in-memory ledger and are not CPA-reviewed.{' '}
+            {safeHarborResult.notes}
+            {' '}Use this as a planning view, not a filing document.
           </div>
         </div>
       </div>
@@ -296,6 +328,46 @@ function Tile({ label, value, delta, deltaLabel, tone, hint, positiveIsGood }: {
         </div>
       )}
       {hint && <div className="text-[11px] mt-0.5 text-text-tertiary italic">{hint}</div>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+function ExportMenu({ items }: { items: Array<{ label: string; onClick: () => void; hint?: string }> }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+      >
+        <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+        Export
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute top-full right-0 mt-1 z-30 min-w-[240px] bg-bg-elevated border border-border-subtle rounded-md shadow-2xl py-1 animate-in fade-in zoom-in-95 duration-[120ms]">
+          {items.map(it => (
+            <button
+              key={it.label}
+              role="menuitem"
+              onClick={() => { setOpen(false); it.onClick(); }}
+              className="w-full px-3 h-8 flex items-center justify-between text-[13px] text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+            >
+              <span>{it.label}</span>
+              {it.hint && <span className="text-[11px] text-text-tertiary ml-3">{it.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

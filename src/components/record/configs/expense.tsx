@@ -1,9 +1,11 @@
-import { CheckCircle, AlertTriangle, FileText, Trash2, Paperclip, ExternalLink, Upload } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle, AlertTriangle, FileText, Trash2, Paperclip, ExternalLink, Upload, Loader2 } from 'lucide-react';
 import type { RecordDrawerConfig } from '../types';
 import type { TransactionView } from '@/lib/finance/types';
 import { formatCents } from '@/lib/finance/types';
 import { expenseAccounts, accountByCode } from '@/lib/finance/accounts';
 import { ActivityFeed, type ActivityEntry } from '../ActivityFeed';
+import { uploadReceipt } from '@/lib/api';
 
 /**
  * Drawer config for a transaction (expense projection of a journal entry).
@@ -128,36 +130,61 @@ export function expenseConfig({
 }
 
 function ReceiptPanel({ tx }: { tx: TransactionView }) {
-  if (tx.hasReceipt) {
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState<{ url: string; filename: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onFile = async (file: File) => {
+    setUploading(true); setError(null);
+    try {
+      const res = await uploadReceipt({ journalId: tx.journalId, file });
+      setUploaded({ url: res.url, filename: res.filename });
+    } catch (e: any) {
+      setError(e.message ?? 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (uploaded || tx.hasReceipt) {
+    const url = uploaded?.url ?? '#';
+    const filename = uploaded?.filename ?? `receipt-${tx.journalId.slice(-6).toLowerCase()}.pdf`;
     return (
       <a
-        href="#"
-        onClick={(e) => { e.preventDefault(); /* attachments viewer lands in Pass 4 */ }}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
         className="flex items-center justify-between gap-2 p-3 rounded border border-border-subtle bg-bg-elevated hover:bg-bg-hover transition-colors duration-[120ms] group/r"
       >
         <span className="flex items-center gap-2 text-[13px] text-text-primary min-w-0">
           <Paperclip className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" strokeWidth={1.5} />
-          <span className="truncate">receipt-{tx.journalId.slice(-6).toLowerCase()}.pdf</span>
+          <span className="truncate">{filename}</span>
         </span>
         <ExternalLink className="w-3.5 h-3.5 text-text-tertiary group-hover/r:text-text-primary flex-shrink-0" strokeWidth={1.5} />
       </a>
     );
   }
+
   return (
-    <button
-      type="button"
-      onClick={() => {
-        // Real upload lands in Pass 4. For now, a clear no-op with explanation.
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*,application/pdf';
-        input.click();
-      }}
-      className="w-full flex items-center justify-center gap-2 p-3 rounded border border-dashed border-border-subtle bg-bg-elevated/40 hover:border-border-strong hover:bg-bg-hover transition-colors duration-[120ms] text-[12px] text-text-secondary"
-    >
-      <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />
-      Attach receipt (image or PDF)
-    </button>
+    <div>
+      <label
+        className={`w-full flex items-center justify-center gap-2 p-3 rounded border border-dashed transition-colors duration-[120ms] text-[12px] cursor-pointer ${
+          uploading
+            ? 'border-accent-brand/40 bg-accent-brand/[0.06] text-accent-brand'
+            : 'border-border-subtle bg-bg-elevated/40 hover:border-border-strong hover:bg-bg-hover text-text-secondary'
+        }`}
+      >
+        {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />}
+        {uploading ? 'Uploading…' : 'Attach receipt (image or PDF)'}
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+        />
+      </label>
+      {error && <p className="mt-1 text-[11px] text-status-alert">{error}</p>}
+    </div>
   );
 }
 

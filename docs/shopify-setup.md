@@ -101,6 +101,10 @@ Watch this. If `avail` regularly drops below 500, the next slice (DB + webhooks)
 - **Products, customers, inventory endpoints** — same pattern as orders; copy [server/shopify/orders.ts](../server/shopify/orders.ts) and tweak.
 - **Etsy** — parallel connector behind the same `/api` surface. The `channel` field on `OrderRecord` already supports it; today every order is Shopify-only.
 
+## Plaid + Stripe (Pass 4)
+
+The finance panel now connects to Plaid (bank reconciliation) and Stripe (1099-K gross). See [design/finance-audit.md](../design/finance-audit.md) for the full integration write-up and [.env.example](../.env.example) for the env vars. Both fall back to mocks when keys aren't set, so the UI keeps working.
+
 ## Next-slice checklist
 
 When you're ready to move past on-demand reads:

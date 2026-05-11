@@ -24,6 +24,7 @@ const ALLOW = {
     'src/components/nav/CommandPalette.tsx',          // signature dark palette
     'src/lib/nav/registry.ts',                         // workspace swatches
     'src/components/nav/Sidebar.tsx',                  // brand cream text on workspace swatch
+    'src/pages/ScheduleCPrint.tsx',                    // print view — intentionally black-on-white
   ]),
   // tokens.ts/motion.ts are token definitions — primitives ARE allowed.
   tokenDefs: new Set([
@@ -43,7 +44,7 @@ const PATTERNS = [
     id: 'raw-rgba',
     re: /\brgba?\(\s*\d+\s*,/g,
     message: 'Raw rgba() value. Use an alpha-aware semantic token (border.subtle, surface.raised, etc.).',
-    appliesTo: (rel) => !ALLOW.tokenDefs.has(rel) && rel !== 'src/index.css',
+    appliesTo: (rel) => !ALLOW.tokenDefs.has(rel) && rel !== 'src/index.css' && rel !== 'src/pages/ScheduleCPrint.tsx',
   },
   {
     id: 'off-scale-text-size',

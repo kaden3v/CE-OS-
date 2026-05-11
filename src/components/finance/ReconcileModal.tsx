@@ -1,36 +1,20 @@
-import { useMemo, useState } from 'react';
-import { X, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { X, CheckCircle, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { updateReconciliation } from '@/lib/finance/store';
 import { formatCents } from '@/lib/finance/types';
 import type { TransactionView } from '@/lib/finance/types';
 import { useApp } from '@/contexts/AppContext';
+import { fetchBankFeed, type BankLine } from '@/lib/api';
 
 /**
  * Bulk reconcile modal — for each selected transaction, propose a bank-line
  * match with a confidence score. The user confirms (or skips) each one.
  *
- * The bank lines are mocked until the Plaid connector lands. The matching
- * UI itself is the deliverable; swapping the source is one function.
+ * Bank lines come from /api/finance/bank-feed (Plaid). The server returns
+ * source=mock when Plaid isn't configured so the UI still works.
  */
-
-type BankLine = {
-  id: string;
-  date: string;
-  amountCents: number;
-  description: string;
-};
-
-const MOCK_BANK_FEED: BankLine[] = [
-  { id: 'bank-2025-05-08', date: '2025-05-08', amountCents: 14_500, description: 'POS SPHAGNUM MOSS CO' },
-  { id: 'bank-2025-05-05', date: '2025-05-05', amountCents:  4_850, description: 'AMAZON BUSINESS' },
-  { id: 'bank-2025-05-03', date: '2025-05-03', amountCents: 31_240, description: 'USPS.COM CLICK-N-SHIP' },
-  { id: 'bank-2025-04-22', date: '2025-04-22', amountCents: 18_520, description: 'SRP ELECTRIC PMT' },
-  { id: 'bank-2025-04-10', date: '2025-04-10', amountCents: 15_000, description: 'AZ DEPT AGRICULTURE' },
-  { id: 'bank-2025-04-01', date: '2025-04-01', amountCents:  3_900, description: 'SHOPIFY MONTHLY' },
-  { id: 'bank-2025-02-15', date: '2025-02-15', amountCents: 75_000, description: 'MILLER ACCT' },
-];
 
 type Match = {
   tx: TransactionView;
@@ -47,10 +31,25 @@ export function ReconcileModal({ open, transactions, onClose, onDone }: {
   onDone: (matched: number) => void;
 }) {
   const trapRef = useFocusTrap<HTMLDivElement>(open);
+  const [bankLines, setBankLines] = useState<BankLine[]>([]);
+  const [source, setSource] = useState<'plaid' | 'mock' | 'loading' | 'error'>('loading');
+
+  // Pull bank lines once when the modal opens, anchored to the span of
+  // the selected transactions so the query is tight.
+  useEffect(() => {
+    if (!open || transactions.length === 0) return;
+    const dates = transactions.map(t => t.date).sort();
+    const start = dates[0];
+    const end   = dates[dates.length - 1];
+    setSource('loading');
+    fetchBankFeed({ start, end })
+      .then(({ lines, source }) => { setBankLines(lines); setSource(source); })
+      .catch(() => { setBankLines([]); setSource('error'); });
+  }, [open, transactions]);
 
   const initialMatches = useMemo<Match[]>(() => {
     return transactions.map(tx => {
-      const candidates = MOCK_BANK_FEED.map(bl => ({ bl, score: scoreMatch(tx, bl) }));
+      const candidates = bankLines.map(bl => ({ bl, score: scoreMatch(tx, bl) }));
       candidates.sort((a, b) => b.score - a.score);
       const best = candidates[0];
       return {
@@ -60,9 +59,10 @@ export function ReconcileModal({ open, transactions, onClose, onDone }: {
         decision: 'pending',
       };
     });
-  }, [transactions]);
+  }, [transactions, bankLines]);
 
-  const [matches, setMatches] = useState<Match[]>(initialMatches);
+  const [matches, setMatches] = useState<Match[]>([]);
+  useEffect(() => { setMatches(initialMatches); }, [initialMatches]);
 
   const accept  = (i: number) => setMatches(m => m.map((x, j) => j === i ? { ...x, decision: 'accept' } : x));
   const skip    = (i: number) => setMatches(m => m.map((x, j) => j === i ? { ...x, decision: 'skip' }   : x));
@@ -103,8 +103,28 @@ export function ReconcileModal({ open, transactions, onClose, onDone }: {
         )}
       >
         <header className="h-12 px-4 flex items-center justify-between border-b border-border-subtle flex-shrink-0">
-          <h2 id="reconcile-title" className="text-[14px] font-semibold text-text-primary">
+          <h2 id="reconcile-title" className="text-[14px] font-semibold text-text-primary flex items-center gap-2">
             Reconcile {transactions.length} {transactions.length === 1 ? 'transaction' : 'transactions'}
+            {source === 'loading' && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-normal text-text-tertiary">
+                <Loader2 className="w-3 h-3 animate-spin" /> Loading bank feed…
+              </span>
+            )}
+            {source === 'plaid' && (
+              <span className="text-[11px] font-normal px-1.5 h-5 inline-flex items-center rounded border border-status-ok/30 bg-status-ok/10 text-status-ok">
+                Plaid · live
+              </span>
+            )}
+            {source === 'mock' && (
+              <span className="text-[11px] font-normal px-1.5 h-5 inline-flex items-center rounded border border-status-warn/30 bg-status-warn/10 text-status-warn">
+                Mock feed · Plaid not configured
+              </span>
+            )}
+            {source === 'error' && (
+              <span className="text-[11px] font-normal px-1.5 h-5 inline-flex items-center rounded border border-status-alert/30 bg-status-alert/10 text-status-alert">
+                Feed unavailable
+              </span>
+            )}
           </h2>
           <div className="flex items-center gap-2">
             <button

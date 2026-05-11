@@ -49,8 +49,59 @@ export type HealthResponse = {
   shop: string | null;
   tokenConfigured: boolean;
   apiVersion: string;
+  plaidConfigured: boolean;
+  stripeConfigured: boolean;
 };
 
 export function fetchHealth(): Promise<HealthResponse> {
   return getJSON<HealthResponse>('/api/health');
+}
+
+// ── Finance: bank feed (Plaid) ──────────────────────────────────────────────
+export type BankLine = {
+  id: string;
+  date: string;
+  amountCents: number;
+  description: string;
+};
+
+export function fetchBankFeed(params: { start: string; end: string }): Promise<{ lines: BankLine[]; source: 'plaid' | 'mock' }> {
+  const q = new URLSearchParams({ start: params.start, end: params.end });
+  return getJSON(`/api/finance/bank-feed?${q}`);
+}
+
+// ── Finance: processor gross (1099-K Sync) ─────────────────────────────────
+export type ProcessorGrossResponse = {
+  grossCents: number;
+  count?: number;
+  source: 'shopify' | 'stripe' | 'unavailable';
+  note?: string;
+};
+
+export function fetchProcessorGross(params: { channel: 'Shopify' | 'Stripe' | 'Etsy'; start: string; end: string }): Promise<ProcessorGrossResponse> {
+  const q = new URLSearchParams({ channel: params.channel, start: params.start, end: params.end });
+  return getJSON(`/api/finance/processor-gross?${q}`);
+}
+
+// ── Finance: receipts upload ────────────────────────────────────────────────
+export type ReceiptUpload = {
+  url: string;
+  filename: string;
+  bytes: number;
+  mimeType: string;
+  journalId: string;
+};
+
+export async function uploadReceipt(args: { journalId: string; file: File }): Promise<ReceiptUpload> {
+  const res = await fetch(`/api/finance/receipts?journalId=${encodeURIComponent(args.journalId)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': args.file.type || 'application/octet-stream',
+      'X-Original-Filename': args.file.name,
+    },
+    body: await args.file.arrayBuffer(),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiFetchError(res.status, body.error ?? 'Upload failed', body);
+  return body as ReceiptUpload;
 }

@@ -11,6 +11,10 @@ type SettingsState = {
   accountingMethod: 'cash' | 'accrual';
   /** Fiscal year start month (1-12). Calendar year = 1 (default). */
   fiscalYearStartMonth: number;
+  /** Last year's federal tax liability (cents). Used by safe-harbor quarterly calc. */
+  priorYearTaxCents: number;
+  /** Last year's AGI (cents). >$150k triggers 110% safe-harbor multiplier. */
+  priorYearAgiCents: number;
 };
 
 type Toast = {
@@ -77,6 +81,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     density: 'comfortable',
     accountingMethod: 'accrual',
     fiscalYearStartMonth: 1,
+    priorYearTaxCents: 0,
+    priorYearAgiCents: 0,
   });
 
   const [toasts, setToasts] = useState<Toast[]>([]);

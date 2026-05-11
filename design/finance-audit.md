@@ -120,18 +120,92 @@ Click "$4,120 Shipping & Postage" on the Tax Report → navigate to `/finances/e
 | **1099-K reconciliation worksheet** | New page at `/finances/tax-report/1099k` ([Form1099K.tsx](../src/pages/Form1099K.tsx)). Operator enters reported gross from each payment processor; ledger revenue is computed; the delta is flagged with confidence-style badges. Includes common-explanations footer for CPA handoff. Linked from the TaxReport topbar. |
 | **Bulk reconcile modal** | New [ReconcileModal.tsx](../src/components/finance/ReconcileModal.tsx). Select rows in Expenses → "Reconcile against bank…" → modal proposes a mocked bank-line match per transaction with a confidence score (amount + date proximity + vendor-token overlap). User accepts/skips individually or accepts all. Confirmed matches post via `updateReconciliation` and flow through to the audit log. |
 
-## What's NOT done yet — pass 4
+## Pass 4 (landed) — integrations, tax artifacts, and the bookkeeping ceiling
 
-### Pass 4: real backend + remaining tax artifacts
+The bookkeeping panel is now genuinely usable end-to-end. The integration surfaces are in place; turning each from sandbox/mock to live is a credential-paste-and-restart, not a code change.
 
-- **Plaid connector** — `/api/finance/bank-feed` endpoint, OAuth flow stored in a separate `plaidAccessToken` env var. Replaces the `MOCK_BANK_FEED` in `ReconcileModal.tsx` with live data and pushes new transactions through webhook → candidate-match queue.
-- **Stripe payout reconciliation** — match Shopify orders → Stripe payouts → bank deposits. The three-way match is the hardest part of e-commerce bookkeeping.
-- **1099-K reported totals auto-sync** — pull the gross from Shopify Payments and Etsy APIs (or CSV upload) so users don't have to type the reported numbers.
-- **Schedule C as PDF** — the data is already structured (see `buildScheduleC()`); a PDF renderer (jsPDF or similar) generates a filing-ready document. CSV already ships.
-- **QuickBooks IIF / Xero CSV / Wave CSV exports** — vendor-specific format adapters on top of the same data.
-- **Receipt upload pipeline** — wire the existing UI affordance to a real attachment store (S3 / Vercel Blob). OCR pass to auto-populate vendor/amount.
-- **Depreciation schedule** — equipment > $2,500 capitalized to 1500 Equipment & Fixtures, depreciated over 5–7 years via journal entries to 6050 Depreciation.
-- **Quarterly estimated tax with safe-harbor** — replace the flat 30% placeholder with the proper "lesser of 100% of last year's tax or 90% of this year's projected tax" calc.
+### Integrations (server-side, in [`server/`](../server/))
+
+| File | What |
+| ---- | ---- |
+| [`server/plaid/client.ts`](../server/plaid/client.ts) | Plaid REST client (no SDK). `createLinkToken`, `exchangePublicToken`, `fetchTransactions`. Reads `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` / `PLAID_ACCESS_TOKEN`. |
+| [`server/stripe/client.ts`](../server/stripe/client.ts) | Stripe REST client (no SDK). `listPayouts`, `listBalanceTransactions`, `grossChargesInRange`. Reads `STRIPE_SECRET_KEY`. |
+| [`server/shopify/sales.ts`](../server/shopify/sales.ts) | `grossSales({ startDate, endDate })` — sums Shopify order totals over a range (drives the 1099-K Shopify Sync). |
+| [`server/finance/bankFeed.ts`](../server/finance/bankFeed.ts) | `listBankLines()` — Plaid when configured, deterministic mock fixture otherwise. |
+| [`server/finance/receipts.ts`](../server/finance/receipts.ts) | Local-FS receipt store under `uploads/receipts/`. Production drop-in for S3 / Vercel Blob is one function. |
+
+### Routes (in [`server/index.ts`](../server/index.ts))
+
+- `GET  /api/finance/bank-feed?start=&end=` — Plaid / mock bank lines
+- `POST /api/finance/plaid/link-token` — start the Plaid Link flow
+- `POST /api/finance/plaid/exchange` — swap a public_token for the long-lived access token
+- `GET  /api/finance/processor-gross?channel=Shopify|Stripe|Etsy&start=&end=` — gross volume for 1099-K Sync
+- `POST /api/finance/receipts?journalId=…` (raw body, mime-aware) — receipt upload
+- `GET  /api/finance/receipts/<journalId>/<filename>` — receipt download
+
+### Client wiring
+
+- [`ReconcileModal`](../src/components/finance/ReconcileModal.tsx) now fetches `/api/finance/bank-feed` on open, sized to the date span of the selected transactions. Header chip shows `Plaid · live` or `Mock feed · Plaid not configured` so you can see at a glance whether the match is against real data.
+- [`Form1099K`](../src/pages/Form1099K.tsx) has a Sync button per channel that calls `/api/finance/processor-gross`. Shopify and Stripe wire to real APIs; Etsy is marked unavailable until OAuth lands.
+- [`ReceiptPanel`](../src/components/record/configs/expense.tsx) opens the native file picker, uploads via `uploadReceipt()` in [`src/lib/api.ts`](../src/lib/api.ts), and replaces itself with a clickable chip on success.
+
+### Tax artifacts
+
+- [`scheduleC.ts`](../src/lib/finance/scheduleC.ts) — already shipped in Pass 3. Now consumed by:
+  - The **Schedule C CSV** export on TaxReport (data only).
+  - The new **Schedule C PDF** flow: [`/finances/tax-report/schedule-c-print/:year`](../src/pages/ScheduleCPrint.tsx) renders a clean printable view; "Schedule C PDF" on TaxReport opens it in a new tab with `?print=1` and auto-launches the browser's print dialog. Save-as-PDF is built into every major browser; no PDF library is added.
+- [`quickbooks.ts`](../src/lib/finance/exports/quickbooks.ts) — IIF builder for QuickBooks Desktop. `!ACCNT` header + `TRNS`/`SPL`/`ENDTRNS` rows per journal entry. Skips superseded entries.
+- [`xero.ts`](../src/lib/finance/exports/xero.ts) — Manual Journals CSV builder for Xero. One row per journal line; debits positive, credits negative.
+- All exports live in a single **Export** dropdown on TaxReport: Schedule C PDF, Schedule C CSV, full tax-report CSV, QuickBooks IIF, Xero CSV.
+
+### Asset register + depreciation
+
+- New [`/finances/assets`](../src/pages/Assets.tsx) page (also in the registry under Reports).
+- [`assets.ts`](../src/lib/finance/assets.ts) — capitalize an asset (>$2,500, life >1 year), and project a straight-line schedule per row through useful life. Reactive store mirroring the journal pattern.
+- Per-asset cards show opening book → depreciation → accumulated → closing book per year. Current year highlighted. Seed includes LED grow rig, climate controller, and potting bench so the page demonstrates real numbers.
+- `totalDepreciationForYear()` is the hook into the tax report — a follow-up pass auto-posts depreciation entries to the ledger at year-end close.
+
+### Safe-harbor quarterly tax
+
+- [`tax.ts`](../src/lib/finance/tax.ts) — `safeHarbor()` returns the IRS lesser-of: (a) 100% (or 110% if prior AGI > $150k) of prior-year tax, vs (b) 90% of projected current-year tax. `annualizeYtd()` extrapolates the YTD net profit linearly through year-end.
+- Settings: new inputs for **Prior-year tax liability** (1040 line 24) and **Prior-year AGI** (1040 line 11) under the Finance section. Both default to $0; the TaxReport tile then prompts the user to set them.
+- TaxReport tile reads "Quarterly est. tax" with the correct safe-harbor basis instead of a flat 30% — and the draft banner now explains exactly which basis is binding.
+
+### env additions
+
+```env
+PLAID_CLIENT_ID=""
+PLAID_SECRET=""
+PLAID_ENV="sandbox"
+PLAID_ACCESS_TOKEN=""
+STRIPE_SECRET_KEY=""
+```
+
+Without these, the relevant endpoints fall back to sensible mocks or report `source: 'unavailable'`. Setting them lights up live data.
+
+### Setup walkthrough (Pass 4 additions)
+
+1. **Plaid** — Dashboard → Apps → new app → grab Sandbox `client_id` + `secret`. Paste into `.env`. Restart `npm run dev:server`. The bank-feed chip should flip to "Plaid · live" once you do a Link flow and paste `PLAID_ACCESS_TOKEN`.
+2. **Stripe** — Dashboard → API keys → Restricted key with read access to balance/balance-transactions/payouts/charges. Paste into `.env`. Form1099K Sync (Stripe) works immediately.
+3. **Shopify gross totals** — already wired via the existing Shopify GraphQL client from the earlier Shopify slice. Make sure the admin app has `read_orders` scope.
+4. **Receipts** — no extra setup. Dev writes to `uploads/receipts/` (gitignored). Production: replace the body of `storeReceipt()` with an S3/Vercel Blob writer.
+
+## What's NOT done yet — pass 5
+
+### Pass 5: production hardening
+
+These are the gaps you'll feel only once Plaid + Stripe + receipts are live and the data volume grows past a few hundred transactions:
+
+- **Persistent storage** — the in-memory `JOURNAL`, `AUDIT`, `PERIODS`, and `ASSETS` need to live somewhere durable. The shape is right for a 1:1 mapping to Postgres or SQLite tables. Replace the module-scoped arrays with a DB client.
+- **Receipt OCR** — pipe uploads through a vision model to auto-extract vendor + amount + date, pre-filling the expense form. (Anthropic, Mindee, AWS Textract are all reasonable.)
+- **Plaid webhook** — `POST /api/finance/plaid/webhook` for `TRANSACTIONS_UPDATE` events. Pushes candidate matches into a queue so the operator sees new bank lines without manual refresh.
+- **Stripe payout three-way match** — Shopify order → Stripe charge → Stripe payout → bank deposit. The hardest part of e-commerce books and the most common source of "where did this $X come from" pain.
+- **Etsy 1099-K auto-pull** — needs Etsy OAuth approval per shop. Etsy doesn't have a sandbox; setup is heavier than Plaid/Stripe.
+- **Depreciation auto-posting** — extend the period-close routine to journal each asset's annual depreciation to 6050 Depreciation / 1600 Accumulated Depreciation. Today the schedule is informational only.
+- **Multi-currency** — every cents value would gain a `currency` field; FX-rate snapshot table for period-end translation.
+- **Wave / FreshBooks / Cash App / Quicken adapters** — additional export targets on top of the same data, following the QuickBooks/Xero pattern.
+- **Per-state sales-tax remittance log** — if you sell into nexus states, the sales-tax payable account (2010) needs a sub-ledger by jurisdiction.
+- **Section 179 / bonus depreciation** — for the year the asset is placed in service. A tax-prep choice rather than a bookkeeping one, but the Schedule C export should be able to model it.
 
 ---
 

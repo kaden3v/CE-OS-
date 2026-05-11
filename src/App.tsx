@@ -22,6 +22,8 @@ import Vendors from "./pages/Vendors";
 import TaxReport from "./pages/TaxReport";
 import YearEndSnapshot from "./pages/YearEndSnapshot";
 import Form1099K from "./pages/Form1099K";
+import ScheduleCPrint from "./pages/ScheduleCPrint";
+import Assets from "./pages/Assets";
 import Licenses from "./pages/Licenses";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -34,6 +36,10 @@ export default function App() {
       <Toaster />
       <BrowserRouter>
         <Routes>
+          {/* Printable views — outside the shell so the sidebar/topbar don't appear. */}
+          <Route path="/finances/tax-report/schedule-c-print" element={<ScheduleCPrint />} />
+          <Route path="/finances/tax-report/schedule-c-print/:year" element={<ScheduleCPrint />} />
+
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/orders" element={<Orders />} />
@@ -58,6 +64,7 @@ export default function App() {
             <Route path="/finances/tax-report/year-end" element={<YearEndSnapshot />} />
             <Route path="/finances/tax-report/year-end/:year" element={<YearEndSnapshot />} />
             <Route path="/finances/tax-report/1099k" element={<Form1099K />} />
+            <Route path="/finances/assets" element={<Assets />} />
             <Route path="/licenses" element={<Licenses />} />
             <Route path="/audit" element={<AuditLog />} />
             <Route path="/settings" element={<Settings />} />

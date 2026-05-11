@@ -114,6 +114,44 @@ export default function Settings() {
                 ))}
               </select>
             </div>
+            <div className="p-4 flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="font-medium text-sm">Prior-year tax liability</div>
+                <div className="text-xs text-text-secondary mt-2">
+                  From last year's Form 1040, line 24. Drives the safe-harbor quarterly estimated-tax calculation on the Tax Report.
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-text-tertiary text-sm">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={(settings.priorYearTaxCents / 100).toFixed(0)}
+                  onChange={(e) => updateSettings({ priorYearTaxCents: Math.max(0, Math.round(parseFloat(e.target.value || '0') * 100)) })}
+                  className="w-32 h-8 px-2 rounded bg-bg-base border border-border-subtle text-sm text-text-primary tabular-nums text-right focus:outline-none focus:border-accent-brand"
+                />
+              </div>
+            </div>
+            <div className="p-4 flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="font-medium text-sm">Prior-year AGI</div>
+                <div className="text-xs text-text-secondary mt-2">
+                  From last year's Form 1040, line 11. Over $150,000 triggers the 110% safe-harbor multiplier (high-income rule).
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-text-tertiary text-sm">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={(settings.priorYearAgiCents / 100).toFixed(0)}
+                  onChange={(e) => updateSettings({ priorYearAgiCents: Math.max(0, Math.round(parseFloat(e.target.value || '0') * 100)) })}
+                  className="w-32 h-8 px-2 rounded bg-bg-base border border-border-subtle text-sm text-text-primary tabular-nums text-right focus:outline-none focus:border-accent-brand"
+                />
+              </div>
+            </div>
           </Card>
         </section>
 

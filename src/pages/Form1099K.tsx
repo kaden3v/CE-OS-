@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, Download, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Download, AlertTriangle, CheckCircle2, RefreshCcw, Loader2 } from 'lucide-react';
 import { Topbar } from '@/components/nav/Topbar';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
 import { resolve } from '@/lib/finance/period';
 import { listRevenue, useFinanceStore } from '@/lib/finance/store';
 import { formatCents, type PeriodSelection } from '@/lib/finance/types';
 import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
+import { fetchProcessorGross } from '@/lib/api';
 import { useApp } from '@/contexts/AppContext';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,28 @@ export default function Form1099K() {
   const updateReported = (channel: ReportedTotal['channel'], dollars: string) => {
     const cents = Math.max(0, Math.round(parseFloat(dollars || '0') * 100));
     setReported(prev => prev.map(r => r.channel === channel ? { ...r, reportedCents: cents } : r));
+  };
+
+  const [syncing, setSyncing] = useState<null | ReportedTotal['channel']>(null);
+  const onSync = async (channel: ReportedTotal['channel']) => {
+    setSyncing(channel);
+    try {
+      const { grossCents, source, note } = await fetchProcessorGross({
+        channel,
+        start: period.current.start,
+        end: period.current.end,
+      });
+      if (source === 'unavailable') {
+        addToast({ title: `${channel} sync unavailable`, description: note, status: 'warn' });
+      } else {
+        setReported(prev => prev.map(r => r.channel === channel ? { ...r, reportedCents: grossCents } : r));
+        addToast({ title: `${channel}: synced gross from ${source}`, status: 'ok' });
+      }
+    } catch (e: any) {
+      addToast({ title: `${channel} sync failed`, description: e.message, status: 'alert' });
+    } finally {
+      setSyncing(null);
+    }
   };
 
   // Ledger revenue per channel for the same period.
@@ -127,6 +150,16 @@ export default function Form1099K() {
                     <td className="h-12 px-4 text-text-primary font-medium">{r.channel}</td>
                     <td className="h-12 px-4 text-right">
                       <div className="inline-flex items-center gap-1 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => onSync(r.channel)}
+                          disabled={syncing === r.channel}
+                          aria-label={`Auto-sync ${r.channel}`}
+                          className="w-7 h-7 rounded flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-bg-hover disabled:opacity-50 transition-colors duration-[120ms]"
+                          title={r.channel === 'Etsy' ? 'Etsy OAuth pending — enter manually for now' : `Sync ${r.channel} gross from API`}
+                        >
+                          {syncing === r.channel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCcw className="w-3.5 h-3.5" />}
+                        </button>
                         <span className="text-text-tertiary">$</span>
                         <input
                           type="number"
