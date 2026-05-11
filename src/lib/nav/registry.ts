@@ -133,6 +133,7 @@ export const routes: Route[] = [
   { id: 'qr-analytics',    label: 'QR Analytics',     href: '/inventory/qr-codes/analytics', icon: BarChart3, section: 'reports' },
   { id: 'tax-report',      label: 'Tax Report',       href: '/finances/tax-report', icon: FileSpreadsheet, section: 'reports', goto: 'r', keywords: ['taxes', 'p&l', 'profit', 'loss', 'income statement', 'schedule c'] },
   { id: 'year-end',        label: 'Year-End Snapshot', href: '/finances/tax-report/year-end', icon: Calendar, section: 'reports', keywords: ['closed period', 'historical', 'archive'] },
+  { id: 'form-1099k',      label: '1099-K Reconciliation', href: '/finances/tax-report/1099k', icon: FileSpreadsheet, section: 'reports', paletteOnly: true, keywords: ['1099', '1099-k', 'etsy gross', 'shopify gross', 'payment processor'] },
   { id: 'expenses',        label: 'Expenses', href: '/finances/expenses', icon: Receipt, section: 'reports', goto: 'f', keywords: ['spending', 'receipts', 'deductions', 'ledger', 'transactions'] },
   { id: 'supplies',        label: 'Supplies', href: '/finances/supplies', icon: PackageOpen, section: 'reports', keywords: ['inventory', 'reorder', 'stock', 'pots', 'media'] },
   { id: 'vendors',         label: 'Vendors',  href: '/finances/vendors',  icon: Store,    section: 'reports', keywords: ['suppliers', 'merchants', 'payees'] },

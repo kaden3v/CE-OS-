@@ -21,6 +21,7 @@ import Supplies from "./pages/Supplies";
 import Vendors from "./pages/Vendors";
 import TaxReport from "./pages/TaxReport";
 import YearEndSnapshot from "./pages/YearEndSnapshot";
+import Form1099K from "./pages/Form1099K";
 import Licenses from "./pages/Licenses";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/finances/tax-report" element={<TaxReport />} />
             <Route path="/finances/tax-report/year-end" element={<YearEndSnapshot />} />
             <Route path="/finances/tax-report/year-end/:year" element={<YearEndSnapshot />} />
+            <Route path="/finances/tax-report/1099k" element={<Form1099K />} />
             <Route path="/licenses" element={<Licenses />} />
             <Route path="/audit" element={<AuditLog />} />
             <Route path="/settings" element={<Settings />} />

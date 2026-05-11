@@ -1,16 +1,18 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { Plus, Download, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
+import { Plus, Download, CheckCircle, AlertTriangle, Trash2, Lock, Link2 } from 'lucide-react';
 import { DataTable } from '@/components/data/DataTable';
 import { RecordDrawer } from '@/components/record/RecordDrawer';
 import { ReasonModal } from '@/components/record/ReasonModal';
 import { Topbar } from '@/components/nav/Topbar';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
+import { ReconcileModal } from '@/components/finance/ReconcileModal';
 import { expenseConfig } from '@/components/record/configs/expense';
 import type { ColumnDef } from '@/components/data/types';
 import type { ActivityEntry } from '@/components/record/ActivityFeed';
 import {
   listTransactions, totalCents, correctExpense, updateReconciliation, postExpense,
+  useFinanceStore, periodFor, getEntryChain, listAuditEntries,
 } from '@/lib/finance/store';
 import { defaultPeriod, pctChange } from '@/lib/finance/period';
 import { expenseAccounts, suggestAccountForVendor, accountByCode } from '@/lib/finance/accounts';
@@ -24,8 +26,7 @@ export default function Expenses() {
   const [params, setParams] = useSearchParams();
   const [period, setPeriod] = useState<PeriodSelection>(() => defaultPeriod(settings.fiscalYearStartMonth));
   const [addOpen, setAddOpen] = useState(false);
-  const [tick, setTick] = useState(0); // bump to refresh after mutation
-  const refresh = useCallback(() => setTick(t => t + 1), []);
+  const [reconcileTxs, setReconcileTxs] = useState<TransactionView[] | null>(null);
   const [reasonPending, setReasonPending] = useState<null | {
     tx: TransactionView;
     field: string;
@@ -39,19 +40,23 @@ export default function Expenses() {
   // ── Filters from URL (for drill-down support) ─────────────────────────────
   const accountFilter = params.get('account') ?? null;
   const reconFilter   = params.get('recon') ?? null;
+  const vendorFilter  = params.get('vendor') ?? null;
 
-  // ── Data ──────────────────────────────────────────────────────────────────
-  const transactions = useMemo(() => listTransactions({
+  // ── Reactive data ─────────────────────────────────────────────────────────
+  const transactions = useFinanceStore(() => listTransactions({
     period: { start: period.current.start, end: period.current.end },
     method: settings.accountingMethod,
     accounts: accountFilter ? [accountFilter] : undefined,
+    vendors:  vendorFilter ? [vendorFilter] : undefined,
     reconciliation: reconFilter as any,
-  }), [period, settings.accountingMethod, accountFilter, reconFilter, tick]);
+  }));
 
-  const prevTotalCents = useMemo(() => period.previous ? totalCents({
+  const prevTotalCents = useFinanceStore(() => period.previous ? totalCents({
     period: period.previous,
     method: settings.accountingMethod,
-  }) : null, [period, settings.accountingMethod, tick]);
+  }) : null);
+
+  const lockedPeriod = useFinanceStore(() => periodFor(period.current.start));
 
   const currTotalCents = useMemo(() => transactions.reduce((s, t) => s + t.amountCents, 0), [transactions]);
 
@@ -71,12 +76,16 @@ export default function Expenses() {
   const onCorrect = useCallback((tx: TransactionView, field: string, next: string) => {
     const originalDisplay =
       field === 'serviceDate' ? tx.date :
+      field === 'cashDate'    ? tx.date :
       field === 'vendor'      ? tx.vendor :
       field === 'memo'        ? tx.memo :
       field === 'accountCode' ? `${tx.account} — ${tx.accountName}` :
+      field === 'amount'      ? formatCents(tx.amountCents) :
       '—';
     const nextDisplay =
-      field === 'accountCode' ? `${next} — ${accountByCode(next)?.name ?? '?'}` : next;
+      field === 'accountCode' ? `${next} — ${accountByCode(next)?.name ?? '?'}` :
+      field === 'amount'      ? `$${Number(next).toFixed(2)}` :
+      next;
     setReasonPending({ tx, field, next, originalDisplay, nextDisplay });
   }, []);
 
@@ -89,23 +98,22 @@ export default function Expenses() {
         reason,
         next: {
           serviceDate: field === 'serviceDate' ? next : tx.date,
-          cashDate:    tx.date,
+          cashDate:    field === 'cashDate'    ? next : tx.date,
           vendor:      field === 'vendor' ? next : tx.vendor,
           memo:        field === 'memo'   ? next : tx.memo,
           accountCode: field === 'accountCode' ? next : tx.account,
-          amountCents: tx.amountCents,
+          amountCents: field === 'amount' ? Math.round(parseFloat(next) * 100) : tx.amountCents,
           channel:     tx.channel,
           hasReceipt:  tx.hasReceipt,
         },
       });
       addToast({ title: 'Correction posted', description: 'Original entry preserved; new version is now active.', status: 'ok' });
-      refresh();
     } catch (e: any) {
       addToast({ title: 'Correction failed', description: e.message, status: 'alert' });
     } finally {
       setReasonPending(null);
     }
-  }, [reasonPending, addToast, refresh]);
+  }, [reasonPending, addToast]);
 
   const onReconcile = useCallback((tx: TransactionView, state: 'reviewed' | 'unreconciled' | 'disputed') => {
     try {
@@ -113,11 +121,10 @@ export default function Expenses() {
       else if (state === 'disputed') updateReconciliation(tx.journalId, { state: 'disputed', reason: 'Manually flagged', flaggedAt: new Date().toISOString(), flaggedBy: 'Kaden' });
       else                            updateReconciliation(tx.journalId, { state: 'unreconciled' });
       addToast({ title: `Marked ${state}`, status: 'ok' });
-      refresh();
     } catch (e: any) {
       addToast({ title: 'Update failed', description: e.message, status: 'alert' });
     }
-  }, [addToast, refresh]);
+  }, [addToast]);
 
   const onDelete = useCallback((tx: TransactionView) => {
     addToast({
@@ -129,9 +136,31 @@ export default function Expenses() {
     closeRecord();
   }, [addToast]);
 
-  const getActivity = useCallback((journalId: string): ActivityEntry[] => [
-    { id: '1', kind: 'system', actor: { name: 'System', initials: 'S' }, at: new Date().toISOString(), text: `Journal entry ${journalId} created` },
-  ], []);
+  const getActivity = useCallback((journalId: string): ActivityEntry[] => {
+    const chain = getEntryChain(journalId);
+    const audits = listAuditEntries({ entryId: journalId });
+    const fromChain: ActivityEntry[] = chain.map((e, i) => ({
+      id: `chain-${e.id}`,
+      kind: 'system',
+      actor: { name: e.createdBy, initials: initialsOf(e.createdBy) },
+      at: e.createdAt,
+      text: i === chain.length - 1
+        ? `Posted ${e.vendor}: ${e.memo || '—'}`
+        : e.correctionReason
+          ? `Corrected — reason: "${e.correctionReason}"`
+          : `Corrected (no reason recorded)`,
+    }));
+    const fromAudit: ActivityEntry[] = audits
+      .filter(a => a.kind === 'reconcile')
+      .map(a => ({
+        id: `audit-${a.id}`,
+        kind: 'system',
+        actor: { name: a.actor, initials: initialsOf(a.actor) },
+        at: a.at,
+        text: a.summary,
+      }));
+    return [...fromChain, ...fromAudit].sort((a, b) => a.at.localeCompare(b.at));
+  }, []);
 
   const config = useMemo(() => expenseConfig({ onCorrect, onReconcile, onDelete, getActivity }), [onCorrect, onReconcile, onDelete, getActivity]);
 
@@ -259,6 +288,16 @@ export default function Expenses() {
           />
         </div>
 
+        {/* Closed-period banner */}
+        {lockedPeriod && lockedPeriod.status !== 'open' && (
+          <div className="rounded-lg border border-status-warn/30 bg-status-warn/[0.06] p-3 flex items-start gap-2">
+            <Lock className="w-4 h-4 text-status-warn flex-shrink-0 mt-0.5" strokeWidth={1.5} />
+            <div className="text-[12px] text-text-secondary leading-[1.6]">
+              <strong className="text-text-primary">{lockedPeriod.id} is {lockedPeriod.status}.</strong> Closed on {lockedPeriod.closedAt ? new Date(lockedPeriod.closedAt).toLocaleDateString() : '—'} by {lockedPeriod.closedBy ?? '—'}. New posts and corrections are blocked. Reopen from the Tax Report if you need to make changes.
+            </div>
+          </div>
+        )}
+
         {/* Active drill-down chip */}
         {activeFilter && (
           <div className="flex items-center gap-2 text-[12px]">
@@ -272,6 +311,19 @@ export default function Expenses() {
           </div>
         )}
 
+        {/* Totals row — pinned beneath the table while it sits on the page */}
+        {transactions.length > 0 && (
+          <div className="rounded-lg border border-border-subtle bg-bg-elevated px-4 h-10 flex items-center justify-between text-[12px]">
+            <span className="text-text-tertiary">
+              {transactions.length} {transactions.length === 1 ? 'transaction' : 'transactions'} · {transactions.filter(t => t.deductible).length} deductible
+            </span>
+            <span className="flex items-center gap-4 tabular-nums">
+              <span className="text-text-tertiary">Deductible: <span className="text-status-ok">{formatCents(transactions.filter(t => t.deductible).reduce((s, t) => s + t.amountCents, 0))}</span></span>
+              <span className="text-text-primary font-semibold">Total: {formatCents(currTotalCents)}</span>
+            </span>
+          </div>
+        )}
+
         <DataTable<TransactionView>
           storageKey="expenses.v2"
           rows={transactions}
@@ -280,6 +332,8 @@ export default function Expenses() {
           onRowOpen={(t) => openRecord(t.id)}
           onSelectionChange={() => { /* bulk actions wired below */ }}
           bulkActions={[
+            { id: 'reconcile', label: 'Reconcile against bank…', icon: Link2,
+              run: (rows) => setReconcileTxs(rows) },
             { id: 'review', label: 'Mark reviewed', icon: CheckCircle,
               run: (rows) => { rows.forEach(r => onReconcile(r, 'reviewed')); } },
             { id: 'dispute', label: 'Flag disputed', icon: AlertTriangle,
@@ -308,9 +362,16 @@ export default function Expenses() {
       {addOpen && (
         <NewExpenseModal
           onClose={() => setAddOpen(false)}
-          onCreated={() => { setAddOpen(false); refresh(); addToast({ title: 'Expense posted', status: 'ok' }); }}
+          onCreated={() => { setAddOpen(false); addToast({ title: 'Expense posted', status: 'ok' }); }}
         />
       )}
+
+      <ReconcileModal
+        open={!!reconcileTxs}
+        transactions={reconcileTxs ?? []}
+        onClose={() => setReconcileTxs(null)}
+        onDone={(matched) => { setReconcileTxs(null); addToast({ title: `Reconciled ${matched} transactions`, status: 'ok' }); }}
+      />
 
       <ReasonModal
         open={!!reasonPending}
@@ -332,8 +393,14 @@ function fieldLabelFor(field: string): string {
     case 'vendor':      return 'Vendor';
     case 'memo':        return 'Memo';
     case 'accountCode': return 'GL Account';
+    case 'amount':      return 'Amount';
+    case 'cashDate':    return 'Cash date';
     default:            return field;
   }
+}
+
+function initialsOf(name: string): string {
+  return name.split(/\s+/).map(w => w[0]?.toUpperCase() ?? '').join('').slice(0, 2) || 'U';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

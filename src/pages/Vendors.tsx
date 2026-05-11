@@ -7,7 +7,7 @@ import { Topbar } from '@/components/nav/Topbar';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
 import { vendorConfig, type VendorRecord } from '@/components/record/configs/vendor';
 import type { ColumnDef } from '@/components/data/types';
-import { listTransactions, listVendors } from '@/lib/finance/store';
+import { listTransactions, listVendors, useFinanceStore } from '@/lib/finance/store';
 import { defaultPeriod } from '@/lib/finance/period';
 import { accountName } from '@/lib/finance/accounts';
 import { formatCents, type PeriodSelection } from '@/lib/finance/types';
@@ -28,7 +28,7 @@ export default function Vendors() {
 
   const periodArg = { start: period.current.start, end: period.current.end };
 
-  const vendors = useMemo<VendorRecord[]>(() => {
+  const vendors = useFinanceStore<VendorRecord[]>(() => {
     const rolled = listVendors({ period: periodArg, method: settings.accountingMethod });
     return rolled.map(v => {
       const transactions = listTransactions({
@@ -46,7 +46,7 @@ export default function Vendors() {
         transactions,
       };
     });
-  }, [period, settings.accountingMethod]);
+  });
 
   // Drill-down
   const openId = params.get('id');

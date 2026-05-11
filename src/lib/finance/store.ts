@@ -5,15 +5,43 @@
  * `supersedes` set, never mutate the original. The store is the authoritative
  * source for "is this still the current version of the entry?"
  *
+ * Reactive: every mutation bumps a version counter and notifies subscribers.
+ * Pages use `useFinanceStore(selector)` to re-render automatically — no
+ * manual refresh ticks.
+ *
  * When the real backend lands, this module's public API stays the same; only
  * the implementation switches to `fetch('/api/finance/journal')`.
  */
 
+import { useSyncExternalStore } from 'react';
 import { accountByCode, accountName, expenseAccounts } from './accounts';
 import { withinPeriod } from './period';
 import type {
-  JournalEntry, JournalLine, TransactionView, AccountingMethod, ReconciliationStatus,
+  JournalEntry, TransactionView, AccountingMethod, ReconciliationStatus,
+  FiscalPeriod,
 } from './types';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reactivity — subscribe pattern via useSyncExternalStore
+// ─────────────────────────────────────────────────────────────────────────────
+
+let version = 0;
+const listeners = new Set<() => void>();
+function bump() { version++; listeners.forEach(l => l()); }
+function subscribe(l: () => void) { listeners.add(l); return () => listeners.delete(l); }
+function getSnapshot() { return version; }
+
+/**
+ * React hook for components to react to store changes.
+ * `selector` runs each render and returns the projection the component needs.
+ *
+ *   const txs = useFinanceStore(() => listTransactions({ period, method }));
+ */
+export function useFinanceStore<T>(selector: () => T): T {
+  // useSyncExternalStore returns the version; we use it as a re-render trigger.
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return selector();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed data
@@ -202,8 +230,15 @@ export type NewExpenseInput = {
 
 export function postExpense(input: NewExpenseInput): JournalEntry {
   validate(input);
+  assertPeriodOpen(input.serviceDate);
   const e = expenseEntry({ ...input });
   JOURNAL = [e, ...JOURNAL];
+  logAudit({
+    kind: 'post',
+    entryId: e.id,
+    summary: `Posted expense ${e.vendor} ${formatAmount(input.amountCents)} → ${input.accountCode}`,
+  });
+  bump();
   return e;
 }
 
@@ -217,6 +252,8 @@ export function correctExpense(args: {
   if (!original) throw new Error(`Journal entry ${args.originalId} not found`);
   if (original.supersededBy) throw new Error(`Journal entry ${args.originalId} is already superseded`);
   validate(args.next);
+  assertPeriodOpen(original.serviceDate);
+  assertPeriodOpen(args.next.serviceDate);
   const correction = expenseEntry(args.next);
   correction.supersedes = original.id;
   correction.correctionReason = args.reason;
@@ -225,17 +262,33 @@ export function correctExpense(args: {
     e.id === original.id ? { ...e, supersededBy: correction.id } : e,
   );
   JOURNAL = [correction, ...JOURNAL];
+  logAudit({
+    kind: 'correct',
+    entryId: correction.id,
+    relatedId: original.id,
+    reason: args.reason,
+    summary: `Corrected ${original.vendor} entry (was ${formatAmount(sumDebits(original))} → ${formatAmount(args.next.amountCents)})`,
+  });
+  bump();
   return correction;
 }
 
 export function updateReconciliation(journalId: string, next: ReconciliationStatus): JournalEntry {
   let updated: JournalEntry | undefined;
+  let prev: ReconciliationStatus['state'] | undefined;
   JOURNAL = JOURNAL.map(e => {
     if (e.id !== journalId) return e;
+    prev = e.reconciliation.state;
     updated = { ...e, reconciliation: next };
     return updated;
   });
   if (!updated) throw new Error(`Journal entry ${journalId} not found`);
+  logAudit({
+    kind: 'reconcile',
+    entryId: journalId,
+    summary: `Reconciliation: ${prev} → ${next.state}`,
+  });
+  bump();
   return updated;
 }
 
@@ -356,4 +409,130 @@ export function isBalanced(entry: JournalEntry): boolean {
   const debit  = entry.lines.reduce((s, l) => s + l.debitCents,  0);
   const credit = entry.lines.reduce((s, l) => s + l.creditCents, 0);
   return debit === credit;
+}
+
+function sumDebits(entry: JournalEntry): number {
+  return entry.lines.reduce((s, l) => s + l.debitCents, 0);
+}
+
+function formatAmount(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit log — one feed, every mutation appends. Read by the AuditLog page.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AuditEntry = {
+  id: string;
+  at: string; // ISO timestamp
+  actor: string;
+  kind: 'post' | 'correct' | 'reconcile' | 'close-period' | 'reopen-period';
+  /** Primary entry the audit row references. */
+  entryId?: string;
+  /** Related (superseded) entry id for corrections. */
+  relatedId?: string;
+  /** Reason given (corrections + closures). */
+  reason?: string;
+  summary: string;
+};
+
+let AUDIT: AuditEntry[] = [];
+
+function logAudit(input: Omit<AuditEntry, 'id' | 'at' | 'actor'>) {
+  AUDIT = [
+    {
+      id: `AUD-${Math.random().toString(36).slice(2, 9).toUpperCase()}`,
+      at: new Date().toISOString(),
+      actor: 'Kaden', // wire to auth in a later pass
+      ...input,
+    },
+    ...AUDIT,
+  ];
+}
+
+export function listAuditEntries(filter?: { entryId?: string; sinceDays?: number }): AuditEntry[] {
+  const cutoff = filter?.sinceDays != null ? Date.now() - filter.sinceDays * 86_400_000 : 0;
+  return AUDIT.filter(a => {
+    if (filter?.entryId && a.entryId !== filter.entryId && a.relatedId !== filter.entryId) return false;
+    if (cutoff && new Date(a.at).getTime() < cutoff) return false;
+    return true;
+  });
+}
+
+/** Walk the supersedes chain for a journal entry. Useful for activity feed. */
+export function getEntryChain(entryId: string): JournalEntry[] {
+  const chain: JournalEntry[] = [];
+  let current = JOURNAL.find(e => e.id === entryId);
+  while (current) {
+    chain.push(current);
+    if (!current.supersedes) break;
+    current = JOURNAL.find(e => e.id === current!.supersedes);
+  }
+  return chain; // newest first
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Period close / lock enforcement
+// ─────────────────────────────────────────────────────────────────────────────
+
+let PERIODS: FiscalPeriod[] = [];
+
+export function listPeriods(): FiscalPeriod[] {
+  return PERIODS;
+}
+
+/** Returns the closed/locked period containing `date`, or null if no closure applies. */
+export function periodFor(date: string): FiscalPeriod | null {
+  return PERIODS.find(p => date >= p.start && date <= p.end) ?? null;
+}
+
+function assertPeriodOpen(date: string): void {
+  const period = periodFor(date);
+  if (!period) return;
+  if (period.status !== 'open') {
+    throw new Error(`Period ${period.id} is ${period.status}. Reopen the period to post here.`);
+  }
+}
+
+/**
+ * Close a fiscal period. The period must not already exist (or must be open).
+ * Closing forbids new posts; corrections can reopen and re-close.
+ */
+export function closePeriod(args: {
+  kind: 'month' | 'quarter' | 'year';
+  start: string;
+  end: string;
+  id: string;
+}): FiscalPeriod {
+  const existing = PERIODS.find(p => p.id === args.id);
+  if (existing && existing.status !== 'open') {
+    throw new Error(`Period ${args.id} is already ${existing.status}`);
+  }
+  const next: FiscalPeriod = {
+    id: args.id,
+    kind: args.kind,
+    start: args.start,
+    end: args.end,
+    status: 'closed',
+    closedAt: new Date().toISOString(),
+    closedBy: 'Kaden',
+  };
+  PERIODS = existing
+    ? PERIODS.map(p => (p.id === args.id ? next : p))
+    : [...PERIODS, next];
+  logAudit({ kind: 'close-period', summary: `Closed ${args.id}`, reason: 'period close' });
+  bump();
+  return next;
+}
+
+export function reopenPeriod(periodId: string, reason: string): FiscalPeriod {
+  const existing = PERIODS.find(p => p.id === periodId);
+  if (!existing) throw new Error(`Period ${periodId} not found`);
+  if (existing.status === 'locked') throw new Error(`Period ${periodId} is locked and cannot be reopened from this UI`);
+  const next: FiscalPeriod = { ...existing, status: 'open', closedAt: undefined, closedBy: undefined };
+  PERIODS = PERIODS.map(p => (p.id === periodId ? next : p));
+  logAudit({ kind: 'reopen-period', summary: `Reopened ${periodId}`, reason });
+  bump();
+  return next;
 }

@@ -105,23 +105,33 @@ Click "$4,120 Shipping & Postage" on the Tax Report → navigate to `/finances/e
 | [registry.ts](../src/lib/nav/registry.ts) | Palette keywords for tax/expenses/vendors. New action: "Drill into expenses by GL account" (palette → enter 4-digit code → navigates to filtered view). |
 | [App.tsx](../src/App.tsx) | Added `/finances/tax-report/year-end/:year` route. |
 
-## What's NOT done yet — passes 3–4
+## Pass 3 (landed) — enforcement + polish
 
-### Pass 3: bookkeeping core (the "B" in Option B)
+| Area | What changed |
+| ---- | ------------ |
+| **Reactive store** | [store.ts](../src/lib/finance/store.ts) now exposes `useFinanceStore(selector)` backed by `useSyncExternalStore`. Every mutator (`postExpense`, `correctExpense`, `updateReconciliation`, `closePeriod`, `reopenPeriod`) bumps a version and notifies subscribers. The `tick`/`refresh` hack in pages is gone — they re-render automatically. |
+| **Period close + lock** | `closePeriod({ kind, start, end, id })` writes a `FiscalPeriod` to the store. `postExpense` and `correctExpense` now call `assertPeriodOpen()` and refuse with an explicit error when the target date falls in a closed period. `reopenPeriod(id, reason)` allows controlled reopening; the reason is audit-logged. New [`<ClosePeriodButton>`](../src/components/finance/ClosePeriodButton.tsx) in the TaxReport topbar shows a type-to-confirm close dialog when the period is open, and a "Reopen …" button with a reason prompt when it's closed. Expenses surfaces a banner when the active period is closed. |
+| **Audit log integration** | New `logAudit()` inside the store; every mutation appends. [`AuditLog.tsx`](../src/pages/AuditLog.tsx) reads via `useFinanceStore(() => listAuditEntries(...))` and merges into the synthetic seed, so finance changes appear there immediately and reactively. |
+| **Journal-entry chain in activity feed** | The expense drawer's Activity tab now renders the full supersedes chain plus reconciliation history (sourced from `getEntryChain()` and `listAuditEntries({ entryId })`). Correction reasons show up inline. |
+| **Editable amount + cashDate** | The expense drawer can now correct amount and cash date in addition to the previously-supported fields. Both flow through the immutable-journal `correctExpense` path with required reason. |
+| **Sticky totals row** | A summary row sits beneath the Expenses table showing transaction count, deductible count, deductible total, and grand total — all computed from the visible (filtered) data. |
+| **Receipt panel** | The drawer's overview body now has a dedicated Receipt section: a clickable file chip when present, an "Attach receipt" upload affordance when not. The native file picker opens; upload pipeline lands in Pass 4. |
+| **Schedule C draft export** | New [scheduleC.ts](../src/lib/finance/scheduleC.ts) builds a draft mapping every contributing GL account to its Schedule C line. TaxReport has a "Schedule C draft" button that downloads the CSV. The CSV includes line number, label, amount, and a detail column listing GL contributors per line. |
+| **1099-K reconciliation worksheet** | New page at `/finances/tax-report/1099k` ([Form1099K.tsx](../src/pages/Form1099K.tsx)). Operator enters reported gross from each payment processor; ledger revenue is computed; the delta is flagged with confidence-style badges. Includes common-explanations footer for CPA handoff. Linked from the TaxReport topbar. |
+| **Bulk reconcile modal** | New [ReconcileModal.tsx](../src/components/finance/ReconcileModal.tsx). Select rows in Expenses → "Reconcile against bank…" → modal proposes a mocked bank-line match per transaction with a confidence score (amount + date proximity + vendor-token overlap). User accepts/skips individually or accepts all. Confirmed matches post via `updateReconciliation` and flow through to the audit log. |
 
-- **Period close workflow** — `closePeriod(periodId, closedBy)` marks `status: 'closed'`. New entries against that period require a "post-close adjusting entry" code path with an explicit reason.
-- **Period locking** — once locked, even corrections require an unlock workflow (audit-logged). UI shows a 🔒 chip in the period picker for locked periods.
-- **Audit log wiring** — every `postExpense`, `correctExpense`, `updateReconciliation`, `closePeriod` emits a row into the existing `/audit` page.
-- **Bulk reconciliation** — match expenses to bank lines en masse with a confidence-scored review UI.
-- **Reason prompt UX** — current implementation uses `window.prompt()` for correction reasons. Replace with a proper dialog that requires reason ≥ N chars and surfaces who/when/why on the journal entry.
+## What's NOT done yet — pass 4
 
-### Pass 4: integrations + tax artifacts
+### Pass 4: real backend + remaining tax artifacts
 
-- **Plaid connector** — `/api/finance/bank-feed` endpoint, OAuth flow stored in a separate `plaidAccessToken` env var. Webhook on new transactions auto-creates "candidate match" reconciliations.
+- **Plaid connector** — `/api/finance/bank-feed` endpoint, OAuth flow stored in a separate `plaidAccessToken` env var. Replaces the `MOCK_BANK_FEED` in `ReconcileModal.tsx` with live data and pushes new transactions through webhook → candidate-match queue.
 - **Stripe payout reconciliation** — match Shopify orders → Stripe payouts → bank deposits. The three-way match is the hardest part of e-commerce bookkeeping.
-- **1099-K reconciliation worksheet** — pulls Etsy/Shopify reported gross, your ledger's revenue, the delta with explanations.
-- **Schedule C draft** — generate a PDF that maps each line to your `totalsByAccount(period: this year, group by scheduleC)`.
+- **1099-K reported totals auto-sync** — pull the gross from Shopify Payments and Etsy APIs (or CSV upload) so users don't have to type the reported numbers.
+- **Schedule C as PDF** — the data is already structured (see `buildScheduleC()`); a PDF renderer (jsPDF or similar) generates a filing-ready document. CSV already ships.
 - **QuickBooks IIF / Xero CSV / Wave CSV exports** — vendor-specific format adapters on top of the same data.
+- **Receipt upload pipeline** — wire the existing UI affordance to a real attachment store (S3 / Vercel Blob). OCR pass to auto-populate vendor/amount.
+- **Depreciation schedule** — equipment > $2,500 capitalized to 1500 Equipment & Fixtures, depreciated over 5–7 years via journal entries to 6050 Depreciation.
+- **Quarterly estimated tax with safe-harbor** — replace the flat 30% placeholder with the proper "lesser of 100% of last year's tax or 90% of this year's projected tax" calc.
 
 ---
 
@@ -135,9 +145,9 @@ Click "$4,120 Shipping & Postage" on the Tax Report → navigate to `/finances/e
 
 4. **No depreciation schedule.** Equipment > $2,500 should depreciate over years 5–7. Pass 4 territory.
 
-5. **Period locking is visual only.** YearEndSnapshot shows a "Locked" chip but the underlying ledger doesn't yet refuse posts to a closed year. Pass 3 wires real enforcement.
+5. **Etsy/Shopify revenue is seeded, not synced.** Pass 4's Plaid + Shopify-payout integration replaces the seed entries with real ones.
 
-6. **Etsy/Shopify revenue is seeded, not synced.** Pass 4's Plaid + Shopify-payout integration replaces the seed entries with real ones.
+6. **Bank feed used by the reconcile modal is mocked.** [`MOCK_BANK_FEED`](../src/components/finance/ReconcileModal.tsx) in `ReconcileModal.tsx` is the placeholder; Pass 4 swaps it for Plaid output.
 
 ---
 

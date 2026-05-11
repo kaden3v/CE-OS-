@@ -8,6 +8,7 @@ import { RefreshCcw, X, Code, AlignLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
+import { listAuditEntries, useFinanceStore } from "@/lib/finance/store";
 
 const TABLES = ["customers", "orders", "inventory", "cultivars", "expenses"];
 const ACTIONS = ["CREATE", "UPDATE", "DELETE"];
@@ -39,6 +40,21 @@ export default function AuditLog() {
   const { addToast } = useApp();
 
   const selectedWebhook = useMemo(() => WEBHOOKS.find(w => w.id === selectedWebhookId), [selectedWebhookId]);
+
+  // Real finance audit entries — live, reactive. Prepended to the synthetic
+  // seed below until the rest of the app emits real audit rows too.
+  const financeAudit = useFinanceStore(() => listAuditEntries({ sinceDays: 365 }));
+  const mergedLog = useMemo(() => [
+    ...financeAudit.map(a => ({
+      id: a.id,
+      timestamp: a.at.replace('T', ' ').substring(0, 19),
+      table: 'finance.journal',
+      action: a.kind === 'post' ? 'CREATE' : a.kind === 'correct' ? 'UPDATE' : a.kind.toUpperCase(),
+      recordId: a.entryId ?? a.relatedId ?? '—',
+      actor: `${a.actor}${a.reason ? ` — ${a.reason}` : ''}`,
+    })),
+    ...AUDIT_LOG,
+  ], [financeAudit]);
 
   const auditColumns = useMemo(() => [
     {
@@ -123,10 +139,10 @@ export default function AuditLog() {
 
         {activeTab === "database" ? (
           <Card className="flex-1 overflow-auto">
-            {AUDIT_LOG.length === 0 ? (
+            {mergedLog.length === 0 ? (
                <EmptyState title="Nothing recorded yet" description="Mutations will appear here." />
             ) : (
-               <DataTable columns={auditColumns} data={AUDIT_LOG} />
+               <DataTable columns={auditColumns} data={mergedLog} />
             )}
           </Card>
         ) : (

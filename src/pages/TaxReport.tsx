@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Download, ChevronRight, Lock, AlertTriangle } from 'lucide-react';
+import { Download, ChevronRight, Lock, AlertTriangle, FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Topbar } from '@/components/nav/Topbar';
 import { PeriodPicker } from '@/components/finance/PeriodPicker';
+import { ClosePeriodButton } from '@/components/finance/ClosePeriodButton';
 import { resolve, pctChange } from '@/lib/finance/period';
 import {
-  listTransactions, listRevenue, totalsByAccount, revenueTotalCents, totalCents, monthlyCashFlow,
+  listRevenue, totalsByAccount, revenueTotalCents, totalCents, monthlyCashFlow, useFinanceStore,
 } from '@/lib/finance/store';
 import { CHART_OF_ACCOUNTS, accountByCode } from '@/lib/finance/accounts';
+import { buildScheduleC, scheduleCCsvRows } from '@/lib/finance/scheduleC';
 import { formatCents, type PeriodSelection } from '@/lib/finance/types';
 import { toCsv, downloadCsv, timestampedFilename } from '@/lib/finance/csv';
 import { useApp } from '@/contexts/AppContext';
@@ -29,17 +31,16 @@ export default function TaxReport() {
   const periodArg = { start: period.current.start, end: period.current.end };
   const prevArg   = period.previous ? { start: period.previous.start, end: period.previous.end } : null;
 
-  // ── Computed totals ────────────────────────────────────────────────────────
-  const revenueCents = useMemo(() => revenueTotalCents({ period: periodArg, method: settings.accountingMethod }), [period, settings.accountingMethod]);
-  const expensesCents = useMemo(() => totalCents({ period: periodArg, method: settings.accountingMethod }), [period, settings.accountingMethod]);
-  const netCents = revenueCents - expensesCents;
+  // ── Reactive totals ────────────────────────────────────────────────────────
+  const revenueCents  = useFinanceStore(() => revenueTotalCents({ period: periodArg, method: settings.accountingMethod }));
+  const expensesCents = useFinanceStore(() => totalCents({ period: periodArg, method: settings.accountingMethod }));
+  const netCents      = revenueCents - expensesCents;
 
-  const prevRevenue  = useMemo(() => prevArg ? revenueTotalCents({ period: prevArg, method: settings.accountingMethod }) : null, [prevArg, settings.accountingMethod]);
-  const prevExpenses = useMemo(() => prevArg ? totalCents({ period: prevArg, method: settings.accountingMethod }) : null, [prevArg, settings.accountingMethod]);
+  const prevRevenue  = useFinanceStore(() => prevArg ? revenueTotalCents({ period: prevArg, method: settings.accountingMethod }) : null);
+  const prevExpenses = useFinanceStore(() => prevArg ? totalCents({ period: prevArg, method: settings.accountingMethod }) : null);
   const prevNet      = prevRevenue != null && prevExpenses != null ? prevRevenue - prevExpenses : null;
 
-  // Breakdown
-  const revenueBreakdown = useMemo(() => {
+  const revenueBreakdown = useFinanceStore(() => {
     const map = new Map<string, number>();
     for (const r of listRevenue({ period: periodArg, method: settings.accountingMethod })) {
       map.set(r.account, (map.get(r.account) ?? 0) + r.amountCents);
@@ -47,9 +48,9 @@ export default function TaxReport() {
     return Array.from(map.entries())
       .map(([code, cents]) => ({ code, name: accountByCode(code)?.name ?? code, cents }))
       .sort((a, b) => b.cents - a.cents);
-  }, [period, settings.accountingMethod]);
+  });
 
-  const expenseTotals = useMemo(() => totalsByAccount({ period: periodArg, method: settings.accountingMethod }), [period, settings.accountingMethod]);
+  const expenseTotals = useFinanceStore(() => totalsByAccount({ period: periodArg, method: settings.accountingMethod }));
 
   // Group expense rows by Schedule C line for the deductions panel.
   const expenseBySchedC = useMemo(() => {
@@ -68,14 +69,13 @@ export default function TaxReport() {
       }));
   }, [expenseTotals]);
 
-  // Monthly chart data
-  const chartData = useMemo(() => {
-    return monthlyCashFlow({ period: periodArg, method: settings.accountingMethod }).map(m => ({
-      month: m.month.slice(5) + '/' + m.month.slice(2, 4), // MM/YY
+  const chartData = useFinanceStore(() =>
+    monthlyCashFlow({ period: periodArg, method: settings.accountingMethod }).map(m => ({
+      month: m.month.slice(5) + '/' + m.month.slice(2, 4),
       income: m.income / 100,
       expense: m.expense / 100,
-    }));
-  }, [period, settings.accountingMethod]);
+    })),
+  );
 
   // ── Drill-down ─────────────────────────────────────────────────────────────
   const drillRevenue = (code: string) => {
@@ -108,6 +108,23 @@ export default function TaxReport() {
     addToast({ title: 'Tax report exported', status: 'ok' });
   };
 
+  // Schedule C draft (every line + contributing GL accounts).
+  const onExportScheduleC = () => {
+    const sc = buildScheduleC({ period: periodArg, method: settings.accountingMethod });
+    const csv = toCsv(scheduleCCsvRows(sc), [
+      { header: 'Line',   value: r => r.line },
+      { header: 'Label',  value: r => r.label },
+      { header: 'Amount', value: r => r.amount },
+      { header: 'Detail', value: r => r.detail },
+    ]);
+    downloadCsv(csv, `schedule-c-draft-${period.current.label.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    addToast({
+      title: 'Schedule C draft exported',
+      description: 'Always have a CPA review before filing.',
+      status: 'ok',
+    });
+  };
+
   // ── Year-end snapshot link ─────────────────────────────────────────────────
   const isFullYear = period.current.label === String(currentYear) || /^\d{4}$/.test(period.current.label);
   const snapshotYear = isFullYear ? Number(period.current.label) : null;
@@ -118,6 +135,7 @@ export default function TaxReport() {
         actions={
           <>
             <PeriodPicker value={period} onChange={setPeriod} accountingMethod={settings.accountingMethod} fiscalYearStartMonth={settings.fiscalYearStartMonth} />
+            <ClosePeriodButton period={period} />
             {snapshotYear && (
               <button
                 onClick={() => navigate(`/finances/tax-report/year-end/${snapshotYear}`)}
@@ -127,6 +145,19 @@ export default function TaxReport() {
                 Year-end snapshot
               </button>
             )}
+            <button
+              onClick={() => navigate('/finances/tax-report/1099k')}
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+            >
+              1099-K
+            </button>
+            <button
+              onClick={onExportScheduleC}
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"
+            >
+              <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />
+              Schedule C draft
+            </button>
             <button
               onClick={onExportCsv}
               className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-border-subtle text-[13px] text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors duration-[120ms]"

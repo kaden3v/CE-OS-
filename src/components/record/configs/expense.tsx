@@ -1,4 +1,4 @@
-import { CheckCircle, AlertTriangle, FileText, Trash2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileText, Trash2, Paperclip, ExternalLink, Upload } from 'lucide-react';
 import type { RecordDrawerConfig } from '../types';
 import type { TransactionView } from '@/lib/finance/types';
 import { formatCents } from '@/lib/finance/types';
@@ -57,8 +57,14 @@ export function expenseConfig({
         },
       },
       {
-        id: 'amount', label: 'Amount', type: 'readonly',
-        value: (t) => formatCents(t.amountCents),
+        id: 'amount', label: 'Amount', type: 'number',
+        value: (t) => (t.amountCents / 100).toFixed(2),
+        onCommit: (t, v) => onCorrect(t, 'amount', String(v)),
+      },
+      {
+        id: 'cashDate', label: 'Cash date', type: 'date',
+        value: (t) => t.date,
+        onCommit: (t, v) => onCorrect(t, 'cashDate', String(v)),
       },
       {
         id: 'channel', label: 'Channel', type: 'readonly',
@@ -70,18 +76,20 @@ export function expenseConfig({
         onCommit: (t, v) => onCorrect(t, 'memo', String(v)),
       },
       {
-        id: 'receipt', label: 'Receipt', type: 'readonly',
-        value: (t) => t.hasReceipt ? 'Attached' : '— (no receipt)',
-      },
-      {
         id: 'createdBy', label: 'Posted by', type: 'readonly',
         value: (t) => `${t.createdBy} · ${new Date(t.createdAt).toLocaleDateString()}`,
       },
     ],
     overviewBody: (t) => (
-      <div>
-        <h3 className="text-[12px] uppercase tracking-wider font-medium text-text-tertiary mb-2">Reconciliation</h3>
-        <ReconciliationPanel tx={t} />
+      <div className="space-y-4">
+        <section>
+          <h3 className="text-[12px] uppercase tracking-wider font-medium text-text-tertiary mb-2">Reconciliation</h3>
+          <ReconciliationPanel tx={t} />
+        </section>
+        <section>
+          <h3 className="text-[12px] uppercase tracking-wider font-medium text-text-tertiary mb-2">Receipt</h3>
+          <ReceiptPanel tx={t} />
+        </section>
       </div>
     ),
     tabs: [
@@ -117,6 +125,40 @@ export function expenseConfig({
       },
     ],
   };
+}
+
+function ReceiptPanel({ tx }: { tx: TransactionView }) {
+  if (tx.hasReceipt) {
+    return (
+      <a
+        href="#"
+        onClick={(e) => { e.preventDefault(); /* attachments viewer lands in Pass 4 */ }}
+        className="flex items-center justify-between gap-2 p-3 rounded border border-border-subtle bg-bg-elevated hover:bg-bg-hover transition-colors duration-[120ms] group/r"
+      >
+        <span className="flex items-center gap-2 text-[13px] text-text-primary min-w-0">
+          <Paperclip className="w-3.5 h-3.5 text-text-tertiary flex-shrink-0" strokeWidth={1.5} />
+          <span className="truncate">receipt-{tx.journalId.slice(-6).toLowerCase()}.pdf</span>
+        </span>
+        <ExternalLink className="w-3.5 h-3.5 text-text-tertiary group-hover/r:text-text-primary flex-shrink-0" strokeWidth={1.5} />
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        // Real upload lands in Pass 4. For now, a clear no-op with explanation.
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,application/pdf';
+        input.click();
+      }}
+      className="w-full flex items-center justify-center gap-2 p-3 rounded border border-dashed border-border-subtle bg-bg-elevated/40 hover:border-border-strong hover:bg-bg-hover transition-colors duration-[120ms] text-[12px] text-text-secondary"
+    >
+      <Upload className="w-3.5 h-3.5" strokeWidth={1.5} />
+      Attach receipt (image or PDF)
+    </button>
+  );
 }
 
 function ReconciliationPanel({ tx }: { tx: TransactionView }) {

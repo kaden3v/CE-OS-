@@ -4,7 +4,7 @@ import { ArrowLeft, Download, FileText, Lock, CheckCircle2 } from 'lucide-react'
 import { Topbar } from '@/components/nav/Topbar';
 import { resolve } from '@/lib/finance/period';
 import {
-  listRevenue, totalsByAccount, revenueTotalCents, totalCents, monthlyCashFlow,
+  listRevenue, totalsByAccount, revenueTotalCents, totalCents, useFinanceStore,
 } from '@/lib/finance/store';
 import { accountByCode } from '@/lib/finance/accounts';
 import { formatCents } from '@/lib/finance/types';
@@ -28,20 +28,19 @@ export default function YearEndSnapshot() {
   const periodArg = { start: period.current.start, end: period.current.end };
   const prevArg   = period.previous ? { start: period.previous.start, end: period.previous.end } : null;
 
-  const revenueCents  = useMemo(() => revenueTotalCents({ period: periodArg, method: settings.accountingMethod }), [periodArg, settings.accountingMethod]);
-  const expensesCents = useMemo(() => totalCents({ period: periodArg, method: settings.accountingMethod }), [periodArg, settings.accountingMethod]);
+  const revenueCents  = useFinanceStore(() => revenueTotalCents({ period: periodArg, method: settings.accountingMethod }));
+  const expensesCents = useFinanceStore(() => totalCents({ period: periodArg, method: settings.accountingMethod }));
   const netCents      = revenueCents - expensesCents;
   const margin        = revenueCents > 0 ? (netCents / revenueCents) * 100 : 0;
 
-  const prevRevenue   = useMemo(() => prevArg ? revenueTotalCents({ period: prevArg, method: settings.accountingMethod }) : null, [prevArg, settings.accountingMethod]);
-  const prevExpenses  = useMemo(() => prevArg ? totalCents({ period: prevArg, method: settings.accountingMethod }) : null, [prevArg, settings.accountingMethod]);
+  const prevRevenue   = useFinanceStore(() => prevArg ? revenueTotalCents({ period: prevArg, method: settings.accountingMethod }) : null);
+  const prevExpenses  = useFinanceStore(() => prevArg ? totalCents({ period: prevArg, method: settings.accountingMethod }) : null);
 
   // Expense breakdown for the bar/legend
-  const breakdown = useMemo(() => {
+  const breakdown = useFinanceStore(() => {
     const totals = totalsByAccount({ period: periodArg, method: settings.accountingMethod });
-    const sorted = Array.from(totals.values()).sort((a, b) => b.cents - a.cents);
-    return sorted.slice(0, 6); // top six
-  }, [periodArg, settings.accountingMethod]);
+    return Array.from(totals.values()).sort((a, b) => b.cents - a.cents).slice(0, 6);
+  });
 
   const onDownloadPdf = () => addToast({
     title: `PDF for ${year}`,
