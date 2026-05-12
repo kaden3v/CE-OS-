@@ -4,195 +4,180 @@ import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Plus, Receipt, FileText, X } from "lucide-react";
-import { useDataState } from "@/hooks/useDataState";
-import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
+import { Plus, FileText, X } from "lucide-react";
+import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
+import { useEntity } from "@/hooks/useEntity";
+import { friendlyDbError } from "@/lib/dbErrors";
+import type { Tables } from "@/lib/database.types";
 
-const INITIAL_EXPENSES = [
-  { id: 1, category: "Soil and media", vendor: "Sphagnum Moss Co.", amount: 145.00, date: "2 days ago", desc: "2 Bales of LFS", receipt: true, deductible: true },
-  { id: 2, category: "Packaging", vendor: "Amazon Business", amount: 48.50, date: "5 days ago", desc: "Kraft mailers 100pk", receipt: true, deductible: true },
-  { id: 3, category: "Shipping", vendor: "USPS", amount: 312.40, date: "1 week ago", desc: "Postage reload", receipt: true, deductible: true },
-  { id: 4, category: "Utilities", vendor: "SRP", amount: 185.20, date: "2 weeks ago", desc: "Electricity for grow room", receipt: true, deductible: true },
-  { id: 5, category: "Marketing", vendor: "Instagram Ads", amount: 25.00, date: "3 weeks ago", desc: "Boosted post", receipt: false, deductible: false },
-  { id: 6, category: "Permits and licenses", vendor: "AZ Dept of Ag", amount: 150.00, date: "1 month ago", desc: "Nursery annual renewal", receipt: true, deductible: true },
-];
+type Expense = Tables<"expenses">;
+type Vendor = Tables<"vendors">;
+
+const CATEGORIES = ["Soil and media", "Packaging", "Shipping", "Utilities", "Marketing", "Permits and licenses", "Tools", "Other"];
+
+const SEED: Expense[] = [];
 
 export default function Expenses() {
-  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
-  const { data, isLoading, isError, isEmpty } = useDataState(expenses);
+  const { data: expenses, add, isLoading } = useEntity<Expense>("expenses", SEED, {
+    toRow: (e) => ({
+      vendor_id: e.vendor_id,
+      amount: e.amount,
+      category: e.category,
+      description: e.description,
+      occurred_on: e.occurred_on,
+      receipt_url: e.receipt_url,
+    }),
+    orderBy: "occurred_on",
+  });
+  const { data: vendors } = useEntity<Vendor>("vendors", [], { toRow: (v) => ({ name: v.name }) });
   const { addToast } = useApp();
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
-  // Form State
-  const [newVendor, setNewVendor] = useState("");
-  const [newAmount, setNewAmount] = useState("");
-  const [newCategory, setNewCategory] = useState("Supplies");
-  const [newDesc, setNewDesc] = useState("");
+  const [form, setForm] = useState({ amount: "", category: "Soil and media", vendor_id: "", description: "", occurred_on: new Date().toISOString().slice(0, 10) });
 
-  const handleAddExpense = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newVendor || !newAmount) return;
-
-    const newExpense = {
-      id: Date.now(),
-      category: newCategory,
-      vendor: newVendor,
-      amount: parseFloat(newAmount),
-      date: "Just now",
-      desc: newDesc,
-      receipt: false,
-      deductible: true
-    };
-
-    setExpenses([newExpense, ...expenses]);
-    setIsAddModalOpen(false);
-    setNewVendor("");
-    setNewAmount("");
-    setNewDesc("");
-    addToast({ title: "Expense Added", description: `Added $${newAmount} to ${newVendor}.`, status: "success" });
+    const amount = parseFloat(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      addToast({ title: "Amount required", description: "Enter a positive number.", status: "warn" });
+      return;
+    }
+    const result = await add({
+      id: crypto.randomUUID(),
+      amount,
+      category: form.category,
+      vendor_id: form.vendor_id || null,
+      description: form.description.trim() || null,
+      occurred_on: form.occurred_on,
+      receipt_url: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as Expense);
+    if (result.ok === false) {
+      addToast({ title: "Couldn't save expense", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setIsOpen(false);
+    setForm({ amount: "", category: "Soil and media", vendor_id: "", description: "", occurred_on: new Date().toISOString().slice(0, 10) });
+    addToast({ title: "Expense logged", description: `$${amount.toFixed(2)} · ${form.category}`, status: "ok" });
   };
 
-  const columns = useMemo(() => [
-    {
-      accessorKey: "date",
-      header: "Date",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      cell: (info: any) => <Badge>{info.getValue()}</Badge>,
-    },
-    {
-      accessorKey: "vendor",
-      header: "Vendor",
-      cell: (info: any) => <span className="font-medium">{info.getValue()}</span>,
-    },
-    {
-      accessorKey: "desc",
-      header: "Description",
-      cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span>,
-    },
-    {
-      accessorKey: "amount",
-      header: "Amount",
-      cell: (info: any) => <span className="font-medium tabular-nums">${info.getValue().toFixed(2)}</span>,
-    },
-    {
-      id: "actions",
-      header: "Flags",
-      cell: (info: any) => (
-        <div className="flex items-center gap-2">
-          {info.row.original.receipt && <Receipt className="w-4 h-4 text-text-secondary" />}
-          {info.row.original.deductible && <Badge variant="brand">Tax Deductible</Badge>}
-        </div>
-      ),
-    },
-  ], []);
+  const vendorName = (id: string | null) => (id ? vendors.find((v) => v.id === id)?.name ?? "—" : "—");
 
-  const totalYtd = expenses.reduce((acc, exp) => acc + exp.amount, 0) + 3955.40; // Add previous sum for demo
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: "occurred_on",
+        header: "Date",
+        cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span>,
+      },
+      { accessorKey: "category", header: "Category", cell: (info: any) => (info.getValue() ? <Badge>{info.getValue()}</Badge> : null) },
+      { accessorKey: "vendor_id", header: "Vendor", cell: (info: any) => <span className="font-medium">{vendorName(info.getValue())}</span> },
+      { accessorKey: "description", header: "Memo", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
+      { accessorKey: "amount", header: "Amount", cell: (info: any) => <span className="font-medium tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
+    ],
+    [vendors],
+  );
+
+  // Aggregations
+  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const sumYtd = expenses.filter((e) => e.occurred_on >= yearStart).reduce((s, e) => s + Number(e.amount), 0);
+  const sumMonth = expenses.filter((e) => e.occurred_on >= monthStart).reduce((s, e) => s + Number(e.amount), 0);
+  const byCat = expenses.reduce<Record<string, number>>((acc, e) => {
+    const k = e.category ?? "Uncategorized";
+    acc[k] = (acc[k] ?? 0) + Number(e.amount);
+    return acc;
+  }, {});
+  const topCategory = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+
+  const isEmpty = !isLoading && expenses.length === 0;
 
   return (
     <div className="p-8 max-w-7xl mx-auto h-full flex flex-col relative">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Expenses</h1>
-          <p className="text-sm text-text-secondary">Track operating costs and manage receipts.</p>
+          <p className="text-sm text-text-secondary">Track operating costs.</p>
         </div>
-        <Button variant="brand" onClick={() => setIsAddModalOpen(true)}>
+        <Button variant="brand" onClick={() => setIsOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Expense
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 mt-2">
-        <StatTile label="Spend (This Month)" value="$716.10" />
-        <StatTile label="Total YTD" value={`$${totalYtd.toFixed(2)}`} />
-        <StatTile label="Top Category" value="Shipping" />
-        <StatTile label="Deductible YTD" value="$4,500.00" trend={{ direction: "up", value: "93%" }} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 mt-2">
+        <StatTile label="This month" value={`$${sumMonth.toFixed(2)}`} />
+        <StatTile label="YTD total" value={`$${sumYtd.toFixed(2)}`} />
+        <StatTile label="Top category" value={topCategory} />
       </div>
 
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
-        {isLoading && <LoadingTable cols={6} rows={8} />}
-        {isError && <ErrorState />}
-        {!isLoading && !isError && isEmpty && (
-          <EmptyState 
-            icon={FileText} 
-            title="No expenses yet" 
-            description="Track operating costs and manage receipts." 
-            action={<Button variant="outline" onClick={() => setIsAddModalOpen(true)}>Add Expense</Button>}
+        {isLoading && <LoadingTable cols={5} rows={8} />}
+        {!isLoading && isEmpty && (
+          <EmptyState
+            icon={FileText}
+            title="No expenses yet"
+            description="Track operating costs."
+            action={<Button variant="outline" onClick={() => setIsOpen(true)}>Add Expense</Button>}
           />
         )}
-        {!isLoading && !isError && !isEmpty && <DataTable columns={columns} data={data} />}
+        {!isLoading && !isEmpty && <DataTable columns={columns} data={expenses} />}
       </Card>
 
-      {/* Add Expense Modal */}
-      {isAddModalOpen && (
+      {isOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
+          <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">Log Expense</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-text-secondary hover:text-text-primary">
+              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
-            <form onSubmit={handleAddExpense} className="flex-1 overflow-y-auto p-4 space-y-4">
+            <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Amount</label>
-                <Input 
-                  type="number" 
-                  step="0.01"
-                  required
-                  placeholder="0.00" 
-                  className="w-full text-lg"
-                  value={newAmount}
-                  onChange={e => setNewAmount(e.target.value)}
-                />
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Amount *</label>
+                <Input type="number" step="0.01" min="0" required placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
               </div>
-              
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Category</label>
-                  <select 
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong transition-colors"
-                    value={newCategory}
-                    onChange={e => setNewCategory(e.target.value)}
-                  >
-                    <option>Soil and media</option>
-                    <option>Packaging</option>
-                    <option>Shipping</option>
-                    <option>Utilities</option>
-                    <option>Marketing</option>
-                    <option>Permits and licenses</option>
-                  </select>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Date</label>
+                  <Input type="date" value={form.occurred_on} onChange={(e) => setForm({ ...form, occurred_on: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Vendor / Merchant</label>
-                  <Input 
-                    type="text" 
-                    required
-                    placeholder="E.g. Home Depot" 
-                    value={newVendor}
-                    onChange={e => setNewVendor(e.target.value)}
-                  />
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Category</label>
+                  <select
+                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Description / Memo</label>
-                <Input 
-                  type="text" 
-                  placeholder="Optional memo" 
-                  value={newDesc}
-                  onChange={e => setNewDesc(e.target.value)}
-                />
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Vendor</label>
+                <select
+                  className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  value={form.vendor_id}
+                  onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}
+                >
+                  <option value="">— None —</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
               </div>
-
-              <div className="mt-8 pt-4 flex justify-end gap-3 border-t border-border-subtle">
-                <Button variant="ghost" type="button" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Memo</label>
+                <Input placeholder="Optional" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
+                <Button variant="ghost" type="button" onClick={() => setIsOpen(false)}>Cancel</Button>
                 <Button type="submit">Save Expense</Button>
               </div>
             </form>

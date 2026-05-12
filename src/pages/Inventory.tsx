@@ -3,91 +3,75 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Search, Image as ImageIcon, Plus, X, ArrowLeft, History, AlertTriangle, QrCode, Camera } from "lucide-react";
+import { Search, Image as ImageIcon, Plus, X, ArrowLeft, QrCode, Pencil, Trash2, Save, Minus } from "lucide-react";
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router";
 import { useDataState } from "@/hooks/useDataState";
 import { ErrorState, EmptyState, ZeroResultState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
+import { PhotoUploader } from "@/components/PhotoUploader";
 import { useApp } from "@/contexts/AppContext";
+import { friendlyDbError } from "@/lib/dbErrors";
 
-const INVENTORY = [
-  { id: 1, name: "Pinguicula 'Pirouette'", common: "Pirouette Butterwort", genus: "Pinguicula", stock: { juv: 45, mat: 12, flower: 4 }, lastUpdated: "2 hours ago" },
-  { id: 2, name: "Pinguicula agnata 'El Lobo'", common: "El Lobo", genus: "Pinguicula", stock: { juv: 12, mat: 3, flower: 0 }, lastUpdated: "1 day ago" },
-  { id: 3, name: "Pinguicula 'Johanna'", common: "Agnata x Debbertiana", genus: "Pinguicula", stock: { juv: 5, mat: 0, flower: 0 }, lastUpdated: "3 days ago" },
-  { id: 4, name: "Drosera capensis 'Red'", common: "Red Cape Sundew", genus: "Drosera", stock: { juv: 120, mat: 54, flower: 10 }, lastUpdated: "4 hours ago" },
-  { id: 5, name: "Pinguicula gigantea", common: "Giant Butterwort", genus: "Pinguicula", stock: { juv: 8, mat: 2, flower: 1 }, lastUpdated: "1 week ago" },
-  { id: 6, name: "Pinguicula moranensis", common: "Mexican Butterwort", genus: "Pinguicula", stock: { juv: 60, mat: 25, flower: 8 }, lastUpdated: "2 days ago" },
-  { id: 7, name: "Pinguicula 'Sethos'", common: "Sethos Butterwort", genus: "Pinguicula", stock: { juv: 30, mat: 15, flower: 5 }, lastUpdated: "5 hours ago" },
-];
+import type { Tables } from "@/lib/database.types";
+import { useEntity as useEntityRaw } from "@/hooks/useEntity";
 
-function TimelineTab() {
-  const [compareMode, setCompareMode] = useState(false);
+type InventoryRow = Tables<"inventory">;
+type CultivarRow = Tables<"cultivars">;
 
-  if (compareMode) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-subtle">
-           <span className="text-sm font-medium">Compare Plants</span>
-           <button onClick={() => setCompareMode(false)} className="text-xs text-accent-brand">Exit compare</button>
-        </div>
-        <div className="flex-1 flex flex-col">
-           <div className="flex gap-4 mb-4">
-             <select className="flex-1 bg-bg-base border border-border-subtle rounded px-2 py-2 text-sm"><option>Dec 12, 2023</option></select>
-             <select className="flex-1 bg-bg-base border border-border-subtle rounded px-2 py-2 text-sm"><option>Jan 24, 2024</option></select>
-           </div>
-           {/* Mock slider view */}
-           <div className="relative flex-1 bg-bg-active rounded border border-border-subtle min-h-[200px] flex overflow-hidden">
-             <div className="flex-1 border-r border-accent-brand flex items-center justify-center p-4">
-               <Camera className="w-8 h-8 text-text-tertiary" />
-             </div>
-             <div className="flex-1 flex items-center justify-center p-4">
-               <Camera className="w-8 h-8 text-text-tertiary" />
-             </div>
-             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-12 bg-accent-brand rounded flex items-center justify-center cursor-ew-resize">
-               <div className="w-0.5 h-6 bg-white/50"></div>
-             </div>
-           </div>
-           <div className="mt-4 text-center text-sm font-medium">43 days, 6 photos in between</div>
-        </div>
-      </div>
-    );
+type InventoryItem = {
+  id: string | number;
+  name: string;
+  common: string;
+  genus: string;
+  cultivar_id: string | null;
+  stock: { juv: number; mat: number; flower: number };
+  lastUpdated: string;
+};
+
+const INVENTORY: InventoryItem[] = [];
+
+const fromRow = (r: InventoryRow): InventoryItem => ({
+  id: r.id,
+  name: r.name,
+  common: r.common ?? "Unknown",
+  genus: r.genus ?? "Unknown",
+  cultivar_id: r.cultivar_id,
+  stock: { juv: r.stock_juv, mat: r.stock_mat, flower: r.stock_flower },
+  lastUpdated: r.updated_at,
+});
+
+// Partial-safe mapper: only includes fields actually present in the input.
+// `update()` may pass a partial patch (e.g. just {common} or just {stock});
+// we don't want to overwrite columns the caller didn't touch, and we don't
+// want to crash on `it.stock.juv` when stock is absent.
+const toRow = (it: Partial<InventoryItem>): Record<string, unknown> => {
+  const row: Record<string, unknown> = {};
+  if ("name" in it) row.name = it.name;
+  if ("common" in it) row.common = it.common;
+  if ("genus" in it) row.genus = it.genus;
+  if ("cultivar_id" in it) row.cultivar_id = it.cultivar_id;
+  if (it.stock) {
+    row.stock_juv = it.stock.juv;
+    row.stock_mat = it.stock.mat;
+    row.stock_flower = it.stock.flower;
   }
+  return row;
+};
 
-  return (
-    <div className="flex flex-col h-full relative">
-       <div className="flex items-center justify-between mb-4 pb-4 border-b border-border-subtle">
-         <span className="text-sm font-medium">Photo Timeline</span>
-         <button onClick={() => setCompareMode(true)} className="text-xs text-text-secondary hover:text-text-primary px-2 py-2 border border-border-subtle rounded hover:bg-bg-hover">Compare</button>
-       </div>
-       
-       <div className="flex-1 space-y-6 relative before:absolute before:left-[80px] before:top-0 before:bottom-0 before:w-px before:bg-border-subtle pb-4">
-          <div className="flex gap-4 relative z-10">
-            <div className="w-[64px] shrink-0 text-right pt-2 text-xs text-text-tertiary">Oct 14</div>
-            <div className="w-2.5 h-2.5 rounded-full bg-accent-brand absolute left-[76.5px] top-2.5"></div>
-            <div className="flex-1 ml-4 h-[180px] bg-bg-base border border-border-subtle rounded-lg flex items-center justify-center relative hover:border-border-strong transition-colors cursor-pointer group">
-              <Camera className="w-6 h-6 text-text-tertiary group-hover:text-text-secondary" strokeWidth={1} />
-              <div className="absolute bottom-2 right-2 bg-bg-elevated/80 backdrop-blur text-[10px] px-2 rounded text-text-secondary border border-border-subtle">Oct 14</div>
-            </div>
-          </div>
-          <div className="flex gap-4 relative z-10">
-            <div className="w-[64px] shrink-0 text-right pt-2 text-xs text-text-tertiary">Sep 28</div>
-            <div className="w-2.5 h-2.5 rounded-full bg-bg-base border-2 border-border-strong absolute left-[76.5px] top-2.5"></div>
-            <div className="flex-1 ml-4 h-[180px] bg-bg-base border border-border-subtle rounded-lg flex items-center justify-center relative hover:border-border-strong transition-colors cursor-pointer group">
-              <Camera className="w-6 h-6 text-text-tertiary group-hover:text-text-secondary" strokeWidth={1} />
-              <div className="absolute bottom-2 right-2 bg-bg-elevated/80 backdrop-blur text-[10px] px-2 rounded text-text-secondary border border-border-subtle">Sep 28</div>
-            </div>
-          </div>
-       </div>
-    </div>
-  );
-}
 
 export default function Inventory() {
-  const [inventory, setInventory] = useState(INVENTORY);
+  const { data: inventory, add: addInventoryItem, update: updateInventoryItem, remove: removeInventoryItem } = useEntityRaw<InventoryItem, InventoryRow>(
+    "inventory",
+    INVENTORY,
+    { toRow, fromRow },
+  );
+  const { data: cultivars } = useEntityRaw<CultivarRow>("cultivars", [], {
+    toRow: (c) => ({ name: c.name }),
+  });
   const [lowStockFilter, setLowStockFilter] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState("Stock");
   
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
@@ -101,22 +85,94 @@ export default function Inventory() {
 
   // Modal logic
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", juv: 0, mat: 0, flower: 0 });
+  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", cultivar_id: "", juv: 0, mat: 0, flower: 0 });
   const { addToast } = useApp();
 
-  const handleAddPlant = (e: React.FormEvent) => {
+  // Edit Details modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFields, setEditFields] = useState({ name: "", common: "", genus: "", cultivar_id: "" });
+  const openEdit = (item: InventoryItem) => {
+    setEditFields({
+      name: item.name,
+      common: item.common,
+      genus: item.genus,
+      cultivar_id: item.cultivar_id ?? "",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const plant = {
-      id: Math.max(...inventory.map(i => i.id)) + 1,
-      name: newPlant.name,
-      common: newPlant.common || "Unknown",
-      genus: newPlant.genus || "Unknown",
-      stock: { juv: newPlant.juv, mat: newPlant.mat, flower: newPlant.flower },
-      lastUpdated: "Just now"
+    if (!selectedItem) return;
+    const linked = editFields.cultivar_id ? cultivars.find((c) => c.id === editFields.cultivar_id) : null;
+    const patch: Partial<InventoryItem> = {
+      name: linked?.name ?? editFields.name.trim(),
+      common: editFields.common.trim() || linked?.common || "Unknown",
+      genus: linked?.genus ?? editFields.genus.trim() ?? "Unknown",
+      cultivar_id: editFields.cultivar_id || null,
     };
-    setInventory([plant, ...inventory]);
+    const result = await updateInventoryItem(selectedItem.id, patch);
+    if (result.ok === false) {
+      addToast({ title: "Save failed", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setIsEditModalOpen(false);
+    addToast({ title: "Plant details updated", status: "ok" });
+  };
+
+  // Inline stock editor
+  const [stockDraft, setStockDraft] = useState<{ juv: number; mat: number; flower: number } | null>(null);
+  const [savingStock, setSavingStock] = useState(false);
+
+  const startEditingStock = () => {
+    if (!selectedItem) return;
+    setStockDraft({ ...selectedItem.stock });
+  };
+
+  const cancelStockEdit = () => setStockDraft(null);
+
+  const saveStock = async () => {
+    if (!selectedItem || !stockDraft) return;
+    setSavingStock(true);
+    const result = await updateInventoryItem(selectedItem.id, { stock: stockDraft });
+    setSavingStock(false);
+    if (result.ok === false) {
+      addToast({ title: "Couldn't save stock", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setStockDraft(null);
+    addToast({ title: "Stock updated", description: selectedItem.name, status: "ok" });
+  };
+
+  const handleDelete = async () => {
+    if (!selectedItem) return;
+    if (!confirm(`Delete "${selectedItem.name}" from inventory? This also removes its photos. This cannot be undone.`)) return;
+    const result = await removeInventoryItem(selectedItem.id);
+    if (result.ok === false) {
+      addToast({ title: "Delete failed", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setSelectedId(null);
+    setActiveTab("Stock");
+    addToast({ title: "Plant removed", status: "info" });
+  };
+
+  const handleAddPlant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // If a cultivar was picked, snapshot its name/genus into the inventory row
+    const linkedCultivar = newPlant.cultivar_id ? cultivars.find((c) => c.id === newPlant.cultivar_id) : null;
+    const plant: InventoryItem = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now(),
+      name: linkedCultivar?.name ?? newPlant.name,
+      common: newPlant.common || linkedCultivar?.common || "Unknown",
+      genus: linkedCultivar?.genus ?? newPlant.genus ?? "Unknown",
+      cultivar_id: newPlant.cultivar_id || null,
+      stock: { juv: newPlant.juv, mat: newPlant.mat, flower: newPlant.flower },
+      lastUpdated: "Just now",
+    };
+    await addInventoryItem(plant);
     setIsAddModalOpen(false);
-    setNewPlant({ name: "", common: "", genus: "", juv: 0, mat: 0, flower: 0 });
+    setNewPlant({ name: "", common: "", genus: "", cultivar_id: "", juv: 0, mat: 0, flower: 0 });
     addToast("Plant added to inventory", "success");
   };
 
@@ -265,7 +321,7 @@ export default function Inventory() {
               </div>
 
               <div className="flex gap-6 border-b border-transparent">
-                {["Stock", "Timeline"].map(tab => (
+                {["Stock", "Photos"].map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -286,22 +342,72 @@ export default function Inventory() {
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8">
               {activeTab === "Stock" && (
                 <>
-                  {/* Active Stock */}
+                  {/* Stock — inline-editable */}
                   <section>
-                    <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Live Stock</h3>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs uppercase tracking-wide text-text-secondary">Live Stock</h3>
+                      {!stockDraft ? (
+                        <button onClick={startEditingStock} className="text-xs text-accent-brand hover:underline">Edit</button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button onClick={cancelStockEdit} className="text-xs text-text-secondary hover:text-text-primary">Cancel</button>
+                          <button onClick={saveStock} disabled={savingStock} className="text-xs text-accent-brand hover:underline disabled:opacity-50">
+                            {savingStock ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="p-4 rounded-lg bg-bg-active border border-border-subtle text-center">
-                        <div className="text-2xl font-medium mb-2"><StatusDot status={selectedItem.stock.juv < 5 ? "warn" : "ok"} className="mr-2"/>{selectedItem.stock.juv}</div>
-                        <div className="text-xs text-text-secondary">JUVENILE</div>
-                      </div>
-                      <div className="p-4 rounded-lg bg-bg-active border border-border-subtle text-center">
-                        <div className="text-2xl font-medium mb-2"><StatusDot status={selectedItem.stock.mat < 2 ? "warn" : "ok"} className="mr-2"/>{selectedItem.stock.mat}</div>
-                        <div className="text-xs text-text-secondary">MATURE</div>
-                      </div>
-                      <div className="p-4 rounded-lg bg-bg-active border border-border-subtle text-center">
-                        <div className="text-2xl font-medium mb-2"><StatusDot status={selectedItem.stock.flower === 0 ? "info" : "ok"} className="mr-2"/>{selectedItem.stock.flower}</div>
-                        <div className="text-xs text-text-secondary">FLOWERING</div>
-                      </div>
+                      {(["juv", "mat", "flower"] as const).map((stage) => {
+                        const labels = { juv: "JUVENILE", mat: "MATURE", flower: "FLOWERING" };
+                        const v = stockDraft ? stockDraft[stage] : selectedItem.stock[stage];
+                        const dotStatus = stage === "flower"
+                          ? (v === 0 ? "info" : "ok")
+                          : stage === "juv"
+                            ? (v < 5 ? "warn" : "ok")
+                            : (v < 2 ? "warn" : "ok");
+                        return (
+                          <div key={stage} className="p-4 rounded-lg bg-bg-active border border-border-subtle text-center">
+                            {stockDraft ? (
+                              <div className="flex items-center justify-center gap-1 mb-2">
+                                <button
+                                  onClick={() => setStockDraft((prev) => prev ? { ...prev, [stage]: Math.max(0, prev[stage] - 1) } : prev)}
+                                  className="w-7 h-7 rounded-md bg-bg-elevated hover:bg-bg-hover text-text-secondary flex items-center justify-center transition-colors"
+                                  aria-label={`Decrease ${labels[stage]}`}
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={stockDraft[stage]}
+                                  onChange={(e) => {
+                                    const v = Math.max(0, parseInt(e.target.value) || 0);
+                                    setStockDraft((prev) => prev ? { ...prev, [stage]: v } : prev);
+                                  }}
+                                  className="w-16 text-center text-2xl font-medium tabular-nums bg-bg-elevated border border-border-subtle rounded-md focus:outline-none focus:border-accent-brand"
+                                />
+                                <button
+                                  onClick={() => setStockDraft((prev) => prev ? { ...prev, [stage]: prev[stage] + 1 } : prev)}
+                                  className="w-7 h-7 rounded-md bg-bg-elevated hover:bg-bg-hover text-text-secondary flex items-center justify-center transition-colors"
+                                  aria-label={`Increase ${labels[stage]}`}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-2xl font-medium mb-2 flex items-center justify-center gap-2 tabular-nums">
+                                <StatusDot status={dotStatus as any} />
+                                {v}
+                              </div>
+                            )}
+                            <div className="text-xs text-text-secondary">{labels[stage]}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-4 text-xs text-text-tertiary">
+                      Last updated {new Date(selectedItem.lastUpdated).toLocaleString()}
                     </div>
                   </section>
 
@@ -310,36 +416,35 @@ export default function Inventory() {
                     <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Related</h3>
                     <div className="space-y-2">
                       <Link to="/cultivars" className="flex justify-between items-center p-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-border-subtle hover:bg-bg-hover transition-colors">
-                        <span className="text-sm font-medium">Cultivar Profile</span>
+                        <span className="text-sm font-medium">Cultivar Registry</span>
                         <span className="text-xs text-text-secondary">View &rarr;</span>
                       </Link>
                       <Link to="/propagation" className="flex justify-between items-center p-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-border-subtle hover:bg-bg-hover transition-colors">
-                        <span className="text-sm font-medium">Active Propagation</span>
-                        <Badge variant="brand">2 batches</Badge>
+                        <span className="text-sm font-medium">Propagation Batches</span>
+                        <span className="text-xs text-text-secondary">View &rarr;</span>
                       </Link>
-                      <Link to={`/inventory/${selectedItem.id}/mortality`} className="flex justify-between items-center p-2 rounded-lg bg-[rgba(255,255,255,0.02)] border border-border-subtle hover:bg-bg-hover transition-colors">
-                        <span className="text-sm font-medium border-b border-transparent">Mortality Log</span>
-                        <span className="text-xs text-status-alert flex items-center gap-2"><AlertTriangle className="w-3 h-3"/> 2 events</span>
-                      </Link>
-                    </div>
-                  </section>
-
-                  <section className="pt-4 mt-8 border-t border-border-subtle">
-                    <div className="flex items-center justify-between cursor-pointer group">
-                      <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">View audit history (12 entries)</span>
-                      <span className="text-[10px] uppercase font-medium bg-bg-active text-text-tertiary px-2 py-2 rounded">Log</span>
                     </div>
                   </section>
                 </>
               )}
 
-              {activeTab === "Timeline" && (
-                <TimelineTab />
+              {activeTab === "Photos" && selectedItem && (
+                <PhotoUploader inventoryId={String(selectedItem.id)} />
               )}
             </div>
             
             <div className="p-4 md:p-6 border-t border-border-subtle bg-bg-base/50 flex gap-2 pb-safe">
-              <Button variant="outline" className="flex-1" onClick={() => addToast("Stock edit mode enabled.", "info")}>Update Stock</Button>
+              <Button variant="outline" className="flex-1" onClick={() => openEdit(selectedItem)}>
+                <Pencil className="w-4 h-4 mr-1" />
+                Edit details
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleDelete}
+                className="text-status-alert border-status-alert/20 hover:bg-status-alert/10"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
             </div>
           </>
         )}
@@ -356,17 +461,46 @@ export default function Inventory() {
             </div>
             <div className="flex-1 overflow-auto p-4">
               <form id="add-plant-form" onSubmit={handleAddPlant} className="space-y-4">
+                {cultivars.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Link to Cultivar (recommended)</label>
+                    <select
+                      value={newPlant.cultivar_id}
+                      onChange={(e) => setNewPlant({ ...newPlant, cultivar_id: e.target.value })}
+                      className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    >
+                      <option value="">— Custom (fill below) —</option>
+                      {cultivars.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Cultivar Name</label>
-                  <Input required placeholder="P. agnata" value={newPlant.name} onChange={(e) => setNewPlant({...newPlant, name: e.target.value})} className="w-full" />
+                  <label className="text-sm font-medium">Cultivar Name {newPlant.cultivar_id && <span className="text-text-tertiary">(from registry)</span>}</label>
+                  <Input
+                    required={!newPlant.cultivar_id}
+                    placeholder="P. agnata"
+                    value={newPlant.name}
+                    disabled={!!newPlant.cultivar_id}
+                    onChange={(e) => setNewPlant({ ...newPlant, name: e.target.value })}
+                    className="w-full"
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Common Name</label>
-                  <Input placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({...newPlant, common: e.target.value})} className="w-full" />
+                  <Input placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({ ...newPlant, common: e.target.value })} className="w-full" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Genus</label>
-                  <Input required placeholder="Pinguicula" value={newPlant.genus} onChange={(e) => setNewPlant({...newPlant, genus: e.target.value})} className="w-full" />
+                  <Input
+                    required={!newPlant.cultivar_id}
+                    placeholder="Pinguicula"
+                    value={newPlant.genus}
+                    disabled={!!newPlant.cultivar_id}
+                    onChange={(e) => setNewPlant({ ...newPlant, genus: e.target.value })}
+                    className="w-full"
+                  />
                 </div>
                 <div className="grid grid-cols-3 gap-2 pt-2">
                    <div className="space-y-2">
@@ -387,6 +521,78 @@ export default function Inventory() {
             <div className="p-4 border-t border-border-subtle bg-bg-base/50 flex justify-end gap-2 shrink-0">
                <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
                <Button variant="brand" type="submit" form="add-plant-form">Save Plant</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Details Modal */}
+      {isEditModalOpen && selectedItem && (
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
+              <h2 className="text-lg font-semibold">Edit details</h2>
+              <button onClick={() => setIsEditModalOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form id="edit-plant-form" onSubmit={handleEditSave} className="p-4 space-y-4">
+              {cultivars.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Linked cultivar</label>
+                  <select
+                    value={editFields.cultivar_id}
+                    onChange={(e) => setEditFields({ ...editFields, cultivar_id: e.target.value })}
+                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  >
+                    <option value="">— Custom (fill below) —</option>
+                    {cultivars.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-text-tertiary">Linking syncs name + genus from the registry.</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Cultivar Name {editFields.cultivar_id && <span className="text-text-tertiary">(from registry)</span>}
+                </label>
+                <Input
+                  required={!editFields.cultivar_id}
+                  placeholder="P. agnata"
+                  value={editFields.name}
+                  disabled={!!editFields.cultivar_id}
+                  onChange={(e) => setEditFields({ ...editFields, name: e.target.value })}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Common name</label>
+                <Input
+                  placeholder="Butterwort"
+                  value={editFields.common}
+                  onChange={(e) => setEditFields({ ...editFields, common: e.target.value })}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Genus</label>
+                <Input
+                  required={!editFields.cultivar_id}
+                  placeholder="Pinguicula"
+                  value={editFields.genus}
+                  disabled={!!editFields.cultivar_id}
+                  onChange={(e) => setEditFields({ ...editFields, genus: e.target.value })}
+                  className="w-full"
+                />
+              </div>
+            </form>
+            <div className="p-4 border-t border-border-subtle bg-bg-base/50 flex justify-end gap-2 shrink-0">
+              <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+              <Button variant="brand" type="submit" form="edit-plant-form">
+                <Save className="w-4 h-4 mr-1" />
+                Save changes
+              </Button>
             </div>
           </Card>
         </div>

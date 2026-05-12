@@ -1,20 +1,31 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import { useEntity } from '@/hooks/useEntity';
+import type { Tables } from '@/lib/database.types';
 
 type SettingsState = {
   developerMode: boolean;
-  demoMode: boolean;
   loadingMode: boolean;
   errorMode: boolean;
   emptyMode: boolean;
   density: 'comfortable' | 'compact';
 };
 
+type ToastStatus = 'ok' | 'info' | 'warn' | 'alert';
+type ToastInput = 'ok' | 'info' | 'warn' | 'alert' | 'success' | 'error';
+
 type Toast = {
   id: string;
   title: string;
   description?: string;
-  status: 'ok' | 'info' | 'warn' | 'alert';
+  status: ToastStatus;
   duration?: number;
+};
+
+const normalizeStatus = (s?: ToastInput): ToastStatus => {
+  if (s === 'success') return 'ok';
+  if (s === 'error') return 'alert';
+  return (s as ToastStatus) ?? 'info';
 };
 
 type Notification = {
@@ -26,31 +37,30 @@ type Notification = {
   read: boolean;
 };
 
-export type Task = {
-  id: string;
-  title: string;
-  due: string;
-  type: string;
-  completed: boolean;
-};
+export type Task = Tables<'tasks'>;
 
 interface AppContextType {
   settings: SettingsState;
   updateSettings: (updates: Partial<SettingsState>) => void;
   // Toasts
   toasts: Toast[];
-  addToast: (toast: Omit<Toast, 'id'>) => void;
+  addToast: (
+    titleOrToast: string | (Omit<Toast, 'id' | 'status'> & { status?: ToastInput }),
+    status?: ToastInput,
+    description?: string,
+    duration?: number,
+  ) => void;
   removeToast: (id: string) => void;
   // Notifications
   notifications: Notification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'time'>) => void;
-  // Tasks
+  // Tasks (persisted to Supabase when authed; localStorage in demo mode)
   tasks: Task[];
-  addTask: (task: Omit<Task, 'id' | 'completed'>) => void;
-  toggleTask: (id: string) => void;
-  deleteTask: (id: string) => void;
+  addTask: (task: { title: string; due?: string | null; type?: string | null }) => Promise<void>;
+  toggleTask: (id: string) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
   // Command Palette
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -62,9 +72,8 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<SettingsState>({
+  const [settings, setSettings] = usePersistedState<SettingsState>('settings', {
     developerMode: new URLSearchParams(window.location.search).get('dev') === '1',
-    demoMode: false,
     loadingMode: false,
     errorMode: false,
     emptyMode: false,
@@ -72,12 +81,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: '1', title: "Transfer P. 'Pirouette' batch #402 to establishment", due: "Today", type: "propagation", completed: false },
-    { id: '2', title: "Renew AZ Dept. of Agriculture License", due: "In 3 days", type: "license", completed: false },
-    { id: '3', title: "Reorder LFS (Low stock: 2 bales left)", due: "This week", type: "supply", completed: false },
-  ]);
+  const [notifications, setNotifications] = usePersistedState<Notification[]>('notifications', []);
+
+  const TASK_SEED: Task[] = [];
+
+  const taskEntity = useEntity<Task>('tasks', TASK_SEED, {
+    toRow: (t) => ({
+      title: t.title,
+      due: t.due,
+      type: t.type,
+      completed: t.completed,
+    }),
+  });
+  const tasks = taskEntity.data;
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [globalOrderViewId, setGlobalOrderViewId] = useState<string | null>(null);
 
@@ -85,9 +101,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, ...updates }));
   };
 
-  const addToast = (toast: Omit<Toast, 'id'>) => {
+  const addToast = (
+    titleOrToast: string | (Omit<Toast, 'id' | 'status'> & { status?: ToastInput }),
+    status?: ToastInput,
+    description?: string,
+    duration?: number,
+  ) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { ...toast, id }]);
+    const next: Toast =
+      typeof titleOrToast === 'string'
+        ? { id, title: titleOrToast, status: normalizeStatus(status), description, duration }
+        : { id, ...titleOrToast, status: normalizeStatus(titleOrToast.status) };
+    setToasts(prev => [...prev, next]);
   };
 
   const removeToast = (id: string) => {
@@ -107,17 +132,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const addTask = (task: Omit<Task, 'id' | 'completed'>) => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setTasks(prev => [{ ...task, id, completed: false }, ...prev]);
+  const addTask: AppContextType['addTask'] = async (task) => {
+    await taskEntity.add({
+      id: crypto.randomUUID(),
+      title: task.title,
+      due: task.due ?? null,
+      type: task.type ?? null,
+      completed: false,
+      updated_at: new Date().toISOString(),
+      user_id: '',
+    } as Task);
   };
 
-  const toggleTask = (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+  const toggleTask: AppContextType['toggleTask'] = async (id) => {
+    const t = tasks.find((x) => x.id === id);
+    if (!t) return;
+    await taskEntity.update(id, { completed: !t.completed } as Partial<Task>);
   };
 
-  const deleteTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+  const deleteTask: AppContextType['deleteTask'] = async (id) => {
+    await taskEntity.remove(id);
   };
 
   return (
