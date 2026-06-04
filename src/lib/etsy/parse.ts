@@ -136,6 +136,22 @@ function normalizeRow(csvType: CsvType, row: RawRow, index: number): StagedRow |
   };
 }
 
+/**
+ * Payment-ledger rows have no native id, so two genuinely distinct but
+ * identical-looking entries (e.g. two $0.20 listing fees on the same day) share
+ * a content key. Append a per-content occurrence index so they stay distinct —
+ * and stay STABLE across re-imports of the same file (the Nth identical row is
+ * always #N), preserving idempotency. Returns a new array (no mutation).
+ */
+export function disambiguatePaymentKeys(rows: StagedRow[]): StagedRow[] {
+  const seen = new Map<string, number>();
+  return rows.map((r) => {
+    const n = (seen.get(r.etsyKey) ?? 0) + 1;
+    seen.set(r.etsyKey, n);
+    return n > 1 ? { ...r, etsyKey: `${r.etsyKey}#${n}` } : r;
+  });
+}
+
 /** Pull an Etsy order id out of a free-text payment title/info, if present.
  *  Prefer an explicit "Order #…" / "#…" marker so we don't mistake an
  *  unrelated long number (SKU, phone, listing id) for an order id. */
@@ -167,24 +183,12 @@ export function parseFile(file: File): Promise<ParsedFile> {
           });
           return;
         }
-        const rows: StagedRow[] = [];
+        const built: StagedRow[] = [];
         result.data.forEach((raw, i) => {
           const staged = normalizeRow(csvType, raw, i);
-          if (staged) rows.push(staged);
+          if (staged) built.push(staged);
         });
-        // Payment-ledger rows have no native id, so two genuinely distinct but
-        // identical-looking entries (e.g. two $0.20 listing fees on the same
-        // day) share a content key. Append a per-content occurrence index so
-        // they stay distinct — and stay STABLE across re-imports of the same
-        // file (the Nth identical row is always #N), preserving idempotency.
-        if (csvType === "payments") {
-          const seen = new Map<string, number>();
-          for (const r of rows) {
-            const n = (seen.get(r.etsyKey) ?? 0) + 1;
-            seen.set(r.etsyKey, n);
-            if (n > 1) r.etsyKey = `${r.etsyKey}#${n}`;
-          }
-        }
+        const rows = csvType === "payments" ? disambiguatePaymentKeys(built) : built;
         if (result.errors.length) {
           errors.push(`${result.errors.length} row(s) had parse warnings (e.g. ${result.errors[0]?.message}).`);
         }

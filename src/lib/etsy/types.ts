@@ -66,8 +66,11 @@ export interface ImportPlan {
   expenses: ExpenseDraft[];
   customers: CustomerDraft[];
   staged: StagedRow[];
-  /** Counts skipped because they're informational only (e.g. Deposit rows). */
-  skipped: { deposits: number; unmapped: number };
+  /** Counts skipped/unbooked. deposits = bank transfers; unmapped = rows that
+   *  aren't revenue or a known expense; unmatchedSales = ledger Sale rows with
+   *  no extractable order id (revenue that couldn't be attributed — surfaced so
+   *  it's never silently lost). */
+  skipped: { deposits: number; unmapped: number; unmatchedSales: number };
 }
 
 export type CommitOutcome = {

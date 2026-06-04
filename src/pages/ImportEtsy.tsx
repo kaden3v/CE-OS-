@@ -149,6 +149,14 @@ export default function ImportEtsy() {
             </p>
           )}
 
+          {plan.skipped.unmatchedSales > 0 && (
+            <div className="p-3 rounded-md bg-status-warn/10 border border-status-warn/30 text-xs text-status-warn">
+              {plan.skipped.unmatchedSales} sale(s) in the payment ledger couldn't be matched to an order and were
+              not imported as revenue. Include the matching <span className="font-medium">Sold Orders</span> CSV for
+              this period so these orders are captured.
+            </div>
+          )}
+
           {plan.orders.length > 0 && (
             <Card className="overflow-hidden">
               <div className="px-4 py-3 border-b border-border-subtle text-xs uppercase tracking-wide text-text-secondary">

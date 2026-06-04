@@ -34,6 +34,7 @@ export function buildPlan(staged: StagedRow[]): ImportPlan {
   const customers = new Map<string, CustomerDraft>();
   let deposits = 0;
   let unmapped = 0;
+  let unmatchedSales = 0;
 
   // 1) Orders from the Sold Orders CSV (richest source).
   for (const s of staged) {
@@ -82,10 +83,17 @@ export function buildPlan(staged: StagedRow[]): ImportPlan {
     }
 
     if (lc.includes("sale")) {
+      const id = s.orderExternalId;
+      if (!id) {
+        // A sale we can't attribute to an order id. Don't silently drop it —
+        // count it so the UI can surface "N sales couldn't be matched", which
+        // usually means the Sold Orders CSV for this period wasn't included.
+        unmatchedSales++;
+        continue;
+      }
       // Reconcile to an existing order, or stub one from the ledger so a
       // finances-only import still yields orders.
-      const id = s.orderExternalId;
-      if (id && !orders.has(id)) {
+      if (!orders.has(id)) {
         orders.set(id, {
           externalId: id,
           source: "ledger",
@@ -132,6 +140,6 @@ export function buildPlan(staged: StagedRow[]): ImportPlan {
     expenses,
     customers: [...customers.values()],
     staged,
-    skipped: { deposits, unmapped },
+    skipped: { deposits, unmapped, unmatchedSales },
   };
 }
