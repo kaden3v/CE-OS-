@@ -89,9 +89,18 @@ Deno.serve(async (req: Request) => {
     // Denied → fall through and let them re-request.
   }
 
-  // Dedupe: email already in auth.users (active)?
-  const { data: list } = await admin.auth.admin.listUsers();
-  const existingUser = list?.users.find((u) => u.email === email);
+  // Dedupe: email already in auth.users? A single listUsers() call returns only
+  // the first page (~50), so the original guard silently failed as the table
+  // grew — both breaking dedupe and leaking an enumeration signal. Page through
+  // until found or exhausted (cheap for an invite-only tool).
+  let existingUser: { id: string; banned_until?: string | null } | undefined;
+  for (let page = 1; page <= 50; page++) {
+    const { data: pageData, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !pageData) break;
+    const hit = pageData.users.find((u) => u.email === email);
+    if (hit) { existingUser = hit as { id: string; banned_until?: string | null }; break; }
+    if (pageData.users.length < 200) break; // last page reached
+  }
   if (existingUser && !existingUser.banned_until) {
     // Already an active user. Silent success.
     return acceptedResponse;

@@ -71,15 +71,23 @@ export default function Inventory() {
     toRow: (c) => ({ name: c.name }),
   });
   const [lowStockFilter, setLowStockFilter] = useState(false);
+  const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState("Stock");
-  
+
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
-  
+
   const filteredData = useMemo(() => {
-    if (!lowStockFilter) return data;
-    return data.filter(item => (item.stock.juv + item.stock.mat + item.stock.flower) < 10);
-  }, [data, lowStockFilter]);
+    const q = search.trim().toLowerCase();
+    return data.filter((item) => {
+      if (lowStockFilter && (item.stock.juv + item.stock.mat + item.stock.flower) >= 10) return false;
+      if (q) {
+        const haystack = `${item.name ?? ""} ${item.common ?? ""} ${item.genus ?? ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [data, lowStockFilter, search]);
 
   const selectedItem = useMemo(() => inventory.find(i => i.id === selectedId), [inventory, selectedId]);
 
@@ -189,7 +197,7 @@ export default function Inventory() {
             <Link to="/inventory/qr-codes"><Button variant="outline"><QrCode className="w-4 h-4 mr-2" /> QR Codes</Button></Link>
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-              <Input placeholder="Search inventory..." className="pl-8 w-full" />
+              <Input placeholder="Search inventory..." className="pl-8 w-full" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Button 
               variant={lowStockFilter ? "brand" : "outline"} 

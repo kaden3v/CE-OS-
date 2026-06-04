@@ -27,9 +27,14 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen flex items-center justify-center p-8 bg-bg-base text-text-primary">
           <div className="max-w-md w-full bg-bg-elevated border border-border-subtle rounded-xl p-6">
+            <div className="text-xs tracking-[0.04em] text-text-tertiary mb-3" style={{ fontFamily: "var(--font-display-serif)" }}>
+              CE-OS
+            </div>
             <div className="flex items-center gap-2 mb-4 text-status-alert">
               <AlertTriangle className="w-5 h-5" />
-              <h1 className="text-lg font-semibold">Something went wrong</h1>
+              <h1 className="text-xl font-semibold" style={{ fontFamily: "var(--font-display-serif)" }}>
+                Something went wrong
+              </h1>
             </div>
             <p className="text-sm text-text-secondary mb-4">
               The app hit an unexpected error. Your data is safe in local storage.

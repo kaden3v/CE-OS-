@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { Navigate, useLocation } from "react-router";
-import { Sprout, Mail, Lock, ArrowRight, X, Send, ArrowLeft } from "lucide-react";
+import { Mail, Lock, ArrowRight, X, Send, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -70,15 +70,10 @@ export default function SignIn() {
 
   return (
     <div className="min-h-screen bg-bg-base text-text-primary flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-lg bg-accent-brand-dim border border-accent-brand/20 flex items-center justify-center">
-            <Sprout className="w-5 h-5 text-accent-brand" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold">CEOS</h1>
-            <p className="text-xs text-text-tertiary">Canyon Exotics operations</p>
-          </div>
+      <div className="w-full max-w-[400px]">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">CE-OS</h1>
+          <p className="text-xs text-text-tertiary mt-1">Canyon Exotics operations</p>
         </div>
 
         {!isConfigured && (

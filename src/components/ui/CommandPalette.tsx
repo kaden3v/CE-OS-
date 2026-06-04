@@ -117,7 +117,7 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[15vh]"
+          className="fixed inset-0 bg-bg-base/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[15vh]"
           onClick={() => setCommandPaletteOpen(false)}
           onKeyDown={onPaletteKeyDown}
         >

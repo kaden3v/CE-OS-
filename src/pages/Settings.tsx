@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw } from "lucide-react";
 import { Link } from "react-router";
@@ -146,7 +147,14 @@ export default function Settings() {
 
     // Re-verify current password before changing — defense against a stolen
     // session being able to lock the real owner out by changing their password.
-    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+    // Use a throwaway client (persistSession:false) so this verification never
+    // mutates or overwrites the live session.
+    const verifier = createClient(
+      import.meta.env.VITE_SUPABASE_URL as string,
+      import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { error: verifyErr } = await verifier.auth.signInWithPassword({
       email: user.email,
       password: currentPw,
     });

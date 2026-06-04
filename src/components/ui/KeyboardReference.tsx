@@ -73,7 +73,7 @@ export function KeyboardReference({ open, onClose }: Props) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
+            className="fixed inset-0 bg-bg-base/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
             onClick={onClose}
           >
             <motion.div

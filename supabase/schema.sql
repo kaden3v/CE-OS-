@@ -30,7 +30,16 @@ drop policy if exists "profiles self update" on public.profiles;
 
 create policy "profiles self select" on public.profiles for select using (auth.uid() = id);
 create policy "profiles self upsert" on public.profiles for insert with check (auth.uid() = id);
-create policy "profiles self update" on public.profiles for update using (auth.uid() = id);
+create policy "profiles self update" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
+
+-- SECURITY: a row-update policy alone cannot stop a user from flipping their own
+-- is_admin to true (USING is reused as the check; id is unchanged so it passes).
+-- Restrict UPDATE to non-privileged columns at the GRANT level so is_admin is
+-- never user-writable. is_admin is only set server-side (handle_new_user trigger
+-- / service-role).
+revoke update on public.profiles from authenticated;
+grant update (display_name, notification_prefs, onboarded_at, updated_at)
+  on public.profiles to authenticated;
 
 drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at before update on public.profiles

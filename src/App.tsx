@@ -17,6 +17,7 @@ import Vendors from "./pages/Vendors";
 import TaxReport from "./pages/TaxReport";
 import Licenses from "./pages/Licenses";
 import Settings from "./pages/Settings";
+import ImportEtsy from "./pages/ImportEtsy";
 import SignIn from "./pages/SignIn";
 import ResetPassword from "./pages/ResetPassword";
 import Welcome from "./pages/Welcome";
@@ -42,6 +43,7 @@ export default function App() {
               <Route element={<RequireAuth><Layout /></RequireAuth>}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/orders" element={<Orders />} />
+                <Route path="/orders/import" element={<ImportEtsy />} />
                 <Route path="/inventory" element={<Inventory />} />
                 <Route path="/inventory/qr-codes" element={<QrGenerator />} />
                 <Route path="/propagation" element={<Propagation />} />

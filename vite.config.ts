@@ -10,6 +10,19 @@ export default defineConfig(({mode}) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // Split heavy, route-specific vendors out of the main chunk so first
+          // load doesn't ship charts/animation/CSV libs the landing view never uses.
+          manualChunks: {
+            charts: ['recharts'],
+            motion: ['framer-motion'],
+            vendor: ['@supabase/supabase-js', '@tanstack/react-table'],
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

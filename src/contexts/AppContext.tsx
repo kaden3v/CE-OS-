@@ -107,7 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     description?: string,
     duration?: number,
   ) => {
-    const id = Math.random().toString(36).substring(2, 9);
+    const id = crypto.randomUUID();
     const next: Toast =
       typeof titleOrToast === 'string'
         ? { id, title: titleOrToast, status: normalizeStatus(status), description, duration }
@@ -120,7 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addNotification = (notif: Omit<Notification, 'id' | 'read' | 'time'>) => {
-    const id = Math.random().toString(36).substring(2, 9);
+    const id = crypto.randomUUID();
     setNotifications(prev => [{ ...notif, id, read: false, time: 'Just now' }, ...prev]);
   };
 
@@ -133,7 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addTask: AppContextType['addTask'] = async (task) => {
-    await taskEntity.add({
+    const res = await taskEntity.add({
       id: crypto.randomUUID(),
       title: task.title,
       due: task.due ?? null,
@@ -142,16 +142,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updated_at: new Date().toISOString(),
       user_id: '',
     } as Task);
+    if (!res.ok) addToast({ title: "Couldn't add task", status: 'alert' });
   };
 
   const toggleTask: AppContextType['toggleTask'] = async (id) => {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
-    await taskEntity.update(id, { completed: !t.completed } as Partial<Task>);
+    const res = await taskEntity.update(id, { completed: !t.completed } as Partial<Task>);
+    if (!res.ok) addToast({ title: "Couldn't update task", status: 'alert' });
   };
 
   const deleteTask: AppContextType['deleteTask'] = async (id) => {
-    await taskEntity.remove(id);
+    const res = await taskEntity.remove(id);
+    if (!res.ok) addToast({ title: "Couldn't delete task", status: 'alert' });
   };
 
   return (

@@ -23,7 +23,7 @@ export function Dialog({ open, onOpenChange, title, description, children, width
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-bg-base/60 backdrop-blur-sm"
             onClick={() => onOpenChange(false)}
           />
           <motion.div

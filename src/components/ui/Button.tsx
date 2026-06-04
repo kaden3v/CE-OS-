@@ -21,7 +21,7 @@ export function Button({
   };
   const sizes = {
     default: "px-4 py-2",
-    sm: "px-2 py-2 text-xs",
+    sm: "px-2.5 py-1.5 text-xs",
     icon: "p-2",
   };
   return (

@@ -24,6 +24,8 @@ import {
   Menu,
   List,
   CheckSquare,
+  LogOut,
+  FileUp,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -37,6 +39,7 @@ import { KeyboardReference } from "./ui/KeyboardReference";
 const NAV_ITEMS = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Orders", href: "/orders", icon: ShoppingCart },
+  { name: "Import", href: "/orders/import", icon: FileUp },
   { name: "Inventory", href: "/inventory", icon: PackageSearch },
   { name: "Propagation", href: "/propagation", icon: Sprout },
   { name: "Cultivars", href: "/cultivars", icon: Flower2 },
@@ -65,10 +68,25 @@ export function Layout() {
   const [tasksOpen, setTasksOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [keyboardRefOpen, setKeyboardRefOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { setCommandPaletteOpen, notifications, tasks, settings, addToast } = useApp();
-  const { isAdmin, user, onboardedAt, profileChecked } = useAuth();
+  const { isAdmin, user, onboardedAt, profileChecked, signOut } = useAuth();
+
+  const accountInitials = (user?.email ?? "")
+    .split("@")[0]
+    .split(/[.\-_]/)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "CE";
+
+  const handleSignOut = async () => {
+    setAccountMenuOpen(false);
+    await signOut();
+    navigate("/sign-in", { replace: true });
+  };
 
   const isFinancesActive = location.pathname.startsWith("/finances");
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -95,9 +113,6 @@ export function Layout() {
       } else if (e.key === '/' && e.metaKey) {
         e.preventDefault();
         setKeyboardRefOpen(true);
-      } else if (e.key === 'k' && e.metaKey) {
-        e.preventDefault();
-        setCommandPaletteOpen(true);
       } else if (e.key === 'n' && e.metaKey) {
         e.preventDefault();
         addToast({ title: 'Quick Add Triggered', status: 'info' });
@@ -146,8 +161,11 @@ export function Layout() {
       {/* Sidebar - hidden on mobile and when printing */}
       <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-20 no-print">
         <div className="p-6 pb-2">
-          <div className="text-xl font-semibold tracking-tight h-8 flex items-center">
-            <span>CEOS</span>
+          <div className="h-8 flex items-center justify-between">
+            <span className="text-xl font-semibold tracking-[-0.02em]">CEOS</span>
+            <span className="text-[10px] font-medium tracking-wide px-1.5 py-0.5 rounded bg-status-info/20 text-status-info">
+              DEMO
+            </span>
           </div>
           <div className="text-xs text-text-tertiary">Canyon Exotics</div>
         </div>
@@ -245,9 +263,7 @@ export function Layout() {
                <Clock className="w-3 h-3" /> Recent
              </div>
              <div className="space-y-1">
-                <NavLink to="/orders" className="text-xs text-text-secondary hover:text-text-primary block truncate py-2">Order #1284</NavLink>
-                <NavLink to="/cultivars" className="text-xs text-text-secondary hover:text-text-primary block truncate py-2">Pinguicula 'Pirouette'</NavLink>
-                <NavLink to="/customers" className="text-xs text-text-secondary hover:text-text-primary block truncate py-2">Marcus Aldana</NavLink>
+                <span className="text-xs text-text-tertiary block py-2">No recent items</span>
              </div>
           </div>
           <NavLink
@@ -280,7 +296,7 @@ export function Layout() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary group-hover:text-text-secondary transition-colors" />
               <div className="w-full pl-8 pr-2 py-2 bg-bg-base border border-border-subtle rounded-md text-sm text-text-tertiary flex items-center justify-between group-hover:border-border-strong transition-colors">
                 <span>Search everywhere...</span>
-                <kbd className="font-sans text-[10px] px-2 py-2 rounded bg-bg-elevated border border-border-subtle">⌘K</kbd>
+                <kbd className="font-sans text-[10px] px-1.5 py-0.5 rounded bg-bg-elevated border border-border-subtle text-text-secondary">⌘K</kbd>
               </div>
             </div>
           </div>
@@ -321,8 +337,37 @@ export function Layout() {
               )}
             </button>
             <NotificationCenter open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
-            <div className="hidden md:flex w-8 h-8 rounded bg-bg-active items-center justify-center border border-border-subtle font-medium text-sm text-text-primary select-none cursor-pointer hover:bg-bg-hover transition-colors">
-              KC
+            <div className="relative hidden md:block">
+              <button
+                onClick={() => setAccountMenuOpen((o) => !o)}
+                className="w-9 h-9 rounded-full bg-bg-active flex items-center justify-center border border-border-subtle font-medium text-xs text-text-primary select-none cursor-pointer hover:bg-bg-hover transition-colors"
+                aria-label="Account menu"
+              >
+                {accountInitials}
+              </button>
+              {accountMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setAccountMenuOpen(false)} />
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[200px] bg-bg-elevated backdrop-blur-md border border-border-subtle rounded-[10px] shadow-2xl p-1">
+                    <div className="px-3 py-2 border-b border-border-subtle text-xs text-text-tertiary truncate">
+                      {user?.email ?? "Signed in"}
+                    </div>
+                    <NavLink
+                      to="/settings"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className="flex items-center gap-2 px-2 py-2 rounded-md text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+                    >
+                      <Settings className="w-4 h-4" strokeWidth={1.5} /> Settings
+                    </NavLink>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-2 px-2 py-2 rounded-md text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" strokeWidth={1.5} /> Sign out
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -366,7 +411,7 @@ export function Layout() {
         {/* Mobile More Sheet */}
         {mobileMenuOpen && (
           <>
-            <div className="md:hidden fixed inset-0 bg-[#0E0F11]/80 backdrop-blur-sm z-50 transition-opacity" onClick={() => setMobileMenuOpen(false)} />
+            <div className="md:hidden fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 transition-opacity" onClick={() => setMobileMenuOpen(false)} />
             <div className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80vh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-50 p-6 flex flex-col gap-6 slide-in-from-bottom-full animate-in duration-200 ease-out">
                <div>
                   <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Management</h3>

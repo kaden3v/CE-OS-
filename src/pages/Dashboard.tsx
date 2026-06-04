@@ -25,7 +25,13 @@ const CHANNEL_DATA = [
 const CULTIVAR_DATA = [
   { name: "'Pirouette'", value: 400 }, { name: "'El Lobo'", value: 300 }, { name: 'gigantea', value: 300 }, { name: 'esseriana', value: 200 }
 ];
-const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
+// Data-viz earth tones — sourced from @theme tokens (src/index.css)
+const COLORS = [
+  'var(--color-viz-terracotta)',
+  'var(--color-viz-olive)',
+  'var(--color-viz-moss)',
+  'var(--color-viz-pine)',
+];
 
 type Inventory = Tables<"inventory">;
 type Shipment = Tables<"shipments">;
@@ -186,8 +192,8 @@ export default function Dashboard() {
                       <CheckCircle2 className="w-3 h-3 opacity-0 group-hover:opacity-100" />
                     </div>
                     <div className="flex-1 text-sm">{task.title}</div>
-                    {task.due !== "No date" && (
-                      <div className="text-xs text-text-secondary px-2 py-2 rounded bg-bg-active">
+                    {task.due && task.due !== "No date" && (
+                      <div className="text-xs text-text-secondary px-2 py-0.5 rounded bg-bg-active">
                         {task.due}
                       </div>
                     )}

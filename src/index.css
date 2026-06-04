@@ -1,24 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+/* Fonts — all three are Google Fonts, loaded exactly as the product spec calls
+   for. Inter is the workhorse; DM Sans is an occasional alt-sans; Playfair
+   Display (600) is reserved for the crash/error boundary only. */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap');
 @import "tailwindcss";
+/* Entrance-animation utilities (animate-in / slide-in-from-* / fade-in). */
+@import "tw-animate-css";
 
 @theme {
+  /* Surfaces */
   --color-bg-base: #0E0F11;
   --color-bg-elevated: rgba(255,255,255,0.04);
   --color-bg-hover: rgba(255,255,255,0.06);
   --color-bg-active: rgba(255,255,255,0.08);
+  /* Borders */
   --color-border-subtle: rgba(255,255,255,0.06);
   --color-border-strong: rgba(255,255,255,0.12);
+  /* Text */
   --color-text-primary: #E8E9EA;
   --color-text-secondary: #9CA0A6;
   --color-text-tertiary: #5C6066;
+  /* Accent + status */
   --color-accent-brand: #7AB892;
   --color-accent-brand-dim: rgba(122,184,146,0.15);
   --color-status-ok: #7AB892;
   --color-status-warn: #E0B95C;
   --color-status-alert: #D97366;
   --color-status-info: #7CA8C9;
+  /* Data-viz earth tones (charts) — single source of truth for chart palettes */
+  --color-viz-terracotta: #C2714F;
+  --color-viz-olive: #8A9A5B;
+  --color-viz-moss: #4A5D23;
+  --color-viz-pine: #2C3518;
 
+  /* Type families */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-alt-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display-serif: "Playfair Display", Georgia, serif; /* crash/error only */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Radii (spec): badge/kbd 4 · button/input 8 · card 12 · stat tile 16 · sheet 24 */
+  --radius-card: 12px;
+  --radius-tile: 16px;
+  --radius-sheet: 24px;
+
   --default-transition-duration: 150ms;
   --default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
@@ -46,6 +70,17 @@
   svg.lucide {
     stroke-width: 1.5;
   }
+}
+
+/* Compact density (Settings → density). Tightens the data-dense surfaces —
+   table rows and the base text size — when the app root carries .font-compact. */
+.font-compact {
+  font-size: 13px;
+}
+.font-compact table th,
+.font-compact table td {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
 }
 
 @media print {
