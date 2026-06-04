@@ -94,7 +94,7 @@ function paymentKey(row: RawRow): string {
   ].join("|");
 }
 
-function normalizeRow(csvType: CsvType, row: RawRow, index: number): StagedRow | null {
+export function normalizeRow(csvType: CsvType, row: RawRow, index: number): StagedRow | null {
   if (csvType === "sold_orders") {
     const orderId = pick(row, SOLD_ORDERS_COLUMNS.orderId);
     if (!orderId) return null;
@@ -125,13 +125,17 @@ function normalizeRow(csvType: CsvType, row: RawRow, index: number): StagedRow |
   // payments
   const type = pick(row, PAYMENTS_COLUMNS.type);
   if (!type && !pick(row, PAYMENTS_COLUMNS.amount)) return null;
+  // Etsy statements often leave "Amount" as "--" and carry the real signed
+  // value in "Net" (and the fee portion in "Fees & Taxes"). Prefer Amount, fall
+  // back to Net so fees/charges aren't read as 0.
+  const amount = parseMoney(pick(row, PAYMENTS_COLUMNS.amount)) || parseMoney(pick(row, PAYMENTS_COLUMNS.net));
   return {
     csvType,
     etsyKey: `pay:${paymentKey(row)}`,
     rowType: type || "Unknown",
     orderExternalId: extractOrderId(pick(row, PAYMENTS_COLUMNS.title) + " " + pick(row, PAYMENTS_COLUMNS.info)),
     occurredOn: parseDate(pick(row, PAYMENTS_COLUMNS.date)),
-    amount: parseMoney(pick(row, PAYMENTS_COLUMNS.amount)),
+    amount,
     raw: row,
   };
 }

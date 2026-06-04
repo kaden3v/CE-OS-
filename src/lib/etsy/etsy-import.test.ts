@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseMoney, parseDate, detectType, extractOrderId, disambiguatePaymentKeys } from "./parse";
-import { buildPlan } from "./project";
+import { parseMoney, parseDate, detectType, extractOrderId, disambiguatePaymentKeys, normalizeRow } from "./parse";
+import { buildPlan, normalizeOrderStatus } from "./project";
 import type { StagedRow, RawRow } from "./types";
 
 describe("parseMoney", () => {
@@ -89,6 +89,41 @@ describe("disambiguatePaymentKeys", () => {
   });
 });
 
+describe("normalizeOrderStatus (must satisfy orders_status_check)", () => {
+  const allowed = ["pending", "processing", "packed", "shipped", "delivered", "cancelled", "refunded"];
+  it.each([
+    ["", "delivered"],
+    ["Completed", "delivered"],
+    ["completed", "delivered"],
+    ["Paid", "delivered"],
+    ["Shipped", "shipped"],
+    ["Canceled", "cancelled"],
+    ["cancelled", "cancelled"],
+    ["Partially Refunded", "refunded"],
+    ["Open", "processing"],
+    ["whatever-unknown", "delivered"],
+  ])("maps %j → %j", (input, want) => {
+    expect(normalizeOrderStatus(input)).toBe(want);
+  });
+  it("only ever returns an allowed status", () => {
+    for (const s of ["", "completed", "weird", "shipped", "refund", "open"]) {
+      expect(allowed).toContain(normalizeOrderStatus(s));
+    }
+  });
+});
+
+describe("normalizeRow — Etsy statement amount fallback (Amount '--' → Net)", () => {
+  it("reads Net when Amount is '--' (the real statement format)", () => {
+    const row = { Date: "January 28, 2026", Type: "Fee", Title: "Listing fee", Amount: "--", "Fees & Taxes": "-$0.20", Net: "-$0.20" };
+    const staged = normalizeRow("payments", row, 0);
+    expect(staged?.amount).toBe(-0.2); // not 0
+  });
+  it("prefers Amount when present", () => {
+    const row = { Date: "January 28, 2026", Type: "Payment", Title: "Bill payment", Amount: "$29.00", Net: "$29.00" };
+    expect(normalizeRow("payments", row, 0)?.amount).toBe(29);
+  });
+});
+
 // ── buildPlan helpers ──
 function soldOrder(raw: Partial<RawRow>): StagedRow {
   const r = raw as RawRow;
@@ -136,6 +171,7 @@ describe("buildPlan", () => {
     expect(plan.skipped.unmatchedSales).toBe(0);
     expect(plan.orders).toHaveLength(1);
     expect(plan.orders[0].source).toBe("ledger");
+    expect(plan.orders[0].status).toBe("delivered"); // valid per orders_status_check
     expect(plan.expenses.find((e) => e.description.includes("Listing"))?.category).toBe("Etsy Fees");
     expect(plan.expenses.find((e) => e.description.includes("Ads"))?.category).toBe("Etsy Ads");
     expect(plan.expenses.find((e) => e.category === "Refund")?.amount).toBe(10);
@@ -156,6 +192,29 @@ describe("buildPlan", () => {
     ]);
     expect(plan.orders).toHaveLength(1);
     expect(plan.orders[0].source).toBe("orders");
+    expect(plan.skipped.unmatchedSales).toBe(0);
+  });
+
+  // Integration: the exact Etsy *statement* shape that broke in production —
+  // Amount "--", real value in Net, mixed types, and a Sale carrying an Order #.
+  it("handles the real Etsy statement format end-to-end", () => {
+    const rows = [
+      normalizeRow("payments", { Date: "May 31, 2026", Type: "Fee", Title: "Transaction fee: Pinguicula — Order #4073989088", Amount: "--", "Fees & Taxes": "-$1.12", Net: "-$1.12" }, 0)!,
+      normalizeRow("payments", { Date: "May 31, 2026", Type: "Marketing", Title: "Etsy Ads", Amount: "--", "Fees & Taxes": "-$3.00", Net: "-$3.00" }, 1)!,
+      normalizeRow("payments", { Date: "Jan 28, 2026", Type: "Payment", Title: "Bill payment for set-up fee", Amount: "$29.00", Net: "$29.00" }, 2)!,
+      normalizeRow("payments", { Date: "May 31, 2026", Type: "Sale", Title: "Payment for Order #4073989088", Amount: "$52.00", Net: "$45.00" }, 3)!,
+    ];
+    const plan = buildPlan(rows);
+    // Fee + Marketing become expenses with correct (non-zero) amounts.
+    expect(plan.expenses).toHaveLength(2);
+    expect(plan.expenses.find((e) => e.category === "Etsy Fees")?.amount).toBe(1.12);
+    expect(plan.expenses.find((e) => e.category === "Etsy Ads")?.amount).toBe(3);
+    // Payment-type bill settlement is not double-booked as an expense.
+    expect(plan.skipped.unmapped).toBe(1);
+    // The sale (with an Order #) becomes a valid, insertable stub order.
+    expect(plan.orders).toHaveLength(1);
+    expect(plan.orders[0].externalId).toBe("4073989088");
+    expect(plan.orders[0].status).toBe("delivered");
     expect(plan.skipped.unmatchedSales).toBe(0);
   });
 

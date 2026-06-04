@@ -198,6 +198,20 @@ export function useEtsyImport() {
         }
       }
 
+      // If a prior write hard-errored (e.g. an orders insert), abort BEFORE
+      // adding expenses so we don't leave 857-orphaned-expenses on top of a
+      // half-written batch. Roll the staging batch back so the whole import can
+      // be retried cleanly once the underlying issue is fixed.
+      if (hardError) {
+        await db.from("etsy_imports").delete().eq("user_id", uid).eq("import_batch_id", batchId);
+        errors.push("Import aborted after a write error — no expenses were committed for this batch. Fix the issue and re-import.");
+        const aborted: CommitOutcome = {
+          ordersWritten, itemsWritten, expensesWritten: 0, customersWritten, duplicatesSkipped, errors,
+        };
+        setOutcome(aborted);
+        return aborted;
+      }
+
       // 6) Expenses (fees / ads / refunds) — dedup against existing rows too.
       let expensesWritten = 0;
       if (freshPlan.expenses.length) {

@@ -13,6 +13,25 @@ import type {
   StagedRow,
 } from "./types";
 
+/** The orders.status CHECK constraint only allows this set. Map any Etsy/CSV
+ *  status into it — inserting an out-of-set value (e.g. "completed") fails the
+ *  constraint and aborts the whole import. */
+const ALLOWED_ORDER_STATUSES = ["pending", "processing", "packed", "shipped", "delivered", "cancelled", "refunded"];
+
+export function normalizeOrderStatus(raw: string): string {
+  const s = raw.trim().toLowerCase();
+  if (ALLOWED_ORDER_STATUSES.includes(s)) return s;
+  if (s === "canceled") return "cancelled";
+  if (s.includes("refund")) return "refunded";
+  if (s.includes("cancel")) return "cancelled";
+  if (s.includes("ship")) return "shipped";
+  if (s.includes("complete") || s.includes("paid") || s.includes("fulfil") || s.includes("deliver")) return "delivered";
+  if (s.includes("process") || s.includes("pend") || s.includes("open") || s.includes("unship")) return "processing";
+  // Historical Etsy import with no usable status: money was received, so treat
+  // as fulfilled rather than inventing a pipeline state.
+  return "delivered";
+}
+
 /** Map an Etsy payment-ledger row type to a CE-OS expense category, or null
  *  if it isn't an expense (sales, deposits, taxes are handled elsewhere). */
 function expenseCategory(rowType: string): string | null {
@@ -51,7 +70,7 @@ export function buildPlan(staged: StagedRow[]): ImportPlan {
       shipping: parseMoney(pick(r, SOLD_ORDERS_COLUMNS.orderShipping)),
       tax: parseMoney(pick(r, SOLD_ORDERS_COLUMNS.orderSalesTax)),
       total: parseMoney(pick(r, SOLD_ORDERS_COLUMNS.orderValue)),
-      status: (pick(r, SOLD_ORDERS_COLUMNS.status) || "completed").toLowerCase(),
+      status: normalizeOrderStatus(pick(r, SOLD_ORDERS_COLUMNS.status)),
       customerName: name,
       notes: "Imported from Etsy",
     });
@@ -103,7 +122,7 @@ export function buildPlan(staged: StagedRow[]): ImportPlan {
           shipping: 0,
           tax: 0,
           total: s.amount ?? 0,
-          status: "completed",
+          status: "delivered",
           customerName: null,
           notes: "Imported from Etsy payment ledger",
         });
