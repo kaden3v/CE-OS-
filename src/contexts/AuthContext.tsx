@@ -2,12 +2,26 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { Navigate, useLocation } from "react-router";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  isDemoActive,
+  setDemoActive,
+  ensureDemoSeeded,
+  clearDemoData,
+  getDemoProfile,
+  updateDemoProfile,
+  demoUser,
+  demoSession,
+} from "@/lib/demo/store";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
   isConfigured: boolean;
+  /** True when running on the local-only demo backend (localStorage). */
+  isDemo: boolean;
+  /** Enter demo mode: synthetic signed-in admin, data in localStorage. */
+  enterDemo: () => void;
   isAdmin: boolean;
   /** Null = needs onboarding. Set once on completion. */
   onboardedAt: string | null;
@@ -35,9 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [onboardedAt, setOnboardedAt] = useState<string | null>(null);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
+  const [isDemo, setIsDemo] = useState(() => isDemoActive());
+  const [isLoading, setIsLoading] = useState(isSupabaseConfigured && !isDemoActive());
 
   const refreshAdminFlag = useCallback(async (uid: string | undefined) => {
+    if (isDemoActive()) {
+      const p = getDemoProfile();
+      setIsAdmin(p.is_admin);
+      setOnboardedAt(p.onboarded_at);
+      setProfileChecked(true);
+      return;
+    }
     if (!uid || !supabase) {
       setIsAdmin(false);
       setOnboardedAt(null);
@@ -106,11 +128,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshAdminFlag, user?.id]);
 
   const setOnboardedLocal = useCallback((iso: string) => {
+    if (isDemoActive()) updateDemoProfile({ onboarded_at: iso });
     setOnboardedAt(iso);
     setProfileChecked(true);
   }, []);
 
+  const enterDemo = useCallback(() => {
+    ensureDemoSeeded();
+    setDemoActive(true);
+    const p = getDemoProfile();
+    setIsDemo(true);
+    setSession(demoSession);
+    setUser(demoUser);
+    setIsAdmin(p.is_admin);
+    setOnboardedAt(p.onboarded_at);
+    setProfileChecked(true);
+    setIsLoading(false);
+  }, []);
+
   useEffect(() => {
+    // Demo mode short-circuits the Supabase boot entirely: synthetic session,
+    // everything served from localStorage.
+    if (isDemoActive()) {
+      ensureDemoSeeded();
+      const p = getDemoProfile();
+      setSession(demoSession);
+      setUser(demoUser);
+      setIsAdmin(p.is_admin);
+      setOnboardedAt(p.onboarded_at);
+      setProfileChecked(true);
+      setIsLoading(false);
+      return;
+    }
     if (!supabase) {
       setIsLoading(false);
       return;
@@ -266,6 +315,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resyncSession: AuthContextType["resyncSession"] = async () => {
+    if (isDemoActive()) {
+      const p = getDemoProfile();
+      setIsAdmin(p.is_admin);
+      return { ok: true, isAdmin: p.is_admin };
+    }
     if (!supabase) return { ok: false, error: "Supabase is not configured." };
     try {
       const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
@@ -307,6 +361,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (isDemoActive()) {
+      clearDemoData();
+      setIsDemo(false);
+      setSession(null);
+      setUser(null);
+      setIsAdmin(false);
+      setOnboardedAt(null);
+      setProfileChecked(true);
+      return;
+    }
     await supabase?.auth.signOut();
   };
 
@@ -317,6 +381,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         isLoading,
         isConfigured: isSupabaseConfigured,
+        isDemo,
+        enterDemo,
         isAdmin,
         signInWithPassword,
         resetPasswordForEmail,

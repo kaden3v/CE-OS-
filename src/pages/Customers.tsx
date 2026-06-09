@@ -11,6 +11,7 @@ import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { demoWhere } from "@/lib/demo/store";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 
@@ -31,7 +32,7 @@ export default function Customers() {
     }),
   });
   const { addToast } = useApp();
-  const { user } = useAuth();
+  const { user, isDemo } = useAuth();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => customers.find((c) => c.id === selectedId) ?? null, [customers, selectedId]);
@@ -42,7 +43,16 @@ export default function Customers() {
   // Per-customer subscription map (only loaded for the selected one)
   const [activeSub, setActiveSub] = useState<Subscription | null>(null);
   useEffect(() => {
-    if (!selectedId || !user || !supabase) {
+    if (!selectedId || !user) {
+      setActiveSub(null);
+      return;
+    }
+    if (isDemo) {
+      const subs = demoWhere<Subscription>("subscriptions", { customer_id: selectedId, status: "active" });
+      setActiveSub(subs[0] ?? null);
+      return;
+    }
+    if (!supabase) {
       setActiveSub(null);
       return;
     }
@@ -54,7 +64,7 @@ export default function Customers() {
       .eq("status", "active")
       .maybeSingle()
       .then(({ data }) => setActiveSub(data));
-  }, [selectedId, user?.id]);
+  }, [selectedId, user?.id, isDemo]);
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();

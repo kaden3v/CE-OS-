@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { getDemoProfile, updateDemoProfile, demoList, demoInsert, demoDeleteWhere } from "@/lib/demo/store";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw } from "lucide-react";
 import { Link } from "react-router";
@@ -37,7 +38,7 @@ const CONNECTORS = [
 
 export default function Settings() {
   const { settings, updateSettings, setCommandPaletteOpen, addToast } = useApp();
-  const { user, isConfigured, isAdmin, signOut, resyncSession } = useAuth();
+  const { user, isConfigured, isDemo, isAdmin, signOut, resyncSession } = useAuth();
   const [resyncing, setResyncing] = useState(false);
 
   const handleResync = async () => {
@@ -76,7 +77,15 @@ export default function Settings() {
 
   // Load profile
   useEffect(() => {
-    if (!user || !supabase) return;
+    if (!user) return;
+    if (isDemo) {
+      const p = getDemoProfile();
+      setDisplayName(p.display_name ?? "");
+      setNotifPrefs((p.notification_prefs as NotificationPrefs | null) ?? {});
+      setProfileLoaded(true);
+      return;
+    }
+    if (!supabase) return;
     supabase
       .from("profiles")
       .select("display_name, notification_prefs")
@@ -88,11 +97,18 @@ export default function Settings() {
         setNotifPrefs((data?.notification_prefs as NotificationPrefs | null) ?? {});
         setProfileLoaded(true);
       });
-  }, [user?.id]);
+  }, [user?.id, isDemo]);
 
   // Load admin allowlist
   useEffect(() => {
-    if (!isAdmin || !supabase) return;
+    if (!isAdmin) return;
+    if (isDemo) {
+      setLoadingAdmins(true);
+      setAdminEmails(demoList<{ email: string; added_at: string }>("admin_emails", { orderBy: "added_at", ascending: true }));
+      setLoadingAdmins(false);
+      return;
+    }
+    if (!supabase) return;
     setLoadingAdmins(true);
     supabase
       .from("admin_emails")
@@ -103,10 +119,18 @@ export default function Settings() {
         setAdminEmails(data ?? []);
         setLoadingAdmins(false);
       });
-  }, [isAdmin]);
+  }, [isAdmin, isDemo]);
 
   const saveProfile = async () => {
-    if (!user || !supabase) return;
+    if (!user) return;
+    if (isDemo) {
+      setSavingProfile(true);
+      updateDemoProfile({ display_name: displayName.trim() || null });
+      setSavingProfile(false);
+      addToast({ title: "Profile saved", status: "ok" });
+      return;
+    }
+    if (!supabase) return;
     setSavingProfile(true);
     const { error } = await supabase
       .from("profiles")
@@ -126,9 +150,14 @@ export default function Settings() {
   };
 
   const saveNotifPref = async (key: keyof NotificationPrefs, checked: boolean) => {
-    if (!user || !supabase) return;
+    if (!user) return;
     const next = { ...notifPrefs, [key]: checked };
     setNotifPrefs(next);
+    if (isDemo) {
+      updateDemoProfile({ notification_prefs: next as Record<string, boolean> });
+      return;
+    }
+    if (!supabase) return;
     const { error } = await supabase.from("profiles").update({ notification_prefs: next }).eq("id", user.id);
     if (error) {
       addToast({ title: "Couldn't save preference", description: friendlyDbError(error), status: "alert" });
@@ -140,6 +169,14 @@ export default function Settings() {
     e.preventDefault();
     if (newPw.length < 8) return addToast({ title: "Password must be at least 8 characters", status: "warn" });
     if (newPw !== confirmPw) return addToast({ title: "Passwords don't match", status: "warn" });
+    if (isDemo) {
+      setPwOpen(false);
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+      addToast({ title: "Password updated", description: "Demo mode — not persisted.", status: "ok" });
+      return;
+    }
     if (!supabase || !user?.email) return;
 
     setChangingPw(true);
@@ -173,6 +210,18 @@ export default function Settings() {
     e.preventDefault();
     const email = newAdminEmail.trim().toLowerCase();
     if (!email) return;
+    if (isDemo) {
+      if (adminEmails.some((a) => a.email === email)) {
+        addToast({ title: "Already on the allowlist", status: "warn" });
+        return;
+      }
+      const added_at = new Date().toISOString();
+      demoInsert("admin_emails", { email, added_at, added_by: null } as any);
+      setAdminEmails((prev) => [...prev, { email, added_at }]);
+      setNewAdminEmail("");
+      addToast({ title: "Admin email added", status: "ok" });
+      return;
+    }
     if (!supabase) return;
     const { error } = await supabase.from("admin_emails").insert({ email });
     if (error) {
@@ -194,6 +243,12 @@ export default function Settings() {
       if (!ok) return;
     } else {
       if (!confirm(`Remove ${email} from the admin allowlist? Existing admin users keep access until you also flip their profile.is_admin to false.`)) return;
+    }
+    if (isDemo) {
+      demoDeleteWhere("admin_emails", { email });
+      setAdminEmails((prev) => prev.filter((a) => a.email !== email));
+      addToast({ title: "Removed from allowlist", status: "info" });
+      return;
     }
     if (!supabase) return;
     const { error } = await supabase.from("admin_emails").delete().eq("email", email);
@@ -291,11 +346,15 @@ export default function Settings() {
                   </Button>
                 </div>
               )}
-              {!isConfigured && (
+              {isDemo ? (
+                <p className="text-xs text-text-tertiary">
+                  Demo mode — changes are saved to this browser only. Sign out to clear the demo and return to the login screen.
+                </p>
+              ) : !isConfigured ? (
                 <p className="text-xs text-status-warn">
                   Supabase not configured. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in your environment.
                 </p>
-              )}
+              ) : null}
             </div>
           </Card>
         </section>

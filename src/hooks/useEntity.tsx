@@ -3,6 +3,12 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/database.types";
 import { useAuth } from "@/contexts/AuthContext";
 import { logDbError } from "@/lib/dbErrors";
+import { demoList, demoInsert, demoInsertMany, demoUpdate, demoDelete } from "@/lib/demo/store";
+
+/** Drop keys whose value is `undefined` so a partial patch never nulls columns. */
+function omitUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
 
 type WithId = { id: string | number };
 type TableName = keyof Database["public"]["Tables"];
@@ -39,8 +45,8 @@ export function useEntity<T extends WithId, Row = T>(
   isLoading: boolean;
   refresh: () => Promise<void>;
 } {
-  const { user } = useAuth();
-  const ready = !!user && !!supabase;
+  const { user, isDemo } = useAuth();
+  const ready = isDemo || (!!user && !!supabase);
 
   // The hook intentionally bypasses the typed table-name constraint internally.
   // Type safety is preserved at the call site via T and Row.
@@ -52,6 +58,17 @@ export function useEntity<T extends WithId, Row = T>(
   const fetchAll = useCallback(async () => {
     if (!ready) return;
     setIsLoading(true);
+    if (isDemo) {
+      const rows = demoList(table, { orderBy: options?.orderBy, ascending: options?.ascending }) as unknown as Row[];
+      const mapped = options?.fromRow ? rows.map(options.fromRow) : (rows as unknown as T[]);
+      if (mapped.length === 0 && initial.length > 0) {
+        await seedInitial(initial);
+      } else {
+        setData(mapped);
+      }
+      setIsLoading(false);
+      return;
+    }
     const { data: rows, error } = await db
       .from(table)
       .select("*")
@@ -80,6 +97,19 @@ export function useEntity<T extends WithId, Row = T>(
   const seedInitial = useCallback(
     async (items: T[]) => {
       if (!ready) return;
+      if (isDemo) {
+        const rows = items.map((it) => {
+          const base =
+            options?.fromRow && options?.toRow
+              ? options.toRow(it, user!.id)
+              : ({ ...(it as any) } as Record<string, unknown>);
+          return { ...base, user_id: user!.id, id: (it as any).id ?? crypto.randomUUID() };
+        });
+        demoInsertMany(table, rows as any);
+        const final = options?.fromRow ? rows.map((r) => options.fromRow!(r as Row)) : (rows as unknown as T[]);
+        setData(final);
+        return;
+      }
       const rows = items.map((it) => {
         const mapped = options?.toRow
           ? options.toRow(it, user!.id)
@@ -101,6 +131,23 @@ export function useEntity<T extends WithId, Row = T>(
 
   const add = async (item: T): Promise<{ ok: true; row: T } | { ok: false; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
+    if (isDemo) {
+      // Pages with a fromRow mapper pass in-memory shapes (e.g. Inventory) that
+      // need the toRow→store→fromRow round-trip. Pages without one pass full
+      // DB-shaped rows that we store verbatim (preserving created_at etc.).
+      let stored: Record<string, unknown>;
+      let final: T;
+      if (options?.fromRow && options?.toRow) {
+        stored = { ...options.toRow(item, user!.id), user_id: user!.id, id: (item as any).id ?? crypto.randomUUID() };
+        final = options.fromRow(stored as Row);
+      } else {
+        stored = { ...(item as any), user_id: user!.id };
+        final = stored as unknown as T;
+      }
+      demoInsert(table, stored as any);
+      setData((prev) => [final, ...prev]);
+      return { ok: true, row: final };
+    }
     const mapped = options?.toRow
       ? options.toRow(item, user!.id)
       : ({ ...(item as any) } as Record<string, unknown>);
@@ -121,6 +168,11 @@ export function useEntity<T extends WithId, Row = T>(
       ? options.toRow({ ...({} as any), ...patch } as T, user!.id)
       : (patch as Record<string, unknown>);
     const { user_id: _u, id: _i, ...safe } = mapped;
+    if (isDemo) {
+      demoUpdate(table, id, omitUndefined(safe));
+      setData((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+      return { ok: true };
+    }
     const { error } = await db.from(table).update(safe).eq("id", id).eq("user_id", user!.id);
     if (error) {
       logDbError(`update ${table}`, error);
@@ -132,6 +184,11 @@ export function useEntity<T extends WithId, Row = T>(
 
   const remove = async (id: T["id"]): Promise<{ ok: boolean; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
+    if (isDemo) {
+      demoDelete(table, id);
+      setData((prev) => prev.filter((r) => r.id !== id));
+      return { ok: true };
+    }
     const { error } = await db.from(table).delete().eq("id", id).eq("user_id", user!.id);
     if (error) {
       logDbError(`delete ${table}`, error);

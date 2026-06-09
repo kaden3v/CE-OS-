@@ -4,7 +4,18 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import { logDbError } from "@/lib/dbErrors";
+import { demoWhere, demoInsert, demoDelete } from "@/lib/demo/store";
 import type { Tables } from "@/lib/database.types";
+
+/** Read a File into a data URL (used to persist demo photos in localStorage). */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 type Photo = Tables<"plant_photos">;
 
@@ -24,17 +35,24 @@ interface Props {
  * restricts writes to the authed user's namespace.
  */
 export function PhotoUploader({ inventoryId }: Props) {
-  const { user } = useAuth();
+  const { user, isDemo } = useAuth();
   const { addToast } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [photos, setPhotos] = useState<Array<Photo & { signedUrl: string }>>([]);
   const [uploading, setUploading] = useState(false);
-  const isAuthed = !!user && !!supabase;
+  const isAuthed = !!user && (isDemo || !!supabase);
 
   useEffect(() => {
     if (!isAuthed) {
       setPhotos([]);
+      return;
+    }
+    if (isDemo) {
+      // In demo mode storage_path holds a data URL, used directly as the src.
+      const rows = demoWhere<Photo>("plant_photos", { inventory_id: inventoryId })
+        .sort((a, b) => (a.taken_at < b.taken_at ? 1 : -1));
+      setPhotos(rows.map((p) => ({ ...p, signedUrl: p.storage_path })));
       return;
     }
     let cancelled = false;
@@ -79,6 +97,31 @@ export function PhotoUploader({ inventoryId }: Props) {
     const path = `${user!.id}/${inventoryId}/${crypto.randomUUID()}.${ext}`;
 
     setUploading(true);
+
+    if (isDemo) {
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        const row = {
+          id: crypto.randomUUID(),
+          user_id: user!.id,
+          inventory_id: inventoryId,
+          cultivar_id: null,
+          caption: null,
+          storage_path: dataUrl,
+          taken_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        } as Photo;
+        demoInsert("plant_photos", row);
+        setPhotos((prev) => [{ ...row, signedUrl: dataUrl }, ...prev]);
+        addToast({ title: "Photo added", status: "ok" });
+      } catch {
+        addToast({ title: "Couldn't read that file", status: "alert" });
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
     const { error: uploadErr } = await supabase!.storage.from(BUCKET).upload(path, file, {
       contentType: file.type,
       cacheControl: "3600",
@@ -118,6 +161,12 @@ export function PhotoUploader({ inventoryId }: Props) {
   const handleDelete = async (photo: Photo) => {
     if (!isAuthed) return;
     if (!confirm("Delete this photo?")) return;
+    if (isDemo) {
+      demoDelete("plant_photos", photo.id);
+      setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+      addToast({ title: "Photo removed", status: "info" });
+      return;
+    }
     const { error: storageErr } = await supabase!.storage.from(BUCKET).remove([photo.storage_path]);
     if (storageErr) {
       logDbError("photo storage delete", storageErr as any);
