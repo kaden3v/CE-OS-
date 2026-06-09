@@ -19,6 +19,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import { restGet, supabase } from "@/lib/supabase";
+import { getDemoProfile, updateDemoProfile } from "@/lib/demo/store";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +41,7 @@ const NAME_MIN = 2;
 const NAME_MAX = 50;
 
 export default function Welcome() {
-  const { user, isAdmin, onboardedAt, profileChecked, refreshProfile, setOnboardedLocal } = useAuth();
+  const { user, isAdmin, isDemo, onboardedAt, profileChecked, refreshProfile, setOnboardedLocal } = useAuth();
   const { addToast } = useApp();
   const navigate = useNavigate();
 
@@ -74,6 +75,15 @@ export default function Welcome() {
   // Pre-fill display name from the access_request submitted earlier.
   useEffect(() => {
     if (!user?.email) return;
+    if (isDemo) {
+      const name = getDemoProfile().display_name;
+      if (name) {
+        setDisplayName(name);
+        setHint("Sample name — change it if you'd like.");
+      }
+      setPrefilling(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -140,24 +150,37 @@ export default function Welcome() {
   };
 
   const completeOnboarding = async () => {
-    if (!supabase || !user) return;
+    if (!user) return;
     setPending(true);
     setSaveError(null);
     const onboardedIso = new Date().toISOString();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
+    if (isDemo) {
+      updateDemoProfile({
         display_name: trimmedName,
         notification_prefs: notifPrefs,
         onboarded_at: onboardedIso,
-      })
-      .eq("id", user.id);
-    setPending(false);
-    if (error) {
-      console.error("[welcome] save failed", error);
-      setSaveError(friendlyDbError(error, "Couldn't save. Please try again."));
-      return;
+      });
+    } else {
+      if (!supabase) {
+        setPending(false);
+        return;
+      }
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: trimmedName,
+          notification_prefs: notifPrefs,
+          onboarded_at: onboardedIso,
+        })
+        .eq("id", user.id);
+      if (error) {
+        setPending(false);
+        console.error("[welcome] save failed", error);
+        setSaveError(friendlyDbError(error, "Couldn't save. Please try again."));
+        return;
+      }
     }
+    setPending(false);
     addToast({ title: `Welcome, ${firstName}!`, description: "You're all set.", status: "ok" });
     completingRef.current = true;
     setOnboardedLocal(onboardedIso);

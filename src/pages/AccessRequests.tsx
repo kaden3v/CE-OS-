@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Check, X, ShieldCheck, RefreshCw, Mail, MessageSquare, Trash2 } from "lucide-react";
 import { restGet, functionInvoke } from "@/lib/supabase";
+import { demoList, demoUpdate } from "@/lib/demo/store";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import type { Tables } from "@/lib/database.types";
@@ -13,7 +14,7 @@ type Request = Tables<"access_requests">;
 type Action = "approve" | "deny" | "revoke";
 
 export default function AccessRequests() {
-  const { session } = useAuth();
+  const { session, isDemo } = useAuth();
   const { addToast } = useApp();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,11 @@ export default function AccessRequests() {
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
+    if (isDemo) {
+      setRequests(demoList<Request>("access_requests", { orderBy: "requested_at", ascending: false }));
+      setLoading(false);
+      return;
+    }
     try {
       const rows = await restGet<Request[]>("access_requests?select=*&order=requested_at.desc");
       setRequests(rows);
@@ -32,13 +38,33 @@ export default function AccessRequests() {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, isDemo]);
 
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests]);
 
   const callEdgeFunction = async (request_id: string, action: Action, denial_reason?: string) => {
+    if (isDemo) {
+      const nowIso = new Date().toISOString();
+      if (action === "approve") {
+        demoUpdate<Request>("access_requests", request_id, { status: "approved", decided_at: nowIso, invited_at: nowIso });
+      } else if (action === "deny") {
+        demoUpdate<Request>("access_requests", request_id, {
+          status: "denied",
+          decided_at: nowIso,
+          denial_reason: denial_reason || null,
+        });
+      } else {
+        // revoke — account would be deleted server-side; reflect as denied here.
+        demoUpdate<Request>("access_requests", request_id, {
+          status: "denied",
+          decided_at: nowIso,
+          denial_reason: "Access revoked.",
+        });
+      }
+      return true;
+    }
     if (!session) {
       addToast({ title: "Not signed in", status: "alert" });
       return false;

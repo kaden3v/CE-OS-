@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { Navigate, useLocation } from "react-router";
-import { Sprout, Mail, Lock, ArrowRight, X, Send, ArrowLeft } from "lucide-react";
+import { Sprout, Mail, Lock, ArrowRight, X, Send, ArrowLeft, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 type View = "signin" | "request" | "forgot";
 
 export default function SignIn() {
-  const { user, isConfigured, signInWithPassword, requestAccess, resetPasswordForEmail } = useAuth();
+  const { user, isConfigured, signInWithPassword, requestAccess, resetPasswordForEmail, enterDemo } = useAuth();
   const location = useLocation() as { state?: { from?: Location } };
 
   const [view, setView] = useState<View>("signin");
@@ -82,8 +82,10 @@ export default function SignIn() {
         </div>
 
         {!isConfigured && (
-          <div className="mb-4 p-2 rounded-md bg-status-warn/10 border border-status-warn/30 text-xs text-status-warn">
-            Supabase not configured. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in your environment.
+          <div className="mb-4 p-3 rounded-md bg-accent-brand-dim border border-accent-brand/20 text-xs text-text-secondary">
+            <span className="text-text-primary font-medium">No backend connected.</span> Sign-in needs Supabase
+            (<code>VITE_SUPABASE_URL</code> + <code>VITE_SUPABASE_ANON_KEY</code>). To explore everything right now,
+            use <span className="text-accent-brand font-medium">Try the demo</span> below — it runs entirely in your browser.
           </div>
         )}
 
@@ -159,6 +161,21 @@ export default function SignIn() {
               >
                 Request access
               </Button>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-border-subtle">
+              <p className="text-xs text-text-secondary mb-2">Just looking around?</p>
+              <Button
+                type="button"
+                variant="brand"
+                className="w-full"
+                onClick={enterDemo}
+              >
+                <PlayCircle className="w-4 h-4" /> Try the demo
+              </Button>
+              <p className="text-[11px] text-text-tertiary mt-2">
+                Signs you in as a sample admin with seeded data. Nothing leaves your browser; sign out clears it.
+              </p>
             </div>
           </Card>
         )}
