@@ -125,6 +125,13 @@ CE-OS supports a **shared organization** workspace: members of one org see the s
 
 > Migrations: [`supabase/migrations/`](./supabase/migrations/). Historical schema is tracked in Supabase's own migration history; new changes are added here as files. Apply via the Supabase SQL editor or `apply_migration`, then regenerate `database.types.ts`.
 
+### Collaboration layer (Phase 2)
+
+- **Task assignment** — tasks have an `assigned_to` teammate; the Tasks panel has an assignee picker and an All/Mine filter.
+- **Realtime** — `useEntity`/`useOrders` subscribe to `postgres_changes` and live-refresh when a teammate changes shared data (events are only a signal; the refetch is org-scoped and RLS-filtered). Tables are added to the `supabase_realtime` publication by the Phase 2 migration.
+- **Activity log** — `activity_log` is an insert-only, org-scoped audit trail written fire-and-forget on every create/update/delete; the **Activity** page (`/activity`) shows a live feed.
+- **CSV import** — `/import` (owners/managers) bulk-loads cultivars, customers, or inventory with template download, preview, and chunked inserts.
+
 ### CI
 
 [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) runs typecheck (`tsc --noEmit`) + `vite build` on every push to `main` and every PR.

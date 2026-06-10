@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { logDbError } from "@/lib/dbErrors";
+import { logActivity } from "@/lib/activity";
 import type { Tables } from "@/lib/database.types";
 
 export type OrderRow = Tables<"orders">;
@@ -44,6 +45,26 @@ export function useOrders() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Live refresh when a teammate touches orders or line items. Events are just
+  // a signal; the refetch itself is org-scoped + RLS-filtered.
+  useEffect(() => {
+    if (!ready) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refetchSoon = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void fetchAll(), 250);
+    };
+    const channel = supabase!
+      .channel(`rt-orders-${crypto.randomUUID()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, refetchSoon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, refetchSoon)
+      .subscribe();
+    return () => {
+      clearTimeout(timer);
+      void supabase!.removeChannel(channel);
+    };
+  }, [ready, fetchAll]);
 
   const createOrder = async (input: {
     customer_id: string | null;
@@ -95,6 +116,14 @@ export function useOrders() {
       }
     }
     await fetchAll();
+    logActivity({
+      orgId: activeOrgId!,
+      actorId: user!.id,
+      action: "created",
+      entity: "orders",
+      entityId: orderRows.id,
+      summary: `${input.channel} order · ${input.items.length} item${input.items.length === 1 ? "" : "s"}`,
+    });
     return { ok: true, orderId: orderRows.id };
   };
 
@@ -110,6 +139,14 @@ export function useOrders() {
       return { ok: false, code: error.code };
     }
     setData((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    logActivity({
+      orgId: activeOrgId!,
+      actorId: user!.id,
+      action: "updated",
+      entity: "orders",
+      entityId: id,
+      summary: `status → ${status}`,
+    });
     return { ok: true };
   };
 
@@ -121,6 +158,13 @@ export function useOrders() {
       return { ok: false, code: error.code };
     }
     setData((prev) => prev.filter((o) => o.id !== id));
+    logActivity({
+      orgId: activeOrgId!,
+      actorId: user!.id,
+      action: "deleted",
+      entity: "orders",
+      entityId: id,
+    });
     return { ok: true };
   };
 

@@ -16,6 +16,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+          org_id: string | null
+          summary: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+          org_id?: string | null
+          summary?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          org_id?: string | null
+          summary?: string | null
+        }
+        Relationships: []
+      }
       organizations: {
         Row: {
           created_at: string
@@ -980,6 +1013,7 @@ export type Database = {
       }
       tasks: {
         Row: {
+          assigned_to: string | null
           completed: boolean
           due: string | null
           id: string
@@ -990,6 +1024,7 @@ export type Database = {
           org_id: string | null
         }
         Insert: {
+          assigned_to?: string | null
           completed?: boolean
           due?: string | null
           id?: string
@@ -1000,6 +1035,7 @@ export type Database = {
           org_id: string | null
         }
         Update: {
+          assigned_to?: string | null
           completed?: boolean
           due?: string | null
           id?: string

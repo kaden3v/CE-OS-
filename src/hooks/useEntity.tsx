@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/database.types";
 import { useAuth } from "@/contexts/AuthContext";
 import { logDbError } from "@/lib/dbErrors";
+import { logActivity, rowSummary } from "@/lib/activity";
 
 type WithId = { id: string | number };
 type TableName = keyof Database["public"]["Tables"];
@@ -77,6 +78,27 @@ export function useEntity<T extends WithId, Row = T>(
     fetchAll();
   }, [fetchAll]);
 
+  // Live refresh: when a teammate changes this table, refetch. Events are only
+  // a "something changed" signal (refetch is org-scoped + RLS-filtered), and a
+  // short debounce coalesces bursts (e.g. an order + its items). No org filter
+  // on the subscription: DELETE payloads only carry the primary key, so an
+  // org_id filter would silently drop them.
+  useEffect(() => {
+    if (!ready) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const channel = supabase!
+      .channel(`rt-${table}-${crypto.randomUUID()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table }, () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => void fetchAll(), 250);
+      })
+      .subscribe();
+    return () => {
+      clearTimeout(timer);
+      void supabase!.removeChannel(channel);
+    };
+  }, [ready, table, fetchAll]);
+
   const seedInitial = useCallback(
     async (items: T[]) => {
       if (!ready) return;
@@ -112,6 +134,16 @@ export function useEntity<T extends WithId, Row = T>(
     }
     const final = options?.fromRow ? options.fromRow(inserted as Row) : (inserted as unknown as T);
     setData((prev) => [final, ...prev]);
+    if (table !== "activity_log") {
+      logActivity({
+        orgId: activeOrgId!,
+        actorId: user!.id,
+        action: "created",
+        entity: table,
+        entityId: String(final.id),
+        summary: rowSummary(inserted as Record<string, unknown>),
+      });
+    }
     return { ok: true, row: final };
   };
 
@@ -127,6 +159,17 @@ export function useEntity<T extends WithId, Row = T>(
       return { ok: false, code: error.code };
     }
     setData((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    if (table !== "activity_log") {
+      const current = data.find((r) => r.id === id);
+      logActivity({
+        orgId: activeOrgId!,
+        actorId: user!.id,
+        action: "updated",
+        entity: table,
+        entityId: String(id),
+        summary: current ? rowSummary(current as Record<string, unknown>) : null,
+      });
+    }
     return { ok: true };
   };
 
@@ -137,7 +180,18 @@ export function useEntity<T extends WithId, Row = T>(
       logDbError(`delete ${table}`, error);
       return { ok: false, code: error.code };
     }
+    const removed = data.find((r) => r.id === id);
     setData((prev) => prev.filter((r) => r.id !== id));
+    if (table !== "activity_log") {
+      logActivity({
+        orgId: activeOrgId!,
+        actorId: user!.id,
+        action: "deleted",
+        entity: table,
+        entityId: String(id),
+        summary: removed ? rowSummary(removed as Record<string, unknown>) : null,
+      });
+    }
     return { ok: true };
   };
 

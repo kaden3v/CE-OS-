@@ -17,6 +17,8 @@ import Vendors from "./pages/Vendors";
 import TaxReport from "./pages/TaxReport";
 import Licenses from "./pages/Licenses";
 import Team from "./pages/Team";
+import Activity from "./pages/Activity";
+import Import from "./pages/Import";
 import Settings from "./pages/Settings";
 import SignIn from "./pages/SignIn";
 import ResetPassword from "./pages/ResetPassword";
@@ -58,6 +60,8 @@ export default function App() {
                 <Route path="/finances/tax-report" element={<RequireManager><TaxReport /></RequireManager>} />
                 <Route path="/licenses" element={<RequireManager><Licenses /></RequireManager>} />
                 <Route path="/team" element={<Team />} />
+                <Route path="/activity" element={<Activity />} />
+                <Route path="/import" element={<RequireManager><Import /></RequireManager>} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/admin/access-requests" element={<RequireAdmin><AccessRequests /></RequireAdmin>} />
               </Route>

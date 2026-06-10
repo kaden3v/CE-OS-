@@ -56,9 +56,9 @@ interface AppContextType {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'time'>) => void;
-  // Tasks (persisted to Supabase when authed; localStorage in demo mode)
+  // Tasks (persisted to Supabase, shared across the org; assignable to teammates)
   tasks: Task[];
-  addTask: (task: { title: string; due?: string | null; type?: string | null }) => Promise<void>;
+  addTask: (task: { title: string; due?: string | null; type?: string | null; assigned_to?: string | null }) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   // Command Palette
@@ -91,6 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       due: t.due,
       type: t.type,
       completed: t.completed,
+      assigned_to: t.assigned_to,
     }),
   });
   const tasks = taskEntity.data;
@@ -138,6 +139,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       title: task.title,
       due: task.due ?? null,
       type: task.type ?? null,
+      assigned_to: task.assigned_to ?? null,
       completed: false,
       updated_at: new Date().toISOString(),
       user_id: '',

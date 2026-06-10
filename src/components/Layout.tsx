@@ -15,6 +15,7 @@ import {
   FileBadge,
   ShieldCheck,
   UserCog,
+  UploadCloud,
   History,
   Settings,
   Bell,
@@ -258,6 +259,32 @@ export function Layout() {
             <UserCog className="w-5 h-5 opacity-70" strokeWidth={1.5} />
             Team
           </NavLink>
+          <NavLink
+            to="/activity"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors",
+                isActive ? "bg-bg-active text-text-primary border-l-2 border-accent-brand rounded-l-none" : "text-text-secondary"
+              )
+            }
+          >
+            <History className="w-5 h-5 opacity-70" strokeWidth={1.5} />
+            Activity
+          </NavLink>
+          {canManage && (
+          <NavLink
+            to="/import"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors",
+                isActive ? "bg-bg-active text-text-primary border-l-2 border-accent-brand rounded-l-none" : "text-text-secondary"
+              )
+            }
+          >
+            <UploadCloud className="w-5 h-5 opacity-70" strokeWidth={1.5} />
+            Import
+          </NavLink>
+          )}
           {isAdmin && (
             <NavLink
               to="/admin/access-requests"
