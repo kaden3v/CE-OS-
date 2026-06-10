@@ -12,20 +12,9 @@ import { useOrders } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
 import type { Tables } from "@/lib/database.types";
 
-const REVENUE_DATA = [
-  { name: 'Jan', value: 2400 }, { name: 'Feb', value: 1398 }, { name: 'Mar', value: 4800 },
-  { name: 'Apr', value: 3908 }, { name: 'May', value: 4800 }, { name: 'Jun', value: 3800 },
-  { name: 'Jul', value: 4300 }
-];
-
-const CHANNEL_DATA = [
-  { name: 'Shopify', value: 450 }, { name: 'Etsy', value: 320 }, { name: 'Wholesale', value: 150 }
-];
-
-const CULTIVAR_DATA = [
-  { name: "'Pirouette'", value: 400 }, { name: "'El Lobo'", value: 300 }, { name: 'gigantea', value: 300 }, { name: 'esseriana', value: 200 }
-];
 const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
+const REPORTING_MONTHS = 7;
+const TOP_CULTIVAR_COUNT = 4;
 
 type Inventory = Tables<"inventory">;
 type Shipment = Tables<"shipments">;
@@ -52,6 +41,40 @@ export default function Dashboard() {
 
   const recent = orders.slice(0, 5);
   const watch = shipments.filter((s) => s.status === "pending" || s.status === "ready").slice(0, 3);
+
+  // Reporting aggregates — computed from real orders (cancelled/refunded excluded).
+  const reporting = useMemo(() => {
+    const valid = orders.filter((o) => o.status !== "cancelled" && o.status !== "refunded");
+    const now = new Date();
+    const months: Array<{ name: string; value: number }> = [];
+    for (let i = REPORTING_MONTHS - 1; i >= 0; i--) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const value = valid
+        .filter((o) => {
+          const placed = new Date(o.placed_at);
+          return placed >= start && placed < end;
+        })
+        .reduce((s, o) => s + Number(o.total), 0);
+      months.push({ name: start.toLocaleString(undefined, { month: "short" }), value });
+    }
+
+    const channelTotals = new Map<string, number>();
+    valid.forEach((o) => channelTotals.set(o.channel, (channelTotals.get(o.channel) ?? 0) + Number(o.total)));
+    const channels = [...channelTotals.entries()]
+      .map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }))
+      .sort((a, b) => b.value - a.value);
+
+    const unitTotals = new Map<string, number>();
+    valid.forEach((o) => o.items.forEach((it) => unitTotals.set(it.name_snapshot, (unitTotals.get(it.name_snapshot) ?? 0) + it.qty)));
+    const topCultivars = [...unitTotals.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, TOP_CULTIVAR_COUNT);
+    const totalUnits = [...unitTotals.values()].reduce((s, v) => s + v, 0);
+
+    return { months, channels, topCultivars, totalUnits, hasData: valid.length > 0 };
+  }, [orders]);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 flex flex-col h-full">
@@ -199,15 +222,21 @@ export default function Dashboard() {
         </>
       )}
 
-      {viewMode === "reporting" && (
+      {viewMode === "reporting" && !reporting.hasData && (
+        <Card className="p-12 text-center text-sm text-text-tertiary">
+          No order data yet — reporting charts populate as orders come in.
+        </Card>
+      )}
+
+      {viewMode === "reporting" && reporting.hasData && (
         <div className="flex-1 flex flex-col gap-8 pb-12 overflow-y-auto pr-2">
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
               <Card className="p-6 h-[340px] flex flex-col">
-                 <h3 className="text-sm font-medium text-text-secondary mb-6">Revenue Growth (YTD)</h3>
+                 <h3 className="text-sm font-medium text-text-secondary mb-6">Revenue (last {REPORTING_MONTHS} months)</h3>
                  <div className="flex-1 min-h-0">
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={REVENUE_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                        <AreaChart data={reporting.months} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                           <defs>
                             <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="var(--color-accent-brand)" stopOpacity={0.3}/>
@@ -227,11 +256,11 @@ export default function Dashboard() {
                  <div className="flex-1 min-h-0">
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={CHANNEL_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} layout="vertical">
+                        <BarChart data={reporting.channels} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} layout="vertical">
                           <XAxis type="number" hide />
                           <YAxis dataKey="name" type="category" stroke="var(--color-text-secondary)" fontSize={12} tickLine={false} axisLine={false} width={80} />
                           <Bar dataKey="value" fill="var(--color-bg-active)" radius={[0, 4, 4, 0]}>
-                             {CHANNEL_DATA.map((entry, index) => (
+                             {reporting.channels.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={index === 0 ? "var(--color-accent-brand)" : "var(--color-border-strong)"} />
                              ))}
                           </Bar>
@@ -244,13 +273,13 @@ export default function Dashboard() {
 
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Card className="p-6 h-[320px] lg:col-span-1 flex flex-col">
-                 <h3 className="text-sm font-medium text-text-secondary mb-2">Top Cultivars (Units)</h3>
+                 <h3 className="text-sm font-medium text-text-secondary mb-2">Top Cultivars (Units Sold)</h3>
                  <div className="flex-1 flex items-center justify-center min-h-0 relative">
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={CULTIVAR_DATA}
+                            data={reporting.topCultivars}
                             cx="50%"
                             cy="50%"
                             innerRadius={60}
@@ -259,7 +288,7 @@ export default function Dashboard() {
                             dataKey="value"
                             stroke="none"
                           >
-                            {CULTIVAR_DATA.map((entry, index) => (
+                            {reporting.topCultivars.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
@@ -269,37 +298,30 @@ export default function Dashboard() {
                     {/* Legend */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                        <div className="text-xs text-text-tertiary uppercase tracking-widest">Total</div>
-                       <div className="text-xl font-medium">1.2K</div>
+                       <div className="text-xl font-medium">
+                         {reporting.totalUnits >= 1000 ? `${(reporting.totalUnits / 1000).toFixed(1)}K` : reporting.totalUnits}
+                       </div>
                     </div>
                  </div>
               </Card>
 
               <Card className="p-6 lg:col-span-2 flex flex-col">
-                 <h3 className="text-sm font-medium text-text-secondary mb-6">Customer Cohort Retention</h3>
-                 <div className="flex-1 overflow-x-auto">
-                    <div className="min-w-[600px]">
-                       <div className="flex text-xs text-text-tertiary mb-2 font-mono">
-                          <div className="w-[100px] shrink-0"></div>
-                          {Array.from({length: 12}).map((_, i) => <div key={i} className="flex-1 text-center">Mo {i+1}</div>)}
-                       </div>
-                       <div className="space-y-1">
-                          {["Jan", "Feb", "Mar", "Apr", "May"].map((month, mIdx) => (
-                             <div key={month} className="flex text-xs font-mono items-center">
-                                <div className="w-[100px] shrink-0 font-medium text-text-secondary">{month} <span className="opacity-50">({120 - mIdx*10})</span></div>
-                                {Array.from({length: 12}).map((_, i) => {
-                                   if (i > 11 - mIdx) return <div key={i} className="flex-1 m-2 h-6 rounded bg-transparent"></div>;
-                                   const val = Math.max(5, 100 - (i * 15) - (mIdx * 5) + Math.random() * 10);
-                                   return (
-                                     <div key={i} className="flex-1 m-2 h-6 rounded border border-border-subtle relative group flex items-center justify-center cursor-help">
-                                        <div className="absolute inset-0 bg-accent-brand" style={{ opacity: val / 100 }}></div>
-                                        <div className="relative z-10 opacity-0 group-hover:opacity-100 font-medium">{val.toFixed(0)}%</div>
-                                     </div>
-                                   )
-                                })}
-                             </div>
-                          ))}
-                       </div>
-                    </div>
+                 <h3 className="text-sm font-medium text-text-secondary mb-6">Revenue by Channel</h3>
+                 <div className="flex-1 space-y-3 overflow-y-auto">
+                    {reporting.channels.map((c) => {
+                      const max = reporting.channels[0]?.value || 1;
+                      return (
+                        <div key={c.name} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-text-primary">{c.name}</span>
+                            <span className="text-text-secondary tabular-nums">${c.value.toFixed(2)}</span>
+                          </div>
+                          <div className="h-2 rounded bg-bg-active overflow-hidden">
+                            <div className="h-full bg-accent-brand" style={{ width: `${(c.value / max) * 100}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                  </div>
               </Card>
            </div>

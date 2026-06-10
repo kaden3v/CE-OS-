@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, FormEvent } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Store, ShoppingBag, X, Mail, Plus, Users } from "lucide-react";
+import { Store, ShoppingBag, X, Mail, Plus, Users, Pencil, Trash2 } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -20,7 +20,7 @@ type Subscription = Tables<"subscriptions">;
 const SEED: Customer[] = [];
 
 export default function Customers() {
-  const { data: customers, add, isLoading } = useEntity<Customer>("customers", SEED, {
+  const { data: customers, add, update, remove, isLoading } = useEntity<Customer>("customers", SEED, {
     toRow: (c) => ({
       name: c.name,
       email: c.email,
@@ -38,6 +38,53 @@ export default function Customers() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", etsy_handle: "", phone: "" });
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", email: "", etsy_handle: "", phone: "", notes: "" });
+
+  const openEdit = () => {
+    if (!selected) return;
+    setEditForm({
+      name: selected.name,
+      email: selected.email ?? "",
+      etsy_handle: selected.etsy_handle ?? "",
+      phone: selected.phone ?? "",
+      notes: selected.notes ?? "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selected) return;
+    const name = editForm.name.trim();
+    if (!name) return;
+    const result = await update(selected.id, {
+      name,
+      email: editForm.email.trim() || null,
+      etsy_handle: editForm.etsy_handle.trim() || null,
+      phone: editForm.phone.trim() || null,
+      notes: editForm.notes.trim() || null,
+    } as Partial<Customer>);
+    if (!result.ok) {
+      addToast({ title: "Couldn't save changes", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setIsEditOpen(false);
+    addToast({ title: "Customer updated", description: name, status: "ok" });
+  };
+
+  const handleDelete = async () => {
+    if (!selected) return;
+    if (!confirm(`Delete ${selected.name}? Their orders are kept but unlinked.`)) return;
+    const result = await remove(selected.id);
+    if (!result.ok) {
+      addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setSelectedId(null);
+    addToast({ title: "Customer deleted", status: "info" });
+  };
 
   // Per-customer subscription map (only loaded for the selected one)
   const [activeSub, setActiveSub] = useState<Subscription | null>(null);
@@ -218,12 +265,68 @@ export default function Customers() {
               )}
             </div>
 
+            <div className="p-4 md:p-6 border-t border-border-subtle bg-bg-base/50 flex gap-2 pb-safe">
+              <Button variant="outline" className="flex-1" onClick={openEdit}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+              <Button variant="outline" className="flex-1 hover:text-status-alert" onClick={handleDelete}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+            </div>
             <div className="md:hidden p-4 border-t border-border-subtle pb-safe">
               <Button variant="outline" className="w-full" onClick={() => setSelectedId(null)}>Close</Button>
             </div>
           </>
         )}
       </div>
+
+      {isEditOpen && selected && (
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
+              <h2 className="text-lg font-semibold">Edit Customer</h2>
+              <button onClick={() => setIsEditOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
+                <Input required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Email</label>
+                <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Etsy handle</label>
+                  <Input value={editForm.etsy_handle} onChange={(e) => setEditForm({ ...editForm, etsy_handle: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Phone</label>
+                  <Input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Notes</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={3}
+                  className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2 py-2 text-sm focus:outline-none focus:border-accent-brand resize-y"
+                />
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
+                <Button variant="ghost" type="button" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
 
       {isAddOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

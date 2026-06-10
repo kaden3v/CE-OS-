@@ -22,7 +22,6 @@ import {
   Search,
   ChevronRight,
   ChevronDown,
-  Clock,
   Menu,
   List,
   CheckSquare,
@@ -302,16 +301,6 @@ export function Layout() {
         </nav>
         
         <div className="p-2 border-t border-border-subtle space-y-1">
-          <div className="mb-2 px-2">
-             <div className="text-[10px] font-medium text-text-tertiary uppercase tracking-wider mb-2 flex items-center gap-2">
-               <Clock className="w-3 h-3" /> Recent
-             </div>
-             <div className="space-y-1">
-                <NavLink to="/orders" className="text-xs text-text-secondary hover:text-text-primary block truncate py-2">Order #1284</NavLink>
-                <NavLink to="/cultivars" className="text-xs text-text-secondary hover:text-text-primary block truncate py-2">Pinguicula 'Pirouette'</NavLink>
-                <NavLink to="/customers" className="text-xs text-text-secondary hover:text-text-primary block truncate py-2">Marcus Aldana</NavLink>
-             </div>
-          </div>
           <NavLink
             to="/settings"
             className={({ isActive }) =>
@@ -383,9 +372,13 @@ export function Layout() {
               )}
             </button>
             <NotificationCenter open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
-            <div className="hidden md:flex w-8 h-8 rounded bg-bg-active items-center justify-center border border-border-subtle font-medium text-sm text-text-primary select-none cursor-pointer hover:bg-bg-hover transition-colors">
-              KC
-            </div>
+            <NavLink
+              to="/settings"
+              title={user?.email ?? undefined}
+              className="hidden md:flex w-8 h-8 rounded bg-bg-active items-center justify-center border border-border-subtle font-medium text-sm text-text-primary select-none cursor-pointer hover:bg-bg-hover transition-colors uppercase"
+            >
+              {(user?.email ?? "?").slice(0, 2)}
+            </NavLink>
           </div>
         </header>
 

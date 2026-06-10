@@ -15,22 +15,22 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
 
 ## P0 — Fix trust and broken UI (the app must never show fake numbers as real)
 
-- [ ] **Replace or clearly label the fake Reporting tab** — `Dashboard.tsx:15-28` hardcodes
+- [x] **Replace or clearly label the fake Reporting tab** — `Dashboard.tsx:15-28` hardcodes
       REVENUE_DATA / CHANNEL_DATA / CULTIVAR_DATA; `Dashboard.tsx:286-300` hardcodes the entire
       customer-cohort retention heatmap. The stat tiles above them compute *real* MTD revenue from
       orders — so the owner sees two conflicting revenue numbers. Compute from `orders` or remove.
-- [ ] **Remove hardcoded "Recent" sidebar** (`Layout.tsx` — Order #1284, Pinguicula 'Pirouette',
+- [x] **Remove hardcoded "Recent" sidebar** (`Layout.tsx` — Order #1284, Pinguicula 'Pirouette',
       Marcus Aldana never change) — replace with last-3 real records or drop.
-- [ ] **Hardcoded "KC" avatar** in the topbar → derive from the signed-in profile's display name.
-- [ ] **Wire the Inventory search box** (`Inventory.tsx:192`) — it renders but filters nothing.
-- [ ] **Customers: add edit + delete** — today a misspelled customer name is permanent.
-- [ ] **Orders: allow editing line items** after creation (today only status can change).
-- [ ] **Propagation: allow editing a batch** (count, cultivar, est-ready) after creation.
-- [ ] **QR Generator: Print/Download buttons are toast-only theater** — make them generate a real
+- [x] **Hardcoded "KC" avatar** in the topbar → derive from the signed-in profile's display name.
+- [x] **Wire the Inventory search box** (`Inventory.tsx:192`) — it renders but filters nothing.
+- [x] **Customers: add edit + delete** — today a misspelled customer name is permanent.
+- [x] **Orders: allow editing line items** after creation (today only status can change).
+- [x] **Propagation: allow editing a batch** (count, cultivar, est-ready) after creation.
+- [x] **QR Generator: Print/Download buttons are toast-only theater** — make them generate a real
       printable sheet (or enqueue into print_jobs for real).
-- [ ] **Command palette: label it "Navigation" or make ⌘K search real data**
+- [x] **Command palette: label it "Navigation" or make ⌘K search real data**
       (orders/customers/cultivars) — currently nav-only, which violates the search expectation.
-- [ ] **Shipping weather panel** says data is "illustrative" in small print — hide the panel until
+- [x] **Shipping weather panel** says data is "illustrative" in small print — hide the panel until
       a real weather API is wired (P3) so no one makes a ship/hold decision on fake conditions.
 
 ## P1 — Connect the workflows (turn silos into a pipeline)

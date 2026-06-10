@@ -150,6 +150,81 @@ export function useOrders() {
     return { ok: true };
   };
 
+  /** Persist the order's subtotal/total after its items changed. */
+  const recalcTotals = async (orderId: string, items: Array<{ qty: number; price: number }>) => {
+    const order = data.find((o) => o.id === orderId);
+    const subtotal = items.reduce((s, it) => s + Number(it.price) * it.qty, 0);
+    const total = subtotal + Number(order?.shipping ?? 0) + Number(order?.tax ?? 0);
+    const { error } = await supabase!
+      .from("orders")
+      .update({ subtotal, total })
+      .eq("id", orderId)
+      .eq("org_id", activeOrgId!);
+    if (error) logDbError("recalc order totals", error);
+  };
+
+  const updateItem = async (
+    orderId: string,
+    itemId: string,
+    patch: { qty?: number; price?: number },
+  ): Promise<{ ok: boolean; code?: string }> => {
+    if (!ready) return { ok: false, code: "NOT_READY" };
+    const { error } = await supabase!
+      .from("order_items")
+      .update(patch)
+      .eq("id", itemId)
+      .eq("org_id", activeOrgId!);
+    if (error) {
+      logDbError("update order item", error);
+      return { ok: false, code: error.code };
+    }
+    const order = data.find((o) => o.id === orderId);
+    if (order) {
+      await recalcTotals(orderId, order.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it)));
+    }
+    await fetchAll();
+    logActivity({
+      orgId: activeOrgId!,
+      actorId: user!.id,
+      action: "updated",
+      entity: "orders",
+      entityId: orderId,
+      summary: "line item changed",
+    });
+    return { ok: true };
+  };
+
+  const removeItem = async (orderId: string, itemId: string): Promise<{ ok: boolean; code?: string }> => {
+    if (!ready) return { ok: false, code: "NOT_READY" };
+    const order = data.find((o) => o.id === orderId);
+    if (order && order.items.length <= 1) {
+      // An order with zero items is meaningless — delete the order instead.
+      return { ok: false, code: "LAST_ITEM" };
+    }
+    const { error } = await supabase!
+      .from("order_items")
+      .delete()
+      .eq("id", itemId)
+      .eq("org_id", activeOrgId!);
+    if (error) {
+      logDbError("remove order item", error);
+      return { ok: false, code: error.code };
+    }
+    if (order) {
+      await recalcTotals(orderId, order.items.filter((it) => it.id !== itemId));
+    }
+    await fetchAll();
+    logActivity({
+      orgId: activeOrgId!,
+      actorId: user!.id,
+      action: "updated",
+      entity: "orders",
+      entityId: orderId,
+      summary: "line item removed",
+    });
+    return { ok: true };
+  };
+
   const deleteOrder = async (id: string): Promise<{ ok: boolean; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
     const { error } = await supabase!.from("orders").delete().eq("id", id).eq("org_id", activeOrgId!);
@@ -168,5 +243,5 @@ export function useOrders() {
     return { ok: true };
   };
 
-  return { data, isLoading, createOrder, updateStatus, deleteOrder, refresh: fetchAll };
+  return { data, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder, refresh: fetchAll };
 }

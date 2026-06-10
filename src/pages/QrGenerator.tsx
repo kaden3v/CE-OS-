@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import QRCode from "qrcode";
 import { ArrowLeft, Download, Printer, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -35,6 +36,45 @@ export default function QrGenerator() {
   const slug = (cultivar?.name ?? "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const code = `${slug}-${size}-${date}`;
   const url = `https://canyonexotics.com/scan/${code}`;
+
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(url, { width: 480, margin: 1 })
+      .then((dataUrl) => !cancelled && setQrDataUrl(dataUrl))
+      .catch(() => !cancelled && setQrDataUrl(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  const handleDownload = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement("a");
+    a.href = qrDataUrl;
+    a.download = `${code}.png`;
+    a.click();
+    addToast({ title: "Label downloaded", description: `${code}.png`, status: "ok" });
+  };
+
+  const handlePrint = () => {
+    if (!qrDataUrl) return;
+    const win = window.open("", "_blank", "width=480,height=640");
+    if (!win) {
+      addToast({ title: "Pop-up blocked", description: "Allow pop-ups to print labels.", status: "warn" });
+      return;
+    }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    win.document.write(`<!doctype html><html><head><title>${esc(code)}</title>
+      <style>body{font-family:sans-serif;text-align:center;padding:24px}img{width:240px;height:240px}p{font-size:12px;word-break:break-all}</style>
+      </head><body>
+      <img src="${qrDataUrl}" alt="QR code" />
+      <h3>${esc(cultivar?.name ?? "")}</h3>
+      <p>${esc(code)}</p>
+      <script>window.onload = () => { window.print(); window.close(); }<\/script>
+      </body></html>`);
+    win.document.close();
+  };
 
   const generate = async () => {
     if (!cultivar) return;
@@ -114,19 +154,12 @@ export default function QrGenerator() {
         </div>
 
         <Card className="p-8 flex flex-col items-center justify-center min-h-[400px]">
-          <div className="w-[240px] h-[240px] bg-bg-active border border-border-subtle rounded-xl flex items-center justify-center p-4 mb-8">
-            <div className="w-full h-full border-4 border-text-primary rounded-sm p-2 flex flex-col justify-between opacity-80">
-              <div className="flex justify-between">
-                <div className="w-12 h-12 bg-text-primary"></div>
-                <div className="w-12 h-12 bg-text-primary"></div>
-              </div>
-              <div className="flex justify-center flex-1 py-4">
-                <div className="w-3/4 h-full border-8 border-dashed border-text-primary opacity-50"></div>
-              </div>
-              <div className="flex justify-start">
-                <div className="w-12 h-12 bg-text-primary"></div>
-              </div>
-            </div>
+          <div className="w-[240px] h-[240px] bg-white border border-border-subtle rounded-xl flex items-center justify-center p-3 mb-8">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt={`QR code for ${code}`} className="w-full h-full" />
+            ) : (
+              <QrCode className="w-12 h-12 text-text-tertiary" />
+            )}
           </div>
 
           <div className="text-center w-full max-w-sm mb-8">
@@ -137,13 +170,13 @@ export default function QrGenerator() {
           </div>
 
           <div className="flex items-center gap-2 w-full max-w-sm">
-            <Button variant="outline" className="flex-1" onClick={() => addToast({ title: "Print queued", status: "info" })}>
+            <Button variant="outline" className="flex-1" onClick={handlePrint} disabled={!qrDataUrl}>
               <Printer className="w-4 h-4 mr-2" />
               Print
             </Button>
-            <Button variant="outline" className="flex-1" onClick={() => addToast({ title: "Download started", status: "info" })}>
+            <Button variant="outline" className="flex-1" onClick={handleDownload} disabled={!qrDataUrl}>
               <Download className="w-4 h-4 mr-2" />
-              SVG
+              PNG
             </Button>
           </div>
         </Card>

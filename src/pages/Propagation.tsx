@@ -47,6 +47,43 @@ export default function Propagation() {
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ cultivar: "", count: 0, stage: "division" });
 
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ cultivar: "", count: 0, stage: "division", started: "", est_ready: "", notes: "" });
+
+  const openEdit = () => {
+    if (!selected) return;
+    setEditForm({
+      cultivar: selected.cultivar,
+      count: selected.count,
+      stage: selected.stage,
+      started: selected.started ?? "",
+      est_ready: selected.est_ready ?? "",
+      notes: selected.notes ?? "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected) return;
+    const cultivar = editForm.cultivar.trim();
+    if (!cultivar) return;
+    const result = await update(selected.id, {
+      cultivar,
+      count: Number(editForm.count) || 1,
+      stage: editForm.stage,
+      started: editForm.started || null,
+      est_ready: editForm.est_ready || null,
+      notes: editForm.notes.trim() || null,
+    } as Partial<Batch>);
+    if (result.ok === false) {
+      addToast({ title: "Couldn't save batch", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    setIsEditOpen(false);
+    addToast({ title: "Batch updated", description: selected.batch_id, status: "ok" });
+  };
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const cultivar = form.cultivar.trim();
@@ -218,11 +255,70 @@ export default function Propagation() {
             </div>
             <div className="p-4 md:p-6 border-t border-border-subtle bg-bg-base/50 flex gap-2 pb-safe">
               <Button variant="outline" className="flex-1" onClick={() => discard(selected)}>Discard</Button>
+              <Button variant="outline" className="flex-1" onClick={openEdit}>Edit</Button>
               <Button className="flex-1" onClick={() => promote(selected)} disabled={selected.stage === STAGE_ORDER[STAGE_ORDER.length - 1]}>Promote</Button>
             </div>
           </>
         )}
       </div>
+
+      {isEditOpen && selected && (
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
+              <h2 className="text-lg font-semibold">Edit Batch {selected.batch_id}</h2>
+              <button onClick={() => setIsEditOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEdit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
+                <Input required value={editForm.cultivar} onChange={(e) => setEditForm({ ...editForm, cultivar: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                  <select
+                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-brand"
+                    value={editForm.stage}
+                    onChange={(e) => setEditForm({ ...editForm, stage: e.target.value })}
+                  >
+                    {STAGES.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                  <Input type="number" min="1" required value={editForm.count} onChange={(e) => setEditForm({ ...editForm, count: parseInt(e.target.value) || 0 })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Started</label>
+                  <Input type="date" value={editForm.started} onChange={(e) => setEditForm({ ...editForm, started: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Est. ready</label>
+                  <Input type="date" value={editForm.est_ready} onChange={(e) => setEditForm({ ...editForm, est_ready: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  rows={2}
+                  className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-brand resize-y"
+                />
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
+                <Button variant="ghost" type="button" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

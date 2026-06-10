@@ -71,15 +71,24 @@ export default function Inventory() {
     toRow: (c) => ({ name: c.name }),
   });
   const [lowStockFilter, setLowStockFilter] = useState(false);
+  const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState("Stock");
-  
+
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
-  
+
   const filteredData = useMemo(() => {
-    if (!lowStockFilter) return data;
-    return data.filter(item => (item.stock.juv + item.stock.mat + item.stock.flower) < 10);
-  }, [data, lowStockFilter]);
+    const q = search.trim().toLowerCase();
+    return data.filter((item) => {
+      const matchesSearch =
+        !q ||
+        item.name.toLowerCase().includes(q) ||
+        item.common.toLowerCase().includes(q) ||
+        item.genus.toLowerCase().includes(q);
+      const matchesLowStock = !lowStockFilter || item.stock.juv + item.stock.mat + item.stock.flower < 10;
+      return matchesSearch && matchesLowStock;
+    });
+  }, [data, search, lowStockFilter]);
 
   const selectedItem = useMemo(() => inventory.find(i => i.id === selectedId), [inventory, selectedId]);
 
@@ -189,7 +198,7 @@ export default function Inventory() {
             <Link to="/inventory/qr-codes"><Button variant="outline"><QrCode className="w-4 h-4 mr-2" /> QR Codes</Button></Link>
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-              <Input placeholder="Search inventory..." className="pl-8 w-full" />
+              <Input placeholder="Search inventory..." className="pl-8 w-full" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Button 
               variant={lowStockFilter ? "brand" : "outline"} 
@@ -225,7 +234,7 @@ export default function Inventory() {
           ) : isEmpty ? (
             <EmptyState title="Inventory is empty" description="Add a plant to begin." action={<Button variant="outline" onClick={() => setIsAddModalOpen(true)}>Add Plant</Button>} />
           ) : filteredData.length === 0 ? (
-            <ZeroResultState onClearOption={() => setLowStockFilter(false)} />
+            <ZeroResultState onClearOption={() => { setLowStockFilter(false); setSearch(""); }} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-24 md:pb-0">
               {filteredData.map((item) => {

@@ -1,12 +1,10 @@
 import { useMemo, useState, FormEvent } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
-import { ThermometerSun, Plus, X, Truck } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Plus, X, Truck } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
@@ -19,16 +17,7 @@ type Shipment = Tables<"shipments">;
 const STATUSES = ["pending", "ready", "held", "shipped", "delivered", "exception"] as const;
 type Status = (typeof STATUSES)[number];
 
-const REGIONS = [
-  { name: "Southwest", status: "warn" as const, msg: "Heat advisory in AZ and NV. Hold fragile shipments.", temp: "90–105°F" },
-  { name: "West Coast", status: "ok" as const, msg: "Clear for shipping.", temp: "60–75°F" },
-  { name: "Central", status: "ok" as const, msg: "Clear for shipping.", temp: "70–85°F" },
-  { name: "Northeast", status: "ok" as const, msg: "Clear for shipping.", temp: "65–80°F" },
-  { name: "Southeast", status: "warn" as const, msg: "High humidity and storms in FL.", temp: "85–95°F" },
-];
-
 export default function Shipping() {
-  const [activeTab, setActiveTab] = useState<"shipments" | "windows">("shipments");
   const { data: shipments, add, update, isLoading } = useEntity<Shipment>("shipments", [], {
     toRow: (s) => ({
       order_id: s.order_id,
@@ -147,7 +136,7 @@ export default function Shipping() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Shipping</h1>
-          <p className="text-sm text-text-secondary">Track outbound shipments and weather windows.</p>
+          <p className="text-sm text-text-secondary">Track outbound shipments and weather holds.</p>
         </div>
         <Button variant="brand" onClick={() => setIsOpen(true)} disabled={orders.length === 0}>
           <Plus className="w-4 h-4 mr-2" />
@@ -155,52 +144,20 @@ export default function Shipping() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-2 mb-6 border-b border-border-subtle pb-px">
-        <button onClick={() => setActiveTab("shipments")} className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-[1px]", activeTab === "shipments" ? "border-text-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary")}>
-          Shipments
-        </button>
-        <button onClick={() => setActiveTab("windows")} className={cn("px-4 py-2 text-sm font-medium border-b-2 -mb-[1px]", activeTab === "windows" ? "border-text-primary text-text-primary" : "border-transparent text-text-secondary hover:text-text-primary")}>
-          Regional Windows
-        </button>
-      </div>
-
-      {activeTab === "shipments" && (
-        <Card className="flex-1 overflow-auto flex flex-col">
-          {isLoading ? (
-            <LoadingTable cols={7} rows={8} />
-          ) : isEmpty ? (
-            <EmptyState
-              icon={Truck}
-              title="No shipments yet"
-              description={orders.length === 0 ? "Create an order first." : "Create a shipment from an order to start tracking."}
-              action={<Button variant="outline" onClick={() => setIsOpen(true)} disabled={orders.length === 0}>New Shipment</Button>}
-            />
-          ) : (
-            <DataTable columns={columns} data={shipments} />
-          )}
-        </Card>
-      )}
-
-      {activeTab === "windows" && (
-        <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {REGIONS.map((r) => (
-            <Card key={r.name} className="p-5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{r.name}</span>
-                <Badge variant={r.status === "warn" ? "default" : "outline"} className={r.status === "warn" ? "text-status-warn border-status-warn/20" : ""}>
-                  {r.status === "warn" ? "Caution" : "OK"}
-                </Badge>
-              </div>
-              <div className="text-sm text-text-secondary">{r.msg}</div>
-              <div className="text-xs text-text-tertiary flex items-center gap-1.5">
-                <ThermometerSun className="w-3.5 h-3.5" />
-                {r.temp}
-              </div>
-            </Card>
-          ))}
-          <p className="md:col-span-2 lg:col-span-3 text-xs text-text-tertiary italic">Weather data is illustrative — wire a real weather API to update automatically.</p>
-        </div>
-      )}
+      <Card className="flex-1 overflow-auto flex flex-col">
+        {isLoading ? (
+          <LoadingTable cols={7} rows={8} />
+        ) : isEmpty ? (
+          <EmptyState
+            icon={Truck}
+            title="No shipments yet"
+            description={orders.length === 0 ? "Create an order first." : "Create a shipment from an order to start tracking."}
+            action={<Button variant="outline" onClick={() => setIsOpen(true)} disabled={orders.length === 0}>New Shipment</Button>}
+          />
+        ) : (
+          <DataTable columns={columns} data={shipments} />
+        )}
+      </Card>
 
       {isOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

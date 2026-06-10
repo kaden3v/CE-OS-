@@ -1,9 +1,15 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Search, PlayCircle, ArrowRight } from "lucide-react";
+import { X, Search, PlayCircle, ArrowRight, Flower2, Users, PackageSearch, ShoppingCart } from "lucide-react";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+
+const SEARCH_DEBOUNCE_MS = 200;
+const SEARCH_MIN_CHARS = 2;
+const SEARCH_LIMIT_PER_TYPE = 5;
 
 type Command = {
   id: string;
@@ -14,9 +20,11 @@ type Command = {
 };
 
 export function CommandPalette() {
-  const { isCommandPaletteOpen, setCommandPaletteOpen, addToast } = useApp();
+  const { isCommandPaletteOpen, setCommandPaletteOpen, setGlobalOrderViewId } = useApp();
+  const { activeOrgId } = useAuth();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [results, setResults] = useState<Command[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -45,6 +53,54 @@ export function CommandPalette() {
     setCommandPaletteOpen(false);
   };
 
+  // Live data search across the org's records (RLS-scoped). The query is
+  // debounced; % and _ are escaped so they can't act as wildcards.
+  useEffect(() => {
+    const q = query.trim();
+    if (!supabase || !activeOrgId || q.length < SEARCH_MIN_CHARS) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const like = `%${q.replace(/[%_\\]/g, "\\$&")}%`;
+      const db = supabase as any;
+      const [cult, cust, inv, ord] = await Promise.all([
+        db.from("cultivars").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("customers").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("inventory").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("orders").select("id, customers!inner(name)").eq("org_id", activeOrgId).ilike("customers.name", like).limit(SEARCH_LIMIT_PER_TYPE),
+      ]);
+      if (cancelled) return;
+      const found: Command[] = [];
+      (cult.data ?? []).forEach((r: { id: string; name: string }) =>
+        found.push({ id: `cult-${r.id}`, group: "Cultivars", label: r.name, icon: <Flower2 className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/cultivars") }));
+      (cust.data ?? []).forEach((r: { id: string; name: string }) =>
+        found.push({ id: `cust-${r.id}`, group: "Customers", label: r.name, icon: <Users className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/customers") }));
+      (inv.data ?? []).forEach((r: { id: string; name: string }) =>
+        found.push({ id: `inv-${r.id}`, group: "Inventory", label: r.name, icon: <PackageSearch className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/inventory") }));
+      (ord.data ?? [])
+        .filter((r: { customers: { name: string } | null }) => r.customers)
+        .forEach((r: { id: string; customers: { name: string } }) =>
+          found.push({
+            id: `ord-${r.id}`,
+            group: "Orders",
+            label: `${r.id.slice(0, 8)} · ${r.customers.name}`,
+            icon: <ShoppingCart className="w-4 h-4 text-text-tertiary" />,
+            onSelect: () => {
+              setGlobalOrderViewId(r.id);
+              handleNavigate("/orders");
+            },
+          }));
+      setResults(found);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, activeOrgId]);
+
   const commands: Command[] = useMemo(() => {
     const list: Command[] = [];
     list.push(
@@ -70,9 +126,10 @@ export function CommandPalette() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter(c => c.label.toLowerCase().includes(q));
-  }, [commands, query]);
+    const navMatches = q ? commands.filter(c => c.label.toLowerCase().includes(q)) : commands;
+    // Data results first — they're what the user is most likely hunting for.
+    return [...results, ...navMatches];
+  }, [commands, results, query]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -139,7 +196,7 @@ export function CommandPalette() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Type a command or search..."
+                placeholder="Search plants, customers, orders, or pages..."
                 className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder:text-text-tertiary text-lg"
               />
               <button
@@ -154,7 +211,7 @@ export function CommandPalette() {
             <div ref={listRef} className="max-h-[360px] overflow-y-auto p-2">
               {filtered.length === 0 && (
                 <div className="px-2 py-2 text-sm text-text-tertiary text-center">
-                  No commands match "{query}".
+                  No matches for "{query}".
                 </div>
               )}
               {Object.entries(groups).map(([group, items]) => (

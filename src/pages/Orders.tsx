@@ -37,7 +37,7 @@ const statusColor = (s: string) => {
 
 export default function Orders() {
   const { globalOrderViewId, setGlobalOrderViewId, addToast } = useApp();
-  const { data: orders, isLoading, createOrder, updateStatus, deleteOrder } = useOrders();
+  const { data: orders, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
   const { data: customers } = useEntity<Customer>("customers", [], { toRow: (c) => ({ name: c.name }) });
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
 
@@ -110,6 +110,28 @@ export default function Orders() {
       return;
     }
     addToast({ title: "Status updated", description: status, status: "ok" });
+  };
+
+  const handleItemPatch = async (orderId: string, itemId: string, patch: { qty?: number; price?: number }) => {
+    const result = await updateItem(orderId, itemId, patch);
+    if (!result.ok) {
+      addToast({ title: "Couldn't update item", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    addToast({ title: "Item updated", status: "ok" });
+  };
+
+  const handleItemRemove = async (orderId: string, itemId: string) => {
+    const result = await removeItem(orderId, itemId);
+    if (!result.ok) {
+      addToast({
+        title: "Couldn't remove item",
+        description: result.code === "LAST_ITEM" ? "An order needs at least one item — delete the order instead." : friendlyDbError({ code: result.code } as any),
+        status: "alert",
+      });
+      return;
+    }
+    addToast({ title: "Item removed", status: "info" });
   };
 
   const handleDelete = async (orderId: string) => {
@@ -249,14 +271,44 @@ export default function Orders() {
                 <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Line Items</h3>
                 <div className="space-y-3">
                   {selected.items.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center text-sm p-2 bg-bg-active rounded-lg border border-border-subtle">
-                      <div>
+                    <div key={`${item.id}-${item.qty}-${item.price}`} className="flex justify-between items-center gap-2 text-sm p-2 bg-bg-active rounded-lg border border-border-subtle">
+                      <div className="flex-1 min-w-0">
                         <CultivarName name={item.name_snapshot} className="font-medium" />
-                        <div className="text-text-secondary mt-2">Qty: {item.qty}</div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <label className="text-xs text-text-tertiary">Qty</label>
+                          <Input
+                            type="number"
+                            min={1}
+                            defaultValue={item.qty}
+                            className="w-16 px-2 py-1 text-xs"
+                            onBlur={(e) => {
+                              const qty = Math.max(1, Number(e.target.value) || 1);
+                              if (qty !== item.qty) handleItemPatch(selected.id, item.id, { qty });
+                            }}
+                          />
+                          <label className="text-xs text-text-tertiary">$ ea</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            defaultValue={Number(item.price)}
+                            className="w-20 px-2 py-1 text-xs"
+                            onBlur={(e) => {
+                              const price = Math.max(0, Number(e.target.value) || 0);
+                              if (price !== Number(item.price)) handleItemPatch(selected.id, item.id, { price });
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="font-medium tabular-nums text-right">
+                      <div className="font-medium tabular-nums text-right shrink-0">
                         ${(Number(item.price) * item.qty).toFixed(2)}
-                        <div className="text-xs text-text-secondary mt-2 font-normal">${Number(item.price).toFixed(2)} ea</div>
+                        <button
+                          onClick={() => handleItemRemove(selected.id, item.id)}
+                          aria-label="Remove item"
+                          className="block ml-auto mt-2 p-1 text-text-tertiary hover:text-status-alert rounded transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))}
