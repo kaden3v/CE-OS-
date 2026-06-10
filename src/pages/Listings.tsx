@@ -15,6 +15,7 @@ import type { Tables } from "@/lib/database.types";
 
 type Listing = Tables<"listings">;
 type Cultivar = Tables<"cultivars">;
+type InventoryRow = Tables<"inventory">;
 
 const SEED: Listing[] = [];
 
@@ -51,7 +52,21 @@ export default function Listings() {
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], {
     toRow: (c) => ({ name: c.name }),
   });
+  const { data: inventoryRows } = useEntity<InventoryRow>("inventory", [], {
+    toRow: (r) => ({ name: r.name }),
+  });
   const { addToast } = useApp();
+
+  // Real stock on hand per cultivar, from inventory — listings' own "stock"
+  // field is just the quantity listed on the channel, not the truth.
+  const onHandByCultivar = useMemo(() => {
+    const map = new Map<string, number>();
+    inventoryRows.forEach((r) => {
+      if (!r.cultivar_id) return;
+      map.set(r.cultivar_id, (map.get(r.cultivar_id) ?? 0) + r.stock_juv + r.stock_mat + r.stock_flower);
+    });
+    return map;
+  }, [inventoryRows]);
 
   const [channelFilter, setChannelFilter] = useState<"all" | "shopify" | "etsy">("all");
   const [isOpen, setIsOpen] = useState(false);
@@ -97,10 +112,25 @@ export default function Listings() {
       { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
       { accessorKey: "channel", header: "Channel", cell: (info: any) => <div className="flex items-center gap-2 text-text-secondary capitalize">{channelIcon(info.getValue())}{info.getValue()}</div> },
       { accessorKey: "price", header: "Price", cell: (info: any) => <span className="tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
-      { accessorKey: "stock", header: "Stock", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },
+      { accessorKey: "stock", header: "Listed qty", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },
+      {
+        id: "on_hand",
+        header: "On hand",
+        cell: (info: any) => {
+          const cid = info.row.original.cultivar_id as string | null;
+          if (!cid) return <span className="text-text-tertiary">—</span>;
+          const onHand = onHandByCultivar.get(cid) ?? 0;
+          const listed = Number(info.row.original.stock) || 0;
+          return (
+            <span className={`tabular-nums ${onHand < listed ? "text-status-warn" : "text-text-secondary"}`} title={onHand < listed ? "Listed more than you have in inventory" : undefined}>
+              {onHand}
+            </span>
+          );
+        },
+      },
       { accessorKey: "status", header: "Status", cell: (info: any) => renderStatus(info.getValue()) },
     ],
-    [cultivars],
+    [cultivars, onHandByCultivar],
   );
 
   const isEmpty = !isLoading && filtered.length === 0;

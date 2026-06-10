@@ -35,27 +35,34 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
 
 ## P1 — Connect the workflows (turn silos into a pipeline)
 
-- [ ] **Decrement inventory on fulfillment** — shipping an order should consume stock from the
+- [x] **Decrement inventory on fulfillment** — shipping an order should consume stock from the
       matching inventory stage; today you can ship 100 units of a plant you have 0 of.
-- [ ] **Propagation → Inventory conversion** — a "ready" batch should convert into inventory stock
+- [x] **Propagation → Inventory conversion** — a "ready" batch should convert into inventory stock
       with one action; today the owner re-enters the data by hand.
-- [ ] **Order ⇄ shipment status sync** — marking an order shipped should move its shipment (and
+- [x] **Order ⇄ shipment status sync** — marking an order shipped should move its shipment (and
       vice versa); today they are tracked independently and drift.
-- [ ] **Listings stock ⇄ inventory stock** — listings carry their own stock number that never syncs
+- [x] **Listings stock ⇄ inventory stock** — listings carry their own stock number that never syncs
       with inventory; pick one source of truth.
-- [ ] **Surface low-stock where decisions happen** — dashboard widget + notification when a supply
+- [x] **Surface low-stock where decisions happen** — dashboard widget + notification when a supply
       crosses its reorder threshold or a cultivar's saleable stock hits zero (thresholds exist,
       alerts don't).
-- [ ] **Make notifications real** — NotificationCenter is localStorage-only; emit actual events
+- [x] **Make notifications real** — NotificationCenter is localStorage-only; emit actual events
       (new order, low stock, license expiring, task assigned to you) — task assignment notifications
       especially, now that tasks are assignable.
-- [ ] **Pagination on Expenses/Orders/Customers tables** — Expenses already fetches all 857 rows at
+- [x] **Pagination on Expenses/Orders/Customers tables** — Expenses already fetches all 857 rows at
       once; add server-side pagination or virtualization before the data grows.
-- [ ] **Decide fate of orphaned tables** — `mortality_events` (no UI at all: either build a simple
+- [x] **Decide fate of orphaned tables** — `mortality_events` (no UI at all: either build a simple
       "log loss" action on inventory or drop it), `subscriptions` (read-only; add create/cancel on
       the customer panel), `etsy_imports` (4 stale rows, no UI: finish the import path in P3 or drop),
       `qr_codes.scan_count` (always 0 — needs a public scan redirect endpoint or remove the column
       from the UI).
+
+> P1 shipped 2026-06-10. Notes: the order⇄shipment sync + inventory-decrement triggers live in
+> migration `20260610090000_p1_workflow_sync.sql` — **pending prod apply** (needs explicit
+> authorization). Listings now show "Listed qty" vs real "On hand" from inventory (true channel
+> sync arrives with P3). Orphaned-table decisions: mortality_events got a "Log loss" UI;
+> subscriptions got start/cancel on the customer panel; etsy_imports is superseded by the P3 Etsy
+> sync; qr_codes.scan_count stays dormant until the P4 mobile scan workflows.
 
 ## P2 — Money truth (the owner can't see profit today)
 

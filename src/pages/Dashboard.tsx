@@ -15,9 +15,16 @@ import type { Tables } from "@/lib/database.types";
 const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
 const REPORTING_MONTHS = 7;
 const TOP_CULTIVAR_COUNT = 4;
+const LOW_STOCK_THRESHOLD = 10;
+const LICENSE_WARNING_DAYS = 60;
+const MS_PER_DAY = 86_400_000;
 
 type Inventory = Tables<"inventory">;
 type Shipment = Tables<"shipments">;
+type Supply = Tables<"supplies">;
+type License = Tables<"licenses">;
+
+type AlertItem = { id: string; href: string; label: string; detail: string; tone: "warn" | "alert" };
 
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"operations" | "reporting">("operations");
@@ -27,6 +34,36 @@ export default function Dashboard() {
   const { data: orders } = useOrders();
   const { data: inventory } = useEntity<Inventory>("inventory", []);
   const { data: shipments } = useEntity<Shipment>("shipments", []);
+  const { data: supplies } = useEntity<Supply>("supplies", []);
+  const { data: licenses } = useEntity<License>("licenses", []);
+
+  // Things that need a human decision: low plant stock, supplies at/below their
+  // reorder threshold, licenses expiring inside the warning window.
+  const alerts = useMemo<AlertItem[]>(() => {
+    const list: AlertItem[] = [];
+    inventory.forEach((i) => {
+      const total = i.stock_juv + i.stock_mat + i.stock_flower;
+      if (total < LOW_STOCK_THRESHOLD) {
+        list.push({ id: `inv-${i.id}`, href: "/inventory", label: i.name, detail: `${total} plants left`, tone: "warn" });
+      }
+    });
+    supplies.forEach((s) => {
+      if (s.reorder_threshold != null && Number(s.on_hand) <= Number(s.reorder_threshold)) {
+        list.push({ id: `sup-${s.id}`, href: "/finances/supplies", label: s.name, detail: `${s.on_hand}${s.unit ? ` ${s.unit}` : ""} on hand — reorder`, tone: "warn" });
+      }
+    });
+    const now = Date.now();
+    licenses.forEach((l) => {
+      if (!l.expires_on) return;
+      const days = Math.ceil((new Date(l.expires_on).getTime() - now) / MS_PER_DAY);
+      if (days < 0) {
+        list.push({ id: `lic-${l.id}`, href: "/licenses", label: l.name, detail: `expired ${-days}d ago`, tone: "alert" });
+      } else if (days <= LICENSE_WARNING_DAYS) {
+        list.push({ id: `lic-${l.id}`, href: "/licenses", label: l.name, detail: `expires in ${days}d`, tone: days <= 14 ? "alert" : "warn" });
+      }
+    });
+    return list;
+  }, [inventory, supplies, licenses]);
 
   const stats = useMemo(() => {
     const activeOrders = orders.filter((o) => ["pending", "processing", "packed"].includes(o.status)).length;
@@ -192,6 +229,29 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Needs attention */}
+          {alerts.length > 0 && (
+            <div className="space-y-4 shrink-0">
+              <h2 className="text-base font-medium flex items-center gap-2">
+                Needs attention
+                <span className="text-xs font-normal text-text-tertiary">({alerts.length})</span>
+              </h2>
+              <Card>
+                <div className="divide-y divide-border-subtle/50">
+                  {alerts.map((a) => (
+                    <Link key={a.id} to={a.href} className="flex items-center justify-between p-3 hover:bg-bg-hover transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <StatusDot status={a.tone} />
+                        <span className="text-sm font-medium truncate">{a.label}</span>
+                      </div>
+                      <span className={`text-xs whitespace-nowrap ${a.tone === "alert" ? "text-status-alert" : "text-status-warn"}`}>{a.detail}</span>
+                    </Link>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
 
           {/* Bottom Tasks */}
           <div className="space-y-4 shrink-0">

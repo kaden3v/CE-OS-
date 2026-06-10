@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { PhotoUploader } from "@/components/PhotoUploader";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/activity";
 import { friendlyDbError } from "@/lib/dbErrors";
 
 import type { Tables } from "@/lib/database.types";
@@ -151,6 +154,46 @@ export default function Inventory() {
     }
     setStockDraft(null);
     addToast({ title: "Stock updated", description: selectedItem.name, status: "ok" });
+  };
+
+  // Log loss — records a mortality event and removes the plants from stock.
+  const { user, activeOrgId } = useAuth();
+  const [isLossOpen, setIsLossOpen] = useState(false);
+  const [lossForm, setLossForm] = useState({ stage: "juv" as "juv" | "mat" | "flower", count: 1, cause: "", notes: "" });
+
+  const handleLogLoss = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem || !supabase || !user || !activeOrgId) return;
+    const count = Math.max(1, Number(lossForm.count) || 1);
+    const { error } = await (supabase as any).from("mortality_events").insert({
+      user_id: user.id,
+      org_id: activeOrgId,
+      inventory_id: selectedItem.id,
+      cultivar_id: selectedItem.cultivar_id,
+      cause: lossForm.cause.trim() || null,
+      count,
+      notes: lossForm.notes.trim() || null,
+    });
+    if (error) {
+      addToast({ title: "Couldn't log loss", description: friendlyDbError(error), status: "alert" });
+      return;
+    }
+    const nextStock = {
+      ...selectedItem.stock,
+      [lossForm.stage]: Math.max(0, selectedItem.stock[lossForm.stage] - count),
+    };
+    await updateInventoryItem(selectedItem.id, { stock: nextStock });
+    logActivity({
+      orgId: activeOrgId,
+      actorId: user.id,
+      action: "updated",
+      entity: "inventory",
+      entityId: String(selectedItem.id),
+      summary: `${selectedItem.name}: −${count} (loss${lossForm.cause.trim() ? ` — ${lossForm.cause.trim()}` : ""})`,
+    });
+    setIsLossOpen(false);
+    setLossForm({ stage: "juv", count: 1, cause: "", notes: "" });
+    addToast({ title: "Loss logged", description: `−${count} ${selectedItem.name}`, status: "info" });
   };
 
   const handleDelete = async () => {
@@ -447,6 +490,9 @@ export default function Inventory() {
                 <Pencil className="w-4 h-4 mr-1" />
                 Edit details
               </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setIsLossOpen(true)}>
+                Log loss
+              </Button>
               <Button
                 variant="outline"
                 onClick={handleDelete}
@@ -458,6 +504,51 @@ export default function Inventory() {
           </>
         )}
       </div>
+
+      {isLossOpen && selectedItem && (
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
+              <h2 className="text-lg font-semibold">Log Loss — {selectedItem.name}</h2>
+              <button onClick={() => setIsLossOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleLogLoss} className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                  <select
+                    value={lossForm.stage}
+                    onChange={(e) => setLossForm({ ...lossForm, stage: e.target.value as typeof lossForm.stage })}
+                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  >
+                    <option value="juv">Juvenile ({selectedItem.stock.juv})</option>
+                    <option value="mat">Mature ({selectedItem.stock.mat})</option>
+                    <option value="flower">Flowering ({selectedItem.stock.flower})</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                  <Input type="number" min="1" required value={lossForm.count} onChange={(e) => setLossForm({ ...lossForm, count: parseInt(e.target.value) || 1 })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cause</label>
+                <Input placeholder="Rot, pests, shipping damage…" value={lossForm.cause} onChange={(e) => setLossForm({ ...lossForm, cause: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+                <Input placeholder="Optional" value={lossForm.notes} onChange={(e) => setLossForm({ ...lossForm, notes: e.target.value })} />
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
+                <Button variant="ghost" type="button" onClick={() => setIsLossOpen(false)}>Cancel</Button>
+                <Button type="submit">Log Loss</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
 
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

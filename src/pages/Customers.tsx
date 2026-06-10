@@ -74,6 +74,51 @@ export default function Customers() {
     addToast({ title: "Customer updated", description: name, status: "ok" });
   };
 
+  // Subscription management (Rosette+ tiers)
+  const [subForm, setSubForm] = useState({ tier: "Rosette+", billing_cycle: "monthly", price: "" });
+  const [isSubFormOpen, setIsSubFormOpen] = useState(false);
+
+  const startSubscription = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selected || !supabase || !user || !activeOrgId) return;
+    const { data, error } = await (supabase as any)
+      .from("subscriptions")
+      .insert({
+        user_id: user.id,
+        org_id: activeOrgId,
+        customer_id: selected.id,
+        tier: subForm.tier.trim() || "Rosette+",
+        status: "active",
+        billing_cycle: subForm.billing_cycle,
+        price: subForm.price === "" ? null : Number(subForm.price) || null,
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      addToast({ title: "Couldn't start subscription", description: friendlyDbError(error), status: "alert" });
+      return;
+    }
+    setActiveSub(data as Subscription);
+    setIsSubFormOpen(false);
+    addToast({ title: "Subscription started", description: `${selected.name} · ${subForm.tier}`, status: "ok" });
+  };
+
+  const cancelSubscription = async () => {
+    if (!activeSub || !supabase || !activeOrgId) return;
+    if (!confirm(`Cancel ${selected?.name}'s ${activeSub.tier} subscription?`)) return;
+    const { error } = await (supabase as any)
+      .from("subscriptions")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("id", activeSub.id)
+      .eq("org_id", activeOrgId);
+    if (error) {
+      addToast({ title: "Couldn't cancel", description: friendlyDbError(error), status: "alert" });
+      return;
+    }
+    setActiveSub(null);
+    addToast({ title: "Subscription cancelled", status: "info" });
+  };
+
   const handleDelete = async () => {
     if (!selected) return;
     if (!confirm(`Delete ${selected.name}? Their orders are kept but unlinked.`)) return;
@@ -241,21 +286,61 @@ export default function Customers() {
                 </div>
               </section>
 
-              {activeSub && (
-                <section>
-                  <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Subscription</h3>
+              <section>
+                <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Subscription</h3>
+                {activeSub ? (
                   <Card className="p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium">{activeSub.tier}</span>
                       <Badge variant="brand">{activeSub.status}</Badge>
                     </div>
-                    <div className="text-xs text-text-secondary">
+                    <div className="text-xs text-text-secondary mb-3">
                       {activeSub.billing_cycle} · started {new Date(activeSub.started_at).toLocaleDateString()}
+                      {activeSub.price != null && ` · $${Number(activeSub.price).toFixed(2)}`}
                       {activeSub.current_period_end && ` · renews ${new Date(activeSub.current_period_end).toLocaleDateString()}`}
                     </div>
+                    <Button variant="ghost" size="sm" className="text-text-tertiary hover:text-status-alert" onClick={cancelSubscription}>
+                      Cancel subscription
+                    </Button>
                   </Card>
-                </section>
-              )}
+                ) : isSubFormOpen ? (
+                  <Card className="p-4">
+                    <form onSubmit={startSubscription} className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs text-text-tertiary mb-1">Tier</label>
+                          <Input value={subForm.tier} onChange={(e) => setSubForm({ ...subForm, tier: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-text-tertiary mb-1">Billing</label>
+                          <select
+                            value={subForm.billing_cycle}
+                            onChange={(e) => setSubForm({ ...subForm, billing_cycle: e.target.value })}
+                            className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2 py-2 text-sm focus:outline-none focus:border-accent-brand"
+                          >
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-tertiary mb-1">Price (optional)</label>
+                        <Input type="number" step="0.01" min="0" placeholder="29.99" value={subForm.price} onChange={(e) => setSubForm({ ...subForm, price: e.target.value })} />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" type="button" onClick={() => setIsSubFormOpen(false)}>Cancel</Button>
+                        <Button size="sm" type="submit">Start</Button>
+                      </div>
+                    </form>
+                  </Card>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setIsSubFormOpen(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Start subscription
+                  </Button>
+                )}
+              </section>
 
               {selected.notes && (
                 <section>

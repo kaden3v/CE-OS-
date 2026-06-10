@@ -15,6 +15,7 @@ import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 
 type Batch = Tables<"propagation_batches">;
+type InventoryRow = Tables<"inventory">;
 
 const STAGES = [
   { id: "mother", title: "Mother Plants" },
@@ -39,10 +40,55 @@ export default function Propagation() {
       notes: b.notes,
     }),
   });
+  const { data: inventoryRows, add: addInventory, update: updateInventory } = useEntity<InventoryRow>("inventory", [], {
+    toRow: (r) => ({
+      name: r.name,
+      common: r.common,
+      genus: r.genus,
+      cultivar_id: r.cultivar_id,
+      stock_juv: r.stock_juv,
+      stock_mat: r.stock_mat,
+      stock_flower: r.stock_flower,
+    }),
+  });
   const { addToast } = useApp();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = batches.find((b) => b.id === selectedId) ?? null;
+
+  /** Move a ready batch's plants into inventory (juvenile stock) and clear the batch. */
+  const convertToInventory = async (b: Batch) => {
+    if (!confirm(`Move ${b.count} × ${b.cultivar} into inventory as juvenile stock? The batch comes off the board.`)) return;
+    const existing = inventoryRows.find((i) => i.name.trim().toLowerCase() === b.cultivar.trim().toLowerCase());
+    if (existing) {
+      const result = await updateInventory(existing.id, { stock_juv: existing.stock_juv + b.count } as Partial<InventoryRow>);
+      if (!result.ok) {
+        addToast({ title: "Couldn't update inventory", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+        return;
+      }
+    } else {
+      const result = await addInventory({
+        id: crypto.randomUUID(),
+        name: b.cultivar,
+        common: null,
+        genus: null,
+        cultivar_id: null,
+        stock_juv: b.count,
+        stock_mat: 0,
+        stock_flower: 0,
+        updated_at: new Date().toISOString(),
+        user_id: "",
+        org_id: null,
+      } as InventoryRow);
+      if (result.ok === false) {
+        addToast({ title: "Couldn't create inventory item", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+        return;
+      }
+    }
+    await remove(b.id);
+    setSelectedId(null);
+    addToast({ title: "Moved to inventory", description: `${b.count} × ${b.cultivar} added as juvenile stock`, status: "ok" });
+  };
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ cultivar: "", count: 0, stage: "division" });
@@ -256,7 +302,11 @@ export default function Propagation() {
             <div className="p-4 md:p-6 border-t border-border-subtle bg-bg-base/50 flex gap-2 pb-safe">
               <Button variant="outline" className="flex-1" onClick={() => discard(selected)}>Discard</Button>
               <Button variant="outline" className="flex-1" onClick={openEdit}>Edit</Button>
-              <Button className="flex-1" onClick={() => promote(selected)} disabled={selected.stage === STAGE_ORDER[STAGE_ORDER.length - 1]}>Promote</Button>
+              {selected.stage === STAGE_ORDER[STAGE_ORDER.length - 1] ? (
+                <Button variant="brand" className="flex-1" onClick={() => convertToInventory(selected)}>To Inventory</Button>
+              ) : (
+                <Button className="flex-1" onClick={() => promote(selected)}>Promote</Button>
+              )}
             </div>
           </>
         )}

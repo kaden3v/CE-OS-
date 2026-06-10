@@ -1,30 +1,41 @@
 import {
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   useReactTable,
   ColumnDef,
 } from "@tanstack/react-table";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const DEFAULT_PAGE_SIZE = 25;
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   onRowClick?: (row: TData) => void;
+  pageSize?: number;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   onRowClick,
+  pageSize = DEFAULT_PAGE_SIZE,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize } },
   });
 
+  const pageCount = table.getPageCount();
+  const { pageIndex } = table.getState().pagination;
+
   return (
-    <div className="w-full">
+    <div className="w-full flex flex-col">
       <table className="w-full text-sm text-left">
         <thead className="text-[12px] uppercase tracking-wide text-text-secondary sticky top-0 bg-bg-base/90 backdrop-blur-md z-10 border-b border-border-subtle">
           {table.getHeaderGroups().map((headerGroup) => (
@@ -77,6 +88,32 @@ export function DataTable<TData, TValue>({
           )}
         </tbody>
       </table>
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-between px-4 py-2 border-t border-border-subtle text-xs text-text-secondary shrink-0">
+          <span>
+            {data.length.toLocaleString()} rows · page {pageIndex + 1} of {pageCount}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              aria-label="Previous page"
+              className="p-1.5 rounded-md border border-border-subtle hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              aria-label="Next page"
+              className="p-1.5 rounded-md border border-border-subtle hover:bg-bg-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,16 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useEntity } from '@/hooks/useEntity';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import type { Tables } from '@/lib/database.types';
+
+const ACTION_LABELS: Record<string, string> = {
+  created: 'added',
+  updated: 'updated',
+  deleted: 'removed',
+  imported: 'imported into',
+};
 
 type SettingsState = {
   developerMode: boolean;
@@ -132,6 +141,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
+
+  // Real notification sources: teammates' changes (via the activity log) and
+  // tasks assigned to the current user. RLS already limits events to the org;
+  // we additionally drop our own actions.
+  const { user, activeOrgId } = useAuth();
+  useEffect(() => {
+    if (!supabase || !user || !activeOrgId) return;
+    const channel = supabase
+      .channel(`notifs-${crypto.randomUUID()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_log' }, (payload) => {
+        const row = payload.new as Tables<'activity_log'>;
+        if (!row || row.org_id !== activeOrgId || row.actor_id === user.id) return;
+        const entityLabel = row.entity.replace(/_/g, ' ');
+        setNotifications(prev => [{
+          id: `act-${row.id}`,
+          title: `A teammate ${ACTION_LABELS[row.action] ?? row.action} ${entityLabel}`,
+          description: row.summary ?? '',
+          time: 'Just now',
+          status: 'info' as const,
+          read: false,
+        }, ...prev].slice(0, 50));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasks' }, (payload) => {
+        const row = payload.new as Tables<'tasks'>;
+        if (!row || row.org_id !== activeOrgId) return;
+        if (row.assigned_to === user.id && row.user_id !== user.id) {
+          setNotifications(prev => [{
+            id: `task-${row.id}`,
+            title: 'Task assigned to you',
+            description: row.title,
+            time: 'Just now',
+            status: 'info' as const,
+            read: false,
+          }, ...prev].slice(0, 50));
+        }
+      })
+      .subscribe();
+    return () => {
+      void supabase!.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, activeOrgId]);
 
   const addTask: AppContextType['addTask'] = async (task) => {
     await taskEntity.add({
