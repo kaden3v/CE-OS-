@@ -1,0 +1,122 @@
+# CEOS — Product Review To-Do List
+
+From the full app review (2026-06-10): code-level UX/logic scan of every page + competitive research
+against 14 comparable systems (Picas, Plant Partner, SBI, GrowPoint, MyPlantShop, Odoo, Airtable,
+monday.com, Craftybase, inFlow, Katana, Cin7/Sortly, ShipStation/Veeqo/Pirate Ship, Vela).
+
+**Verdict in one line:** the entity model is right and the niche is genuinely empty, but the app
+currently mixes real data with fake data (a trust problem), and its workflows are silos (orders,
+inventory, propagation, and shipping never talk to each other).
+
+Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **P2** = money truth ·
+**P3** = integrations · **P4** = differentiators.
+
+---
+
+## P0 — Fix trust and broken UI (the app must never show fake numbers as real)
+
+- [ ] **Replace or clearly label the fake Reporting tab** — `Dashboard.tsx:15-28` hardcodes
+      REVENUE_DATA / CHANNEL_DATA / CULTIVAR_DATA; `Dashboard.tsx:286-300` hardcodes the entire
+      customer-cohort retention heatmap. The stat tiles above them compute *real* MTD revenue from
+      orders — so the owner sees two conflicting revenue numbers. Compute from `orders` or remove.
+- [ ] **Remove hardcoded "Recent" sidebar** (`Layout.tsx` — Order #1284, Pinguicula 'Pirouette',
+      Marcus Aldana never change) — replace with last-3 real records or drop.
+- [ ] **Hardcoded "KC" avatar** in the topbar → derive from the signed-in profile's display name.
+- [ ] **Wire the Inventory search box** (`Inventory.tsx:192`) — it renders but filters nothing.
+- [ ] **Customers: add edit + delete** — today a misspelled customer name is permanent.
+- [ ] **Orders: allow editing line items** after creation (today only status can change).
+- [ ] **Propagation: allow editing a batch** (count, cultivar, est-ready) after creation.
+- [ ] **QR Generator: Print/Download buttons are toast-only theater** — make them generate a real
+      printable sheet (or enqueue into print_jobs for real).
+- [ ] **Command palette: label it "Navigation" or make ⌘K search real data**
+      (orders/customers/cultivars) — currently nav-only, which violates the search expectation.
+- [ ] **Shipping weather panel** says data is "illustrative" in small print — hide the panel until
+      a real weather API is wired (P3) so no one makes a ship/hold decision on fake conditions.
+
+## P1 — Connect the workflows (turn silos into a pipeline)
+
+- [ ] **Decrement inventory on fulfillment** — shipping an order should consume stock from the
+      matching inventory stage; today you can ship 100 units of a plant you have 0 of.
+- [ ] **Propagation → Inventory conversion** — a "ready" batch should convert into inventory stock
+      with one action; today the owner re-enters the data by hand.
+- [ ] **Order ⇄ shipment status sync** — marking an order shipped should move its shipment (and
+      vice versa); today they are tracked independently and drift.
+- [ ] **Listings stock ⇄ inventory stock** — listings carry their own stock number that never syncs
+      with inventory; pick one source of truth.
+- [ ] **Surface low-stock where decisions happen** — dashboard widget + notification when a supply
+      crosses its reorder threshold or a cultivar's saleable stock hits zero (thresholds exist,
+      alerts don't).
+- [ ] **Make notifications real** — NotificationCenter is localStorage-only; emit actual events
+      (new order, low stock, license expiring, task assigned to you) — task assignment notifications
+      especially, now that tasks are assignable.
+- [ ] **Pagination on Expenses/Orders/Customers tables** — Expenses already fetches all 857 rows at
+      once; add server-side pagination or virtualization before the data grows.
+- [ ] **Decide fate of orphaned tables** — `mortality_events` (no UI at all: either build a simple
+      "log loss" action on inventory or drop it), `subscriptions` (read-only; add create/cancel on
+      the customer panel), `etsy_imports` (4 stale rows, no UI: finish the import path in P3 or drop),
+      `qr_codes.scan_count` (always 0 — needs a public scan redirect endpoint or remove the column
+      from the UI).
+
+## P2 — Money truth (the owner can't see profit today)
+
+- [ ] **Production runs that consume supplies → real COGS** (pattern: Craftybase). "Potted 40
+      D. capensis" should decrement pots/media/labels and accumulate actual cost onto the batch →
+      cultivar profitability becomes margin, not just revenue. `CultivarProfit.tsx` openly admits
+      COGS isn't tracked.
+- [ ] **Sales-tax report** — TaxReport covers expense categories only; add a sales-side report
+      (by state/channel) since plants ship across states.
+- [ ] **Schedule C-ready COGS export** at tax time (Craftybase's most-loved feature).
+- [ ] **Wholesale invoicing + per-customer price tiers + availability list** (pattern: GrowPoint /
+      MyPlantShop / SBI) — wholesale plant buying runs on emailed availability lists generated from
+      saleable-stage inventory; CEOS is uniquely positioned to generate these.
+- [ ] **Accounting export** (QuickBooks/Xero CSV at minimum).
+
+## P3 — Integrations (already on the roadmap; ordering confirmed by user: Shopify → Etsy → Shipping)
+
+- [ ] **Shopify order sync** — webhook edge function → orders/order_items + stock push-back
+      (oversell prevention). Table stakes in every comparable system.
+- [ ] **Etsy order sync** — same; supersedes the abandoned etsy_imports CSV path.
+- [ ] **Shipping labels + rates** — integrate Shippo/EasyPost or pair with Veeqo (free, Amazon-owned,
+      native Etsy+Shopify) rather than rebuilding; print queue then receives real label PDFs.
+- [ ] **Real weather API + weather-hold automation** — rule: destination ZIP forecast <35°F or >95°F
+      within 3 days → auto-hold + tag + customer email + heat-pack suggestion. **No competitor does
+      this natively** (ShipStation rules are static; Logee's/The Sill do it manually) — this is
+      CEOS's leapfrog feature, not catch-up.
+
+## P4 — Differentiators worth building (validated by competitor research)
+
+- [ ] **Lot codes on propagation batches → traceability** (SBI seed-lot control): stamp lot IDs on
+      QR labels so a pest/disease/inspection finding traces to source flat and shipped orders;
+      pairs with the existing license/compliance module (CITES/state inspections are real for
+      carnivorous plants).
+- [ ] **Grow library / care schedules per cultivar** (Plant Partner): repot intervals, feeding,
+      dormancy triggers auto-spawn dated tasks on the kanban.
+- [ ] **Bench/space capacity planning** (Picas/Plant Partner): stage footprint × batches vs
+      greenhouse capacity → "can I start 10 more flats of Nepenthes?"
+- [ ] **Cross-channel listing publish + listing completeness score** (Vela charges $10–40/mo for
+      just this): one-click publish a cultivar listing to Etsy + Shopify from the drafts page.
+- [ ] **Mobile scan-driven workflows** (inFlow/Sortly): QR labels already exist; scanning one on a
+      phone should open that plant's record / decrement stock / log mortality.
+
+## Platform hygiene (carried from earlier phases)
+
+- [ ] Enable leaked-password protection (Supabase Auth dashboard — last open advisor).
+- [ ] Deploy the org-aware frontend to Vercel (activates Team/Activity/Import for the team).
+- [ ] Audit the 4 backfilled workspace members on /team; remove any that shouldn't have access.
+- [ ] CONTRACT migration: make org_id NOT NULL, drop user_id ownership semantics (keep as
+      created_by), switch user_id FKs to SET NULL so deleting an account can't cascade-wipe org data.
+- [ ] Tests: zero coverage today vs an 80% standard — start with order entry, approval flow,
+      CSV import parsing, and the inventory-decrement logic once it exists.
+- [ ] Cross-member photo viewing: plant photo storage paths are per-user; teammates see the DB row
+      but may not render another member's photo.
+
+---
+
+## Market positioning (why this is worth finishing)
+
+The cheapest alternative stack for this business — Craftybase (~$24/mo) + Veeqo (free) + Vela
+(~$10/mo) + QuickBooks — still cannot model growth-stage inventory, propagation, license expiry, or
+weather holds. Nursery ERPs (Picas/SBI/Plant Partner, quote-only) have the production depth but no
+Etsy/DTC world. CEOS's unique ground: **stage-based live-plant inventory + e-commerce channels +
+compliance + weather-aware shipping in one tool.** The to-do list above closes the table-stakes gaps
+(sync, COGS, labels) while doubling down on the four features nobody else has.
