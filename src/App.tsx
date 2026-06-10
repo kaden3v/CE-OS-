@@ -16,13 +16,14 @@ import Supplies from "./pages/Supplies";
 import Vendors from "./pages/Vendors";
 import TaxReport from "./pages/TaxReport";
 import Licenses from "./pages/Licenses";
+import Team from "./pages/Team";
 import Settings from "./pages/Settings";
 import SignIn from "./pages/SignIn";
 import ResetPassword from "./pages/ResetPassword";
 import Welcome from "./pages/Welcome";
 import AccessRequests from "./pages/AccessRequests";
 import { AppProvider } from "./contexts/AppContext";
-import { AuthProvider, RequireAuth, RequireAdmin } from "./contexts/AuthContext";
+import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
 import { Toasts } from "./components/ui/Toasts";
 import { CommandPalette } from "./components/ui/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -46,16 +47,17 @@ export default function App() {
                 <Route path="/inventory/qr-codes" element={<QrGenerator />} />
                 <Route path="/propagation" element={<Propagation />} />
                 <Route path="/cultivars" element={<Cultivars />} />
-                <Route path="/cultivars/profit" element={<CultivarProfit />} />
+                <Route path="/cultivars/profit" element={<RequireManager><CultivarProfit /></RequireManager>} />
                 <Route path="/customers" element={<Customers />} />
                 <Route path="/shipping" element={<Shipping />} />
                 <Route path="/shipping/print-queue" element={<PrintQueue />} />
                 <Route path="/listings" element={<Listings />} />
-                <Route path="/finances/expenses" element={<Expenses />} />
-                <Route path="/finances/supplies" element={<Supplies />} />
-                <Route path="/finances/vendors" element={<Vendors />} />
-                <Route path="/finances/tax-report" element={<TaxReport />} />
-                <Route path="/licenses" element={<Licenses />} />
+                <Route path="/finances/expenses" element={<RequireManager><Expenses /></RequireManager>} />
+                <Route path="/finances/supplies" element={<RequireManager><Supplies /></RequireManager>} />
+                <Route path="/finances/vendors" element={<RequireManager><Vendors /></RequireManager>} />
+                <Route path="/finances/tax-report" element={<RequireManager><TaxReport /></RequireManager>} />
+                <Route path="/licenses" element={<RequireManager><Licenses /></RequireManager>} />
+                <Route path="/team" element={<Team />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/admin/access-requests" element={<RequireAdmin><AccessRequests /></RequireAdmin>} />
               </Route>

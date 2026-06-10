@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   FileBadge,
   ShieldCheck,
+  UserCog,
   History,
   Settings,
   Bell,
@@ -68,8 +69,9 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setCommandPaletteOpen, notifications, tasks, settings, addToast } = useApp();
-  const { isAdmin, user, onboardedAt, profileChecked } = useAuth();
+  const { isAdmin, user, onboardedAt, profileChecked, orgRole, activeOrgId, orgChecked } = useAuth();
 
+  const canManage = orgRole === "owner" || orgRole === "manager";
   const isFinancesActive = location.pathname.startsWith("/finances");
   const unreadCount = notifications.filter(n => !n.read).length;
   const pendingTasksCount = tasks.filter(t => !t.completed).length;
@@ -138,6 +140,22 @@ export function Layout() {
     return <Navigate to="/welcome" replace />;
   }
 
+  // Workspace gate — a signed-in, onboarded user who belongs to no organization
+  // can't see any shared data. New users land here until an admin adds them.
+  if (user && profileChecked && onboardedAt && orgChecked && !activeOrgId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-base p-6">
+        <div className="max-w-sm text-center space-y-3">
+          <div className="text-lg font-semibold text-text-primary">No workspace yet</div>
+          <p className="text-sm text-text-secondary">
+            Your account isn't part of a Canyon Exotics workspace. Ask an administrator to add you to the team, then
+            sign out and back in.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn(
       "flex h-screen bg-bg-base text-text-primary overflow-hidden",
@@ -168,7 +186,8 @@ export function Layout() {
             </NavLink>
           ))}
 
-          {/* Finances Expandable */}
+          {/* Finances — owners & managers only */}
+          {canManage && (
           <div>
             <button
               onClick={() => setFinancesOpen(!financesOpen)}
@@ -210,7 +229,9 @@ export function Layout() {
               </div>
             )}
           </div>
+          )}
 
+          {canManage && (
           <NavLink
             to="/licenses"
             className={({ isActive }) =>
@@ -222,6 +243,20 @@ export function Layout() {
           >
             <FileBadge className="w-5 h-5 opacity-70" strokeWidth={1.5} />
             Licenses
+          </NavLink>
+          )}
+
+          <NavLink
+            to="/team"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors",
+                isActive ? "bg-bg-active text-text-primary border-l-2 border-accent-brand rounded-l-none" : "text-text-secondary"
+              )
+            }
+          >
+            <UserCog className="w-5 h-5 opacity-70" strokeWidth={1.5} />
+            Team
           </NavLink>
           {isAdmin && (
             <NavLink

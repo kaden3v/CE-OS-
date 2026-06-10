@@ -39,8 +39,8 @@ export function useEntity<T extends WithId, Row = T>(
   isLoading: boolean;
   refresh: () => Promise<void>;
 } {
-  const { user } = useAuth();
-  const ready = !!user && !!supabase;
+  const { user, activeOrgId } = useAuth();
+  const ready = !!user && !!supabase && !!activeOrgId;
 
   // The hook intentionally bypasses the typed table-name constraint internally.
   // Type safety is preserved at the call site via T and Row.
@@ -55,7 +55,7 @@ export function useEntity<T extends WithId, Row = T>(
     const { data: rows, error } = await db
       .from(table)
       .select("*")
-      .eq("user_id", user!.id)
+      .eq("org_id", activeOrgId!)
       .order(options?.orderBy ?? "updated_at", { ascending: options?.ascending ?? false });
     if (error) {
       logDbError(`fetch ${table}`, error);
@@ -71,7 +71,7 @@ export function useEntity<T extends WithId, Row = T>(
     }
     setIsLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, user?.id, table]);
+  }, [ready, activeOrgId, table]);
 
   useEffect(() => {
     fetchAll();
@@ -84,7 +84,7 @@ export function useEntity<T extends WithId, Row = T>(
         const mapped = options?.toRow
           ? options.toRow(it, user!.id)
           : ({ ...(it as any) } as Record<string, unknown>);
-        return { ...mapped, user_id: user!.id };
+        return { ...mapped, user_id: user!.id, org_id: activeOrgId! };
       });
       const { data: inserted, error } = await db.from(table).insert(rows).select();
       if (error) {
@@ -96,7 +96,7 @@ export function useEntity<T extends WithId, Row = T>(
       setData(final);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ready, user?.id, table],
+    [ready, user?.id, activeOrgId, table],
   );
 
   const add = async (item: T): Promise<{ ok: true; row: T } | { ok: false; code?: string }> => {
@@ -104,7 +104,7 @@ export function useEntity<T extends WithId, Row = T>(
     const mapped = options?.toRow
       ? options.toRow(item, user!.id)
       : ({ ...(item as any) } as Record<string, unknown>);
-    const row = { ...mapped, user_id: user!.id };
+    const row = { ...mapped, user_id: user!.id, org_id: activeOrgId! };
     const { data: inserted, error } = await db.from(table).insert(row).select().single();
     if (error) {
       logDbError(`insert ${table}`, error);
@@ -120,8 +120,8 @@ export function useEntity<T extends WithId, Row = T>(
     const mapped = options?.toRow
       ? options.toRow({ ...({} as any), ...patch } as T, user!.id)
       : (patch as Record<string, unknown>);
-    const { user_id: _u, id: _i, ...safe } = mapped;
-    const { error } = await db.from(table).update(safe).eq("id", id).eq("user_id", user!.id);
+    const { user_id: _u, id: _i, org_id: _o, ...safe } = mapped;
+    const { error } = await db.from(table).update(safe).eq("id", id).eq("org_id", activeOrgId!);
     if (error) {
       logDbError(`update ${table}`, error);
       return { ok: false, code: error.code };
@@ -132,7 +132,7 @@ export function useEntity<T extends WithId, Row = T>(
 
   const remove = async (id: T["id"]): Promise<{ ok: boolean; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
-    const { error } = await db.from(table).delete().eq("id", id).eq("user_id", user!.id);
+    const { error } = await db.from(table).delete().eq("id", id).eq("org_id", activeOrgId!);
     if (error) {
       logDbError(`delete ${table}`, error);
       return { ok: false, code: error.code };

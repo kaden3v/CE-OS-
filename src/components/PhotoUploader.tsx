@@ -24,13 +24,13 @@ interface Props {
  * restricts writes to the authed user's namespace.
  */
 export function PhotoUploader({ inventoryId }: Props) {
-  const { user } = useAuth();
+  const { user, activeOrgId } = useAuth();
   const { addToast } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [photos, setPhotos] = useState<Array<Photo & { signedUrl: string }>>([]);
   const [uploading, setUploading] = useState(false);
-  const isAuthed = !!user && !!supabase;
+  const isAuthed = !!user && !!supabase && !!activeOrgId;
 
   useEffect(() => {
     if (!isAuthed) {
@@ -42,7 +42,7 @@ export function PhotoUploader({ inventoryId }: Props) {
       .from("plant_photos")
       .select("*")
       .eq("inventory_id", inventoryId)
-      .eq("user_id", user!.id)
+      .eq("org_id", activeOrgId!)
       .order("taken_at", { ascending: false })
       .then(({ data, error }) => {
         if (cancelled || !data) return;
@@ -60,7 +60,7 @@ export function PhotoUploader({ inventoryId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [inventoryId, user?.id, isAuthed]);
+  }, [inventoryId, user?.id, activeOrgId, isAuthed]);
 
   const handleFile = async (file: File) => {
     if (!isAuthed) {
@@ -95,6 +95,7 @@ export function PhotoUploader({ inventoryId }: Props) {
       .from("plant_photos")
       .insert({
         user_id: user!.id,
+        org_id: activeOrgId!,
         inventory_id: inventoryId,
         storage_path: path,
       })
@@ -122,7 +123,7 @@ export function PhotoUploader({ inventoryId }: Props) {
     if (storageErr) {
       logDbError("photo storage delete", storageErr as any);
     }
-    const { error: dbErr } = await supabase!.from("plant_photos").delete().eq("id", photo.id).eq("user_id", user!.id);
+    const { error: dbErr } = await supabase!.from("plant_photos").delete().eq("id", photo.id).eq("org_id", activeOrgId!);
     if (dbErr) {
       logDbError("photo db delete", dbErr);
       addToast({ title: "Delete failed", status: "alert" });

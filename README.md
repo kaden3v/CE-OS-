@@ -114,9 +114,20 @@ auth.users → profiles
    tasks, licenses (standalone)
 ```
 
-## Multi-tenancy roadmap
+## Multi-tenancy (team sharing)
 
-Currently each authed user owns their own world (every row has `user_id`). To support shared data across multiple users (e.g. you + a hire), add an `organizations` table + `org_memberships(user_id, org_id, role)` join table, swap `user_id` columns for `org_id`, and update RLS policies from `auth.uid() = user_id` to `org_id IN (SELECT org_id FROM org_memberships WHERE user_id = auth.uid())`. The `useEntity` hook keeps working with one line change.
+CE-OS supports a **shared organization** workspace: members of one org see the same orders, inventory, customers, and records. Implemented via an **expand/contract** migration so the change is additive and never breaks the running app.
+
+- **Tables:** `organizations` + `org_memberships(org_id, user_id, role)` where `role ∈ {owner, manager, staff}`.
+- **Every data table** has an `org_id` column. RLS is org-scoped: `org_id IN (SELECT private.user_org_ids())`, where `private.user_org_ids()` is a `SECURITY DEFINER` helper in a non-exposed `private` schema (avoids RLS recursion on `org_memberships` and keeps the function off the public REST API).
+- **Expand step (current):** org policies are added *alongside* the legacy `auth.uid() = user_id` policies. Postgres OR's permissive policies, so both the old (user-scoped) and new (org-scoped) frontends work during rollout. A later **contract** migration drops the legacy policies and makes `org_id` `NOT NULL`.
+- **Frontend:** `AuthContext` exposes `activeOrgId` + `orgRole`; `useEntity`/`useOrders` scope all reads/writes by `org_id`. The **Team** page (`/team`) manages members and roles. Finances/Licenses routes are gated to owners/managers via `RequireManager` (route/UI-level; DB-level role restriction is a follow-up).
+
+> Migrations: [`supabase/migrations/`](./supabase/migrations/). Historical schema is tracked in Supabase's own migration history; new changes are added here as files. Apply via the Supabase SQL editor or `apply_migration`, then regenerate `database.types.ts`.
+
+### CI
+
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) runs typecheck (`tsc --noEmit`) + `vite build` on every push to `main` and every PR.
 
 ## Run locally
 

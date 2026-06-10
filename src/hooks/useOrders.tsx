@@ -18,8 +18,8 @@ export type OrderWithRelations = OrderRow & {
  * Pulls orders + items + customer name with one fetch (Supabase row-nesting).
  */
 export function useOrders() {
-  const { user } = useAuth();
-  const ready = !!user && !!supabase;
+  const { user, activeOrgId } = useAuth();
+  const ready = !!user && !!supabase && !!activeOrgId;
 
   const [data, setData] = useState<OrderWithRelations[]>([]);
   const [isLoading, setIsLoading] = useState(ready);
@@ -30,7 +30,7 @@ export function useOrders() {
     const { data: rows, error } = await supabase!
       .from("orders")
       .select("*, customer:customers(id,name,email), items:order_items(*)")
-      .eq("user_id", user!.id)
+      .eq("org_id", activeOrgId!)
       .order("placed_at", { ascending: false });
     if (error) {
       logDbError("fetch orders", error);
@@ -39,7 +39,7 @@ export function useOrders() {
     }
     setData((rows ?? []) as unknown as OrderWithRelations[]);
     setIsLoading(false);
-  }, [ready, user?.id]);
+  }, [ready, activeOrgId]);
 
   useEffect(() => {
     fetchAll();
@@ -58,6 +58,7 @@ export function useOrders() {
       .from("orders")
       .insert({
         user_id: user!.id,
+        org_id: activeOrgId!,
         customer_id: input.customer_id,
         channel: input.channel,
         status: input.status ?? "pending",
@@ -77,6 +78,7 @@ export function useOrders() {
       const { error: itemErr } = await supabase!.from("order_items").insert(
         input.items.map((it) => ({
           user_id: user!.id,
+          org_id: activeOrgId!,
           order_id: orderRows.id,
           cultivar_id: it.cultivar_id,
           inventory_id: it.inventory_id,
@@ -102,7 +104,7 @@ export function useOrders() {
       .from("orders")
       .update({ status })
       .eq("id", id)
-      .eq("user_id", user!.id);
+      .eq("org_id", activeOrgId!);
     if (error) {
       logDbError("update order status", error);
       return { ok: false, code: error.code };
@@ -113,7 +115,7 @@ export function useOrders() {
 
   const deleteOrder = async (id: string): Promise<{ ok: boolean; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
-    const { error } = await supabase!.from("orders").delete().eq("id", id).eq("user_id", user!.id);
+    const { error } = await supabase!.from("orders").delete().eq("id", id).eq("org_id", activeOrgId!);
     if (error) {
       logDbError("delete order", error);
       return { ok: false, code: error.code };

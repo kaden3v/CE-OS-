@@ -9,6 +9,14 @@ interface AuthContextType {
   isLoading: boolean;
   isConfigured: boolean;
   isAdmin: boolean;
+  /** The user's active organization (team workspace). Null if not a member of any org. */
+  activeOrgId: string | null;
+  /** The user's role within the active organization. */
+  orgRole: OrgRole | null;
+  /** True once org membership has been loaded at least once. */
+  orgChecked: boolean;
+  /** Re-fetch the active org + role (call after approval or a role change). */
+  refreshOrg: () => Promise<void>;
   /** Null = needs onboarding. Set once on completion. */
   onboardedAt: string | null;
   /** True until we've loaded profile state at least once. */
@@ -27,6 +35,8 @@ interface AuthContextType {
   setOnboardedLocal: (iso: string) => void;
 }
 
+export type OrgRole = "owner" | "manager" | "staff";
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -35,6 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [onboardedAt, setOnboardedAt] = useState<string | null>(null);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
+  const [orgRole, setOrgRole] = useState<OrgRole | null>(null);
+  const [orgChecked, setOrgChecked] = useState(!isSupabaseConfigured);
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
 
   const refreshAdminFlag = useCallback(async (uid: string | undefined) => {
@@ -109,6 +122,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOnboardedAt(iso);
     setProfileChecked(true);
   }, []);
+
+  // Load the user's active org + role. Uses the same direct-fetch-with-stored-token
+  // approach as refreshAdminFlag so it's robust during the boot window (before the
+  // SDK has finished adopting the session).
+  const loadOrg = useCallback(async (uid: string | undefined) => {
+    if (!uid || !supabase) {
+      // Genuinely signed out — safe to mark checked.
+      setActiveOrgId(null);
+      setOrgRole(null);
+      setOrgChecked(true);
+      return;
+    }
+    try {
+      const url = import.meta.env.VITE_SUPABASE_URL as string;
+      const apikey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const ref = url.replace(/^https?:\/\//, "").split(".")[0];
+      const stored = localStorage.getItem(`sb-${ref}-auth-token`);
+      const accessToken = stored ? (JSON.parse(stored)?.access_token as string | undefined) : undefined;
+      if (!accessToken) {
+        // Token not adopted yet during boot — transient. Do NOT conclude
+        // "no workspace"; a later auth event / resync re-runs this.
+        return;
+      }
+      const res = await fetch(
+        `${url}/rest/v1/org_memberships?select=org_id,role&user_id=eq.${uid}&order=created_at.asc&limit=1`,
+        { headers: { apikey, Authorization: `Bearer ${accessToken}`, Accept: "application/json" } },
+      );
+      if (!res.ok) {
+        console.error("[auth] org membership lookup failed", res.status);
+        return; // transient — leave orgChecked untouched so the gate doesn't false-fire
+      }
+      const rows = (await res.json()) as Array<{ org_id?: string; role?: OrgRole }>;
+      // Authoritative result (zero rows = legitimately no workspace).
+      setActiveOrgId(rows[0]?.org_id ?? null);
+      setOrgRole(rows[0]?.role ?? null);
+      setOrgChecked(true);
+    } catch (err) {
+      console.error("[auth] org fetch failed", err);
+      // transient — leave orgChecked untouched
+    }
+  }, []);
+
+  const refreshOrg = useCallback(async () => {
+    await loadOrg(user?.id);
+  }, [loadOrg, user?.id]);
+
+  useEffect(() => {
+    loadOrg(user?.id);
+  }, [loadOrg, user?.id]);
 
   useEffect(() => {
     if (!supabase) {
@@ -280,6 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!uid) return { ok: false, error: "Not signed in." };
       // Re-use the same direct-fetch path as refreshAdminFlag and update state.
       await refreshAdminFlag(uid);
+      await loadOrg(uid);
       // Read the freshest value via REST one more time so we can return it.
       const url = import.meta.env.VITE_SUPABASE_URL as string;
       const apikey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -307,6 +370,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Eagerly clear org state so a fast user switch can't briefly expose the
+    // previous member's workspace before the auth effect re-runs.
+    setActiveOrgId(null);
+    setOrgRole(null);
     await supabase?.auth.signOut();
   };
 
@@ -318,6 +385,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isConfigured: isSupabaseConfigured,
         isAdmin,
+        activeOrgId,
+        orgRole,
+        orgChecked,
+        refreshOrg,
         signInWithPassword,
         resetPasswordForEmail,
         updatePassword,
@@ -367,6 +438,25 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     );
   }
   if (!user || !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
+/** Gate a route to org owners/managers. Staff are redirected home.
+ *  Note: this is route/UI-level gating. Data-level role restriction (e.g. staff
+ *  not being able to read financials at all) would require role-aware RLS and is
+ *  tracked as a follow-up. */
+export function RequireManager({ children }: { children: ReactNode }) {
+  const { orgRole, orgChecked, user, isLoading } = useAuth();
+  if (isLoading || !orgChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-base">
+        <div className="text-text-secondary text-sm">Loading…</div>
+      </div>
+    );
+  }
+  if (!user || (orgRole !== "owner" && orgRole !== "manager")) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;

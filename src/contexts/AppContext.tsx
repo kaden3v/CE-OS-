@@ -141,6 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completed: false,
       updated_at: new Date().toISOString(),
       user_id: '',
+      org_id: null,
     } as Task);
   };
 

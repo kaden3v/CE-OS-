@@ -103,6 +103,32 @@ Deno.serve(async (req: Request) => {
       console.error("update failed", updateErr);
       return json({ error: "Could not update request" }, 500);
     }
+
+    // Add the approved user to the approving admin's organization so the team
+    // shares data. Without this they'd sign in to a "no workspace" screen.
+    const { data: adminOrg } = await admin
+      .from("org_memberships")
+      .select("org_id")
+      .eq("user_id", callerId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!adminOrg?.org_id) {
+      console.warn("approving admin has no org; approved user not added to a workspace");
+      return json({ ok: true, action, warning: "admin_has_no_org" });
+    }
+    const { error: memberErr } = await admin
+      .from("org_memberships")
+      .upsert(
+        { org_id: adminOrg.org_id, user_id: reqRow.user_id, role: "staff" },
+        { onConflict: "org_id,user_id", ignoreDuplicates: true },
+      );
+    if (memberErr) {
+      // Non-fatal: the user is unbanned and can sign in; an owner can still add
+      // them via the Team page. Surface a soft warning to the admin UI.
+      console.error("add member failed", memberErr);
+      return json({ ok: true, action, warning: "approved_but_not_added_to_org" });
+    }
     return json({ ok: true, action });
   }
 

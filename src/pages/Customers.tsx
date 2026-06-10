@@ -31,7 +31,7 @@ export default function Customers() {
     }),
   });
   const { addToast } = useApp();
-  const { user } = useAuth();
+  const { user, activeOrgId } = useAuth();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => customers.find((c) => c.id === selectedId) ?? null, [customers, selectedId]);
@@ -42,7 +42,7 @@ export default function Customers() {
   // Per-customer subscription map (only loaded for the selected one)
   const [activeSub, setActiveSub] = useState<Subscription | null>(null);
   useEffect(() => {
-    if (!selectedId || !user || !supabase) {
+    if (!selectedId || !user || !supabase || !activeOrgId) {
       setActiveSub(null);
       return;
     }
@@ -50,11 +50,11 @@ export default function Customers() {
       .from("subscriptions")
       .select("*")
       .eq("customer_id", selectedId)
-      .eq("user_id", user.id)
+      .eq("org_id", activeOrgId)
       .eq("status", "active")
       .maybeSingle()
       .then(({ data }) => setActiveSub(data));
-  }, [selectedId, user?.id]);
+  }, [selectedId, user?.id, activeOrgId]);
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
