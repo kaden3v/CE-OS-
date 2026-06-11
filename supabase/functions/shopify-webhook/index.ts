@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { importNormalizedOrder, NormalizedOrder } from "../_shared/import-order.ts";
 
 /**
  * Shopify order-sync webhook (orders/create).
@@ -13,10 +14,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
  * without hand-copying the HMAC secret out of the Shopify admin. HMAC is
  * preferred whenever SHOPIFY_WEBHOOK_SECRET is configured.
  *
- * Per order: dedupe by external_id, upsert the customer by email, insert the
- * order + line items (channel "shopify"), and open a pending shipment with the
- * destination ZIP/state so the weather sweep and fulfillment triggers cover
- * synced orders exactly like manual ones. (Inventory decrements on ship.)
+ * The payload is normalized and handed to the shared importNormalizedOrder()
+ * (see _shared/import-order.ts) — the same path the Etsy poller uses — which
+ * dedupes by external_id, upserts the customer, inserts the order + items
+ * (channel "shopify"), and opens a pending shipment so the weather sweep and
+ * fulfillment triggers cover synced orders exactly like manual ones.
  */
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -90,109 +92,40 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Unexpected payload shape" }, 400);
   }
 
-  const externalId = `shopify:${payload.id}`;
-
-  // Idempotency — Shopify retries webhooks; never double-import.
-  const { data: existing } = await admin
-    .from("orders").select("id").eq("external_id", externalId).maybeSingle();
-  if (existing) return json({ ok: true, duplicate: true });
-
-  // Single-org deployment: attribute everything to the business org and its owner.
-  const { data: org } = await admin
-    .from("organizations").select("id").order("created_at").limit(1).maybeSingle();
-  if (!org) return json({ error: "No organization configured" }, 500);
-  const { data: owner } = await admin
-    .from("org_memberships").select("user_id").eq("org_id", org.id).eq("role", "owner").limit(1).maybeSingle();
-  if (!owner) return json({ error: "No org owner" }, 500);
-
-  // Upsert customer by email.
-  let customerId: string | null = null;
-  const email = (payload.email ?? payload.customer?.email ?? "").trim().toLowerCase();
-  const customerName = [payload.customer?.first_name, payload.customer?.last_name]
-    .filter(Boolean).join(" ") || email || "Shopify customer";
-  if (email) {
-    const { data: found } = await admin
-      .from("customers").select("id").eq("org_id", org.id).eq("email", email).maybeSingle();
-    customerId = found?.id ?? null;
-  }
-  if (!customerId) {
-    const { data: created, error: custErr } = await admin
-      .from("customers")
-      .insert({
-        org_id: org.id,
-        user_id: owner.user_id,
-        name: customerName,
-        email: email || null,
-        shopify_id: payload.customer?.id ? String(payload.customer.id) : null,
-      })
-      .select("id").single();
-    if (custErr) console.error("customer insert failed", custErr);
-    customerId = created?.id ?? null;
-  }
-
+  // Normalize the Shopify payload, then hand it to the shared importer.
   const subtotal = Number(payload.subtotal_price ?? 0);
   const tax = Number(payload.total_tax ?? 0);
   const shipping = (payload.shipping_lines ?? []).reduce(
     (s: number, l: any) => s + Number(l?.price ?? 0), 0);
   const total = Number(payload.total_price ?? subtotal + tax + shipping);
-
-  const { data: order, error: orderErr } = await admin
-    .from("orders")
-    .insert({
-      org_id: org.id,
-      user_id: owner.user_id,
-      customer_id: customerId,
-      external_id: externalId,
-      channel: "shopify",
-      status: "pending",
-      subtotal,
-      shipping,
-      tax,
-      total,
-      notes: payload.note ?? null,
-      placed_at: payload.created_at ?? new Date().toISOString(),
-    })
-    .select("id").single();
-  if (orderErr || !order) {
-    console.error("order insert failed", orderErr);
-    return json({ error: "Order insert failed" }, 500);
-  }
-
-  const items = payload.line_items.map((li: any) => ({
-    org_id: org.id,
-    user_id: owner.user_id,
-    order_id: order.id,
-    cultivar_id: null,
-    inventory_id: null,
-    name_snapshot: String(li.title ?? li.name ?? "Item"),
-    qty: Number(li.quantity ?? 1),
-    price: Number(li.price ?? 0),
-  }));
-  const { error: itemsErr } = await admin.from("order_items").insert(items);
-  if (itemsErr) console.error("items insert failed", itemsErr);
-
-  // Open a shipment so the weather sweep + fulfillment pipeline cover it.
+  const email = (payload.email ?? payload.customer?.email ?? "").trim().toLowerCase();
   const addr = payload.shipping_address;
-  if (addr?.zip) {
-    const { error: shipErr } = await admin.from("shipments").insert({
-      org_id: org.id,
-      user_id: owner.user_id,
-      order_id: order.id,
-      status: "pending",
-      ship_to_zip: String(addr.zip),
-      ship_to_state: addr.province_code ? String(addr.province_code) : null,
-    });
-    if (shipErr) console.error("shipment insert failed", shipErr);
-  }
 
-  await admin.from("activity_log").insert({
-    org_id: org.id,
-    actor_id: null,
-    action: "created",
-    entity: "orders",
-    entity_id: order.id,
-    summary: `Shopify order #${payload.order_number ?? payload.id} synced (${items.length} item${items.length === 1 ? "" : "s"})`,
-  });
+  const normalized: NormalizedOrder = {
+    externalId: `shopify:${payload.id}`,
+    channel: "shopify",
+    email: email || null,
+    customerName: [payload.customer?.first_name, payload.customer?.last_name]
+      .filter(Boolean).join(" ") || email || "Shopify customer",
+    customerExternalId: payload.customer?.id ? String(payload.customer.id) : null,
+    subtotal,
+    shipping,
+    tax,
+    total,
+    notes: payload.note ?? null,
+    placedAt: payload.created_at ?? new Date().toISOString(),
+    items: payload.line_items.map((li: any) => ({
+      name: String(li.title ?? li.name ?? "Item"),
+      qty: Number(li.quantity ?? 1),
+      price: Number(li.price ?? 0),
+    })),
+    shipToZip: addr?.zip ? String(addr.zip) : null,
+    shipToState: addr?.province_code ? String(addr.province_code) : null,
+    orderLabel: `#${payload.order_number ?? payload.id}`,
+  };
 
-  return json({ ok: true, order_id: order.id });
+  const result = await importNormalizedOrder(admin, normalized);
+  if (!result.ok) return json({ error: result.error ?? "Import failed" }, 500);
+  if (result.duplicate) return json({ ok: true, duplicate: true });
+  return json({ ok: true, order_id: result.orderId });
 });
