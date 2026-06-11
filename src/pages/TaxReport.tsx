@@ -3,22 +3,76 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FileSpreadsheet, ChevronDown } from "lucide-react";
 import { useEntity } from "@/hooks/useEntity";
+import { useOrders } from "@/hooks/useOrders";
 import { useApp } from "@/contexts/AppContext";
 import type { Tables } from "@/lib/database.types";
 
 type Expense = Tables<"expenses">;
+type Shipment = Tables<"shipments">;
+
+const EXCLUDED_ORDER_STATUSES = ["cancelled", "refunded"];
+
+const csvCell = (v: string | number | null | undefined): string => {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const downloadCsv = (filename: string, rows: string[][]) => {
+  const blob = new Blob([rows.map((r) => r.map(csvCell).join(",")).join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 export default function TaxReport() {
   const { data: expenses } = useEntity<Expense>("expenses", []);
+  const { data: orders } = useOrders();
+  const { data: shipments } = useEntity<Shipment>("shipments", []);
   const { addToast } = useApp();
 
   const years = useMemo(() => {
     const ys = new Set<number>();
     expenses.forEach((e) => ys.add(new Date(e.occurred_on).getFullYear()));
+    orders.forEach((o) => ys.add(new Date(o.placed_at).getFullYear()));
     if (ys.size === 0) ys.add(new Date().getFullYear());
     return Array.from(ys).sort((a, b) => b - a);
-  }, [expenses]);
+  }, [expenses, orders]);
   const [year, setYear] = useState<number>(years[0] ?? new Date().getFullYear());
+
+  // Destination state per order (from its shipment) — what sales-tax nexus
+  // questions actually need.
+  const stateByOrder = useMemo(() => {
+    const map = new Map<string, string>();
+    shipments.forEach((s) => {
+      if (s.ship_to_state) map.set(s.order_id, s.ship_to_state.toUpperCase());
+    });
+    return map;
+  }, [shipments]);
+
+  const sales = useMemo(() => {
+    const valid = orders.filter(
+      (o) => new Date(o.placed_at).getFullYear() === year && !EXCLUDED_ORDER_STATUSES.includes(o.status),
+    );
+    const byChannel: Record<string, number> = {};
+    const byState: Record<string, number> = {};
+    const byMonth: Record<string, number> = {};
+    let total = 0;
+    let taxCollected = 0;
+    for (const o of valid) {
+      const amount = Number(o.total);
+      total += amount;
+      taxCollected += Number(o.tax);
+      byChannel[o.channel] = (byChannel[o.channel] ?? 0) + amount;
+      const st = stateByOrder.get(o.id) ?? "Unknown";
+      byState[st] = (byState[st] ?? 0) + amount;
+      const m = new Date(o.placed_at).toLocaleString("en-US", { month: "short" });
+      byMonth[m] = (byMonth[m] ?? 0) + amount;
+    }
+    return { valid, byChannel, byState, byMonth, total, taxCollected };
+  }, [orders, year, stateByOrder]);
 
   const { byCategory, byMonth, total } = useMemo(() => {
     const filtered = expenses.filter((e) => new Date(e.occurred_on).getFullYear() === year);
@@ -38,21 +92,36 @@ export default function TaxReport() {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const maxMonthly = Math.max(...Object.values(byMonth), 0);
 
-  const handleExportCsv = () => {
-    const rows = [["Date", "Category", "Amount", "Description"].join(",")];
+  const handleExportExpensesCsv = () => {
+    const rows: string[][] = [["Date", "Category", "Amount", "Description"]];
     expenses
       .filter((e) => new Date(e.occurred_on).getFullYear() === year)
       .forEach((e) => {
-        rows.push([e.occurred_on, e.category ?? "", Number(e.amount).toFixed(2), `"${(e.description ?? "").replace(/"/g, '""')}"`].join(","));
+        rows.push([e.occurred_on, e.category ?? "", Number(e.amount).toFixed(2), e.description ?? ""]);
       });
-    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `expenses-${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(`expenses-${year}.csv`, rows);
     addToast({ title: "CSV exported", description: `expenses-${year}.csv`, status: "ok" });
+  };
+
+  // Flat, accounting-software-friendly sales export (one row per order).
+  const handleExportSalesCsv = () => {
+    const rows: string[][] = [["Date", "Order", "Channel", "Customer", "Ship-to state", "Status", "Subtotal", "Shipping", "Tax", "Total"]];
+    sales.valid.forEach((o) => {
+      rows.push([
+        new Date(o.placed_at).toISOString().slice(0, 10),
+        o.id.slice(0, 8),
+        o.channel,
+        o.customer?.name ?? "",
+        stateByOrder.get(o.id) ?? "",
+        o.status,
+        Number(o.subtotal).toFixed(2),
+        Number(o.shipping).toFixed(2),
+        Number(o.tax).toFixed(2),
+        Number(o.total).toFixed(2),
+      ]);
+    });
+    downloadCsv(`sales-${year}.csv`, rows);
+    addToast({ title: "CSV exported", description: `sales-${year}.csv`, status: "ok" });
   };
 
   return (
@@ -60,7 +129,7 @@ export default function TaxReport() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Tax Report</h1>
-          <p className="text-sm text-text-secondary">Expense summary by category and month.</p>
+          <p className="text-sm text-text-secondary">Sales and expense summaries for tax season.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -75,12 +144,89 @@ export default function TaxReport() {
             </select>
             <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
           </div>
-          <Button variant="brand" onClick={handleExportCsv}>
+          <Button variant="outline" onClick={handleExportSalesCsv}>
             <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Export CSV
+            Sales CSV
+          </Button>
+          <Button variant="brand" onClick={handleExportExpensesCsv}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Expenses CSV
           </Button>
         </div>
       </div>
+
+      {/* Sales (what you collected) */}
+      <h2 className="text-base font-medium mb-4">Sales</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Gross sales {year}</div>
+          <div className="text-3xl font-semibold tabular-nums">${sales.total.toFixed(2)}</div>
+        </Card>
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Tax collected</div>
+          <div className="text-3xl font-semibold tabular-nums">${sales.taxCollected.toFixed(2)}</div>
+        </Card>
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Orders</div>
+          <div className="text-3xl font-semibold tabular-nums">{sales.valid.length}</div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <Card className="p-6">
+          <h3 className="text-sm font-medium mb-4">Sales by Channel</h3>
+          {Object.keys(sales.byChannel).length === 0 ? (
+            <p className="text-sm text-text-tertiary">No sales for {year}.</p>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(sales.byChannel)
+                .sort((a, b) => b[1] - a[1])
+                .map(([channel, amount]) => {
+                  const pct = sales.total > 0 ? (amount / sales.total) * 100 : 0;
+                  return (
+                    <div key={channel} className="space-y-1">
+                      <div className="flex justify-between text-sm capitalize">
+                        <span>{channel}</span>
+                        <span className="tabular-nums">${amount.toFixed(2)} <span className="text-text-tertiary">· {pct.toFixed(0)}%</span></span>
+                      </div>
+                      <div className="h-1.5 bg-bg-active rounded overflow-hidden">
+                        <div className="h-full bg-accent-brand" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-sm font-medium mb-4">Sales by Ship-to State</h3>
+          {Object.keys(sales.byState).length === 0 ? (
+            <p className="text-sm text-text-tertiary">No sales for {year}. States come from each order's shipment.</p>
+          ) : (
+            <div className="space-y-2">
+              {Object.entries(sales.byState)
+                .sort((a, b) => b[1] - a[1])
+                .map(([st, amount]) => {
+                  const pct = sales.total > 0 ? (amount / sales.total) * 100 : 0;
+                  return (
+                    <div key={st} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span>{st}</span>
+                        <span className="tabular-nums">${amount.toFixed(2)} <span className="text-text-tertiary">· {pct.toFixed(0)}%</span></span>
+                      </div>
+                      <div className="h-1.5 bg-bg-active rounded overflow-hidden">
+                        <div className="h-full bg-accent-brand" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <h2 className="text-base font-medium mb-4">Expenses</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="p-6">

@@ -58,8 +58,9 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
       from the UI).
 
 > P1 shipped 2026-06-10. Notes: the order⇄shipment sync + inventory-decrement triggers live in
-> migration `20260610090000_p1_workflow_sync.sql` — **pending prod apply** (needs explicit
-> authorization). Listings now show "Listed qty" vs real "On hand" from inventory (true channel
+> migrations `20260610090000_p1_workflow_sync.sql` + `20260610100000_p1_fix_shipment_timestamps.sql`
+> — **applied to prod 2026-06-10 and verified end-to-end** (self-rolling-back live test: both sync
+> directions, mature-first consumption, timestamp stamping, audit rows). Listings now show "Listed qty" vs real "On hand" from inventory (true channel
 > sync arrives with P3). Orphaned-table decisions: mortality_events got a "Log loss" UI;
 > subscriptions got start/cancel on the customer panel; etsy_imports is superseded by the P3 Etsy
 > sync; qr_codes.scan_count stays dormant until the P4 mobile scan workflows.
@@ -70,13 +71,14 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
       D. capensis" should decrement pots/media/labels and accumulate actual cost onto the batch →
       cultivar profitability becomes margin, not just revenue. `CultivarProfit.tsx` openly admits
       COGS isn't tracked.
-- [ ] **Sales-tax report** — TaxReport covers expense categories only; add a sales-side report
-      (by state/channel) since plants ship across states.
+- [x] **Sales-tax report** — TaxReport now has a Sales section: gross sales, tax collected,
+      by channel, and by ship-to state (from each order's shipment), with year filter.
 - [ ] **Schedule C-ready COGS export** at tax time (Craftybase's most-loved feature).
 - [ ] **Wholesale invoicing + per-customer price tiers + availability list** (pattern: GrowPoint /
       MyPlantShop / SBI) — wholesale plant buying runs on emailed availability lists generated from
       saleable-stage inventory; CEOS is uniquely positioned to generate these.
-- [ ] **Accounting export** (QuickBooks/Xero CSV at minimum).
+- [x] **Accounting export** — flat per-order Sales CSV + Expenses CSV from TaxReport
+      (QuickBooks-importable columns). Deeper sync (API) can ride with P3.
 
 ## P3 — Integrations (already on the roadmap; ordering confirmed by user: Shopify → Etsy → Shipping)
 
