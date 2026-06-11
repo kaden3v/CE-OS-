@@ -131,7 +131,7 @@ create table if not exists public.inventory (
   genus text,
   stock_juv integer not null default 0,
   stock_mat integer not null default 0,
-  stock_flower integer not null default 0,
+  stock_growout integer not null default 0,
   updated_at timestamptz not null default now()
 );
 create index if not exists inventory_user_id_idx on public.inventory(user_id);

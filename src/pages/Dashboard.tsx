@@ -1,6 +1,7 @@
 import { StatTile } from "@/components/ui/StatTile";
 import { Card } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { Badge } from "@/components/ui/Badge";
 import { Store, ShoppingBag, CheckCircle2, BarChart3, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RechartsChart } from "@/components/ui/RechartsChart";
@@ -28,7 +29,7 @@ type AlertItem = { id: string; href: string; label: string; detail: string; tone
 
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"operations" | "reporting">("operations");
-  const { tasks, toggleTask } = useApp();
+  const { tasks, toggleTask, setGlobalOrderViewId } = useApp();
   const pendingTasks = tasks.filter(t => !t.completed).slice(0, 5);
 
   const { data: orders } = useOrders();
@@ -42,9 +43,12 @@ export default function Dashboard() {
   const alerts = useMemo<AlertItem[]>(() => {
     const list: AlertItem[] = [];
     inventory.forEach((i) => {
-      const total = i.stock_juv + i.stock_mat + i.stock_flower;
-      if (total < LOW_STOCK_THRESHOLD) {
-        list.push({ id: `inv-${i.id}`, href: "/inventory", label: i.name, detail: `${total} plants left`, tone: "warn" });
+      // Low stock = low SELLABLE stock (sale-ready + specimen); grow-out plants
+      // can't cover orders, so they don't count toward availability.
+      const saleable = i.stock_juv + i.stock_mat;
+      if (saleable < LOW_STOCK_THRESHOLD) {
+        const growing = i.stock_growout > 0 ? ` (${i.stock_growout} growing on)` : "";
+        list.push({ id: `inv-${i.id}`, href: "/inventory", label: i.name, detail: `${saleable} sellable left${growing}`, tone: "warn" });
       }
     });
     supplies.forEach((s) => {
@@ -67,7 +71,7 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const activeOrders = orders.filter((o) => ["pending", "processing", "packed"].includes(o.status)).length;
-    const plantsInStock = inventory.reduce((s, p) => s + (p.stock_juv ?? 0) + (p.stock_mat ?? 0) + (p.stock_flower ?? 0), 0);
+    const plantsInStock = inventory.reduce((s, p) => s + (p.stock_growout ?? 0) + (p.stock_juv ?? 0) + (p.stock_mat ?? 0), 0);
     const pendingShipments = shipments.filter((s) => s.status === "pending" || s.status === "ready").length;
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const revenueMtd = orders
@@ -77,7 +81,20 @@ export default function Dashboard() {
   }, [orders, inventory, shipments]);
 
   const recent = orders.slice(0, 5);
-  const watch = shipments.filter((s) => s.status === "pending" || s.status === "ready").slice(0, 3);
+
+  // Open shipments enriched with their order (customer, items, value) and how
+  // long they've been waiting — oldest first, since those are the most urgent.
+  const watch = useMemo(() => {
+    return shipments
+      .filter((s) => s.status === "pending" || s.status === "ready")
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .slice(0, 3)
+      .map((sh) => {
+        const order = orders.find((o) => o.id === sh.order_id) ?? null;
+        const ageDays = Math.floor((Date.now() - new Date(sh.created_at).getTime()) / MS_PER_DAY);
+        return { sh, order, ageDays };
+      });
+  }, [shipments, orders]);
 
   // Reporting aggregates — computed from real orders (cancelled/refunded excluded).
   const reporting = useMemo(() => {
@@ -208,22 +225,65 @@ export default function Dashboard() {
                 {watch.length === 0 && (
                   <Card className="p-4 text-sm text-text-tertiary text-center">No shipments queued.</Card>
                 )}
-                {watch.map((sh) => (
+                {watch.map(({ sh, order, ageDays }) => (
                   <Card key={sh.id} className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="text-sm font-medium font-mono">{sh.id.slice(0, 8)}</div>
-                        <div className="text-xs text-text-tertiary">{sh.ship_to_state ? `${sh.ship_to_zip ?? ""} ${sh.ship_to_state}` : sh.carrier ?? "—"}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">{order?.customer?.name ?? `Shipment ${sh.id.slice(0, 8)}`}</span>
+                          {order && (
+                            <Badge variant={order.channel === "shopify" ? "brand" : "default"} className="capitalize shrink-0">
+                              {order.channel}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-text-tertiary mt-0.5">
+                          {order ? (
+                            <>
+                              <span className="font-mono">{order.id.slice(0, 8)}</span>
+                              {" · "}
+                              <span className="tabular-nums">${Number(order.total).toFixed(2)}</span>
+                              {" · "}
+                              {new Date(order.placed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                            </>
+                          ) : (
+                            <span className="font-mono">{sh.id.slice(0, 8)}</span>
+                          )}
+                        </div>
                       </div>
-                      <Link to="/shipping" className="text-xs text-text-secondary hover:text-text-primary">Open</Link>
+                      {order ? (
+                        <Link
+                          to="/orders"
+                          onClick={() => setGlobalOrderViewId(order.id)}
+                          className="text-xs text-text-secondary hover:text-text-primary shrink-0"
+                        >
+                          Open
+                        </Link>
+                      ) : (
+                        <Link to="/shipping" className="text-xs text-text-secondary hover:text-text-primary shrink-0">Open</Link>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between text-xs pt-3 border-t border-border-subtle mt-1 capitalize">
-                      <div className="flex items-center gap-2">
+                    {order && order.items.length > 0 && (
+                      <div className="text-xs text-text-secondary truncate mt-2" title={order.items.map((i) => `${i.qty}× ${i.name_snapshot}`).join(", ")}>
+                        {order.items.map((i) => `${i.qty}× ${i.name_snapshot}`).join(", ")}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2 text-xs pt-3 border-t border-border-subtle mt-3">
+                      <div className="flex items-center gap-2 capitalize min-w-0">
                         <StatusDot status={sh.weather_hold ? "warn" : "info"} />
                         <span className="text-text-secondary">{sh.status}</span>
+                        {sh.weather_hold && <span className="text-status-warn normal-case shrink-0">Weather hold</span>}
                       </div>
-                      {sh.weather_hold && <span className="text-status-warn">Weather hold</span>}
+                      <div className="flex items-center gap-3 text-text-tertiary shrink-0">
+                        {(sh.ship_to_zip || sh.ship_to_state) && (
+                          <span>→ {[sh.ship_to_zip, sh.ship_to_state].filter(Boolean).join(" ")}</span>
+                        )}
+                        <span className={cn("tabular-nums", ageDays >= 7 ? "text-status-alert" : ageDays >= 3 ? "text-status-warn" : "")}>
+                          {ageDays <= 0 ? "today" : `${ageDays}d in queue`}
+                        </span>
+                      </div>
                     </div>
+                    {sh.weather_note && <div className="text-xs text-text-tertiary mt-2">{sh.weather_note}</div>}
                   </Card>
                 ))}
               </div>

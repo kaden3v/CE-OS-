@@ -427,7 +427,7 @@ export type Database = {
           genus: string | null
           id: string
           name: string
-          stock_flower: number
+          stock_growout: number
           stock_juv: number
           stock_mat: number
           updated_at: string
@@ -440,7 +440,7 @@ export type Database = {
           genus?: string | null
           id?: string
           name: string
-          stock_flower?: number
+          stock_growout?: number
           stock_juv?: number
           stock_mat?: number
           updated_at?: string
@@ -453,7 +453,7 @@ export type Database = {
           genus?: string | null
           id?: string
           name?: string
-          stock_flower?: number
+          stock_growout?: number
           stock_juv?: number
           stock_mat?: number
           updated_at?: string

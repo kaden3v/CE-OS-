@@ -47,9 +47,9 @@ export default function Propagation() {
       common: r.common,
       genus: r.genus,
       cultivar_id: r.cultivar_id,
+      stock_growout: r.stock_growout,
       stock_juv: r.stock_juv,
       stock_mat: r.stock_mat,
-      stock_flower: r.stock_flower,
     }),
   });
   const { addToast } = useApp();
@@ -57,12 +57,16 @@ export default function Propagation() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = batches.find((b) => b.id === selectedId) ?? null;
 
-  /** Move a ready batch's plants into inventory (juvenile stock) and clear the batch. */
+  /**
+   * Move a ready batch's plants into inventory as GROW-OUT stock (fresh from the
+   * prop bench — too young to sell yet) and clear the batch. They get promoted
+   * to Sale-Ready by hand once they've sized up.
+   */
   const convertToInventory = async (b: Batch) => {
-    if (!confirm(`Move ${b.count} × ${b.cultivar} into inventory as juvenile stock? The batch comes off the board.`)) return;
+    if (!confirm(`Move ${b.count} × ${b.cultivar} into inventory as grow-out stock? The batch comes off the board.`)) return;
     const existing = inventoryRows.find((i) => i.name.trim().toLowerCase() === b.cultivar.trim().toLowerCase());
     if (existing) {
-      const result = await updateInventory(existing.id, { stock_juv: existing.stock_juv + b.count } as Partial<InventoryRow>);
+      const result = await updateInventory(existing.id, { stock_growout: existing.stock_growout + b.count } as Partial<InventoryRow>);
       if (!result.ok) {
         addToast({ title: "Couldn't update inventory", description: friendlyDbError({ code: result.code } as any), status: "alert" });
         return;
@@ -74,9 +78,9 @@ export default function Propagation() {
         common: null,
         genus: null,
         cultivar_id: null,
-        stock_juv: b.count,
+        stock_growout: b.count,
+        stock_juv: 0,
         stock_mat: 0,
-        stock_flower: 0,
         updated_at: new Date().toISOString(),
         user_id: "",
         org_id: null,
@@ -88,7 +92,7 @@ export default function Propagation() {
     }
     await remove(b.id);
     setSelectedId(null);
-    addToast({ title: "Moved to inventory", description: `${b.count} × ${b.cultivar} added as juvenile stock`, status: "ok" });
+    addToast({ title: "Moved to inventory", description: `${b.count} × ${b.cultivar} added as grow-out stock`, status: "ok" });
   };
 
   const [isOpen, setIsOpen] = useState(false);

@@ -23,15 +23,29 @@ import { useEntity as useEntityRaw } from "@/hooks/useEntity";
 type InventoryRow = Tables<"inventory">;
 type CultivarRow = Tables<"cultivars">;
 
+// Stock tiers by sale-readiness:
+//   growout — "Grow-Out": too small/young to sell (not for sale)
+//   juv     — "Sale-Ready": juvenile size, established, sellable
+//   mat     — "Specimen": mature/premium, sellable
+type StockTier = "growout" | "juv" | "mat";
+
+const TIER_LABELS: Record<StockTier, string> = {
+  growout: "GROW-OUT",
+  juv: "SALE-READY",
+  mat: "SPECIMEN",
+};
+
 type InventoryItem = {
   id: string | number;
   name: string;
   common: string;
   genus: string;
   cultivar_id: string | null;
-  stock: { juv: number; mat: number; flower: number };
+  stock: { growout: number; juv: number; mat: number };
   lastUpdated: string;
 };
+
+const sellable = (s: InventoryItem["stock"]) => s.juv + s.mat;
 
 const INVENTORY: InventoryItem[] = [];
 
@@ -41,7 +55,7 @@ const fromRow = (r: InventoryRow): InventoryItem => ({
   common: r.common ?? "Unknown",
   genus: r.genus ?? "Unknown",
   cultivar_id: r.cultivar_id,
-  stock: { juv: r.stock_juv, mat: r.stock_mat, flower: r.stock_flower },
+  stock: { growout: r.stock_growout, juv: r.stock_juv, mat: r.stock_mat },
   lastUpdated: r.updated_at,
 });
 
@@ -56,9 +70,9 @@ const toRow = (it: Partial<InventoryItem>): Record<string, unknown> => {
   if ("genus" in it) row.genus = it.genus;
   if ("cultivar_id" in it) row.cultivar_id = it.cultivar_id;
   if (it.stock) {
+    row.stock_growout = it.stock.growout;
     row.stock_juv = it.stock.juv;
     row.stock_mat = it.stock.mat;
-    row.stock_flower = it.stock.flower;
   }
   return row;
 };
@@ -88,7 +102,8 @@ export default function Inventory() {
         item.name.toLowerCase().includes(q) ||
         item.common.toLowerCase().includes(q) ||
         item.genus.toLowerCase().includes(q);
-      const matchesLowStock = !lowStockFilter || item.stock.juv + item.stock.mat + item.stock.flower < 10;
+      // Low stock means low SELLABLE stock — Grow-Out plants can't cover orders.
+      const matchesLowStock = !lowStockFilter || sellable(item.stock) < 10;
       return matchesSearch && matchesLowStock;
     });
   }, [data, search, lowStockFilter]);
@@ -97,7 +112,7 @@ export default function Inventory() {
 
   // Modal logic
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", cultivar_id: "", juv: 0, mat: 0, flower: 0 });
+  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, mat: 0 });
   const { addToast } = useApp();
 
   // Edit Details modal
@@ -133,7 +148,7 @@ export default function Inventory() {
   };
 
   // Inline stock editor
-  const [stockDraft, setStockDraft] = useState<{ juv: number; mat: number; flower: number } | null>(null);
+  const [stockDraft, setStockDraft] = useState<{ growout: number; juv: number; mat: number } | null>(null);
   const [savingStock, setSavingStock] = useState(false);
 
   const startEditingStock = () => {
@@ -160,11 +175,11 @@ export default function Inventory() {
   const { user, activeOrgId, orgRole } = useAuth();
   const canManage = orgRole === "owner" || orgRole === "manager";
 
-  // Wholesale availability list — saleable (mature/flowering) stock, printable.
+  // Wholesale availability list — sellable (sale-ready/specimen) stock, printable.
   const handleAvailabilityList = () => {
-    const saleable = inventory.filter((i) => i.stock.mat + i.stock.flower > 0);
+    const saleable = inventory.filter((i) => sellable(i.stock) > 0);
     if (saleable.length === 0) {
-      addToast({ title: "Nothing saleable in stock", description: "No mature or flowering plants right now.", status: "info" });
+      addToast({ title: "Nothing sellable in stock", description: "No sale-ready or specimen plants right now.", status: "info" });
       return;
     }
     const win = window.open("", "_blank", "width=720,height=900");
@@ -174,7 +189,7 @@ export default function Inventory() {
     }
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const rows = saleable
-      .map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.common)}</td><td class="n">${i.stock.mat}</td><td class="n">${i.stock.flower}</td><td class="p"></td></tr>`)
+      .map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.common)}</td><td class="n">${i.stock.juv}</td><td class="n">${i.stock.mat}</td><td class="p"></td></tr>`)
       .join("");
     win.document.write(`<!doctype html><html><head><title>Availability — ${new Date().toLocaleDateString()}</title>
       <style>
@@ -184,9 +199,9 @@ export default function Inventory() {
         th,td{text-align:left;padding:8px;border-bottom:1px solid #ddd} .n{text-align:right} .p{width:90px;border-bottom:1px solid #ddd}
       </style></head><body>
       <h1>Canyon Exotics — Availability</h1>
-      <div class="muted">${new Date().toLocaleDateString()} · mature &amp; flowering stock</div>
+      <div class="muted">${new Date().toLocaleDateString()} · sale-ready &amp; specimen stock</div>
       <table>
-        <thead><tr><th>Cultivar</th><th>Common</th><th class="n">Mature</th><th class="n">Flowering</th><th>Price</th></tr></thead>
+        <thead><tr><th>Cultivar</th><th>Common</th><th class="n">Sale-Ready</th><th class="n">Specimen</th><th>Price</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <script>window.onload = () => { window.print(); }<\/script>
@@ -194,7 +209,7 @@ export default function Inventory() {
     win.document.close();
   };
   const [isLossOpen, setIsLossOpen] = useState(false);
-  const [lossForm, setLossForm] = useState({ stage: "juv" as "juv" | "mat" | "flower", count: 1, cause: "", notes: "" });
+  const [lossForm, setLossForm] = useState({ stage: "growout" as StockTier, count: 1, cause: "", notes: "" });
 
   const handleLogLoss = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,7 +242,7 @@ export default function Inventory() {
       summary: `${selectedItem.name}: −${count} (loss${lossForm.cause.trim() ? ` — ${lossForm.cause.trim()}` : ""})`,
     });
     setIsLossOpen(false);
-    setLossForm({ stage: "juv", count: 1, cause: "", notes: "" });
+    setLossForm({ stage: "growout", count: 1, cause: "", notes: "" });
     addToast({ title: "Loss logged", description: `−${count} ${selectedItem.name}`, status: "info" });
   };
 
@@ -254,12 +269,12 @@ export default function Inventory() {
       common: newPlant.common || linkedCultivar?.common || "Unknown",
       genus: linkedCultivar?.genus ?? newPlant.genus ?? "Unknown",
       cultivar_id: newPlant.cultivar_id || null,
-      stock: { juv: newPlant.juv, mat: newPlant.mat, flower: newPlant.flower },
+      stock: { growout: newPlant.growout, juv: newPlant.juv, mat: newPlant.mat },
       lastUpdated: "Just now",
     };
     await addInventoryItem(plant);
     setIsAddModalOpen(false);
-    setNewPlant({ name: "", common: "", genus: "", cultivar_id: "", juv: 0, mat: 0, flower: 0 });
+    setNewPlant({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, mat: 0 });
     addToast("Plant added to inventory", "success");
   };
 
@@ -319,8 +334,7 @@ export default function Inventory() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-24 md:pb-0">
               {filteredData.map((item) => {
-                const totalStock = item.stock.juv + item.stock.mat + item.stock.flower;
-                const isLowStock = totalStock < 10;
+                const isLowStock = sellable(item.stock) < 10;
                 return (
                   <Card key={item.id} className="p-4 flex flex-col hover:border-border-strong transition-colors cursor-pointer group" onClick={() => setSelectedId(item.id)}>
                     <div className="flex items-start gap-4 mb-6">
@@ -334,25 +348,25 @@ export default function Inventory() {
                     </div>
                     
                     <div className="grid grid-cols-3 gap-2 p-2 bg-bg-base/50 rounded-lg border border-border-subtle mb-4">
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs text-text-secondary mb-2">JUVENILE</span>
+                      <div className="flex flex-col items-center" title="Too small/young to sell">
+                        <span className="text-xs text-text-tertiary mb-2">{TIER_LABELS.growout}</span>
+                        <div className="flex items-center gap-2 font-medium tabular-nums text-text-secondary">
+                          <StatusDot status="info" />
+                          {item.stock.growout}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center border-l border-r border-border-subtle" title="Juvenile size, sellable">
+                        <span className="text-xs text-text-secondary mb-2">{TIER_LABELS.juv}</span>
                         <div className="flex items-center gap-2 font-medium tabular-nums">
                           <StatusDot status={item.stock.juv < 5 ? "warn" : "ok"} />
                           {item.stock.juv}
                         </div>
                       </div>
-                      <div className="flex flex-col items-center border-l border-r border-border-subtle">
-                        <span className="text-xs text-text-secondary mb-2">MATURE</span>
+                      <div className="flex flex-col items-center" title="Mature/premium, sellable">
+                        <span className="text-xs text-text-secondary mb-2">{TIER_LABELS.mat}</span>
                         <div className="flex items-center gap-2 font-medium tabular-nums">
                           <StatusDot status={item.stock.mat < 2 ? "warn" : "ok"} />
                           {item.stock.mat}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs text-text-secondary mb-2">FLOWERING</span>
-                        <div className="flex items-center gap-2 font-medium tabular-nums">
-                          <StatusDot status={item.stock.flower === 0 ? "info" : "ok"} />
-                          {item.stock.flower}
                         </div>
                       </div>
                     </div>
@@ -448,11 +462,11 @@ export default function Inventory() {
                       )}
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      {(["juv", "mat", "flower"] as const).map((stage) => {
-                        const labels = { juv: "JUVENILE", mat: "MATURE", flower: "FLOWERING" };
+                      {(["growout", "juv", "mat"] as const).map((stage) => {
+                        const labels = TIER_LABELS;
                         const v = stockDraft ? stockDraft[stage] : selectedItem.stock[stage];
-                        const dotStatus = stage === "flower"
-                          ? (v === 0 ? "info" : "ok")
+                        const dotStatus = stage === "growout"
+                          ? "info"
                           : stage === "juv"
                             ? (v < 5 ? "warn" : "ok")
                             : (v < 2 ? "warn" : "ok");
@@ -561,9 +575,9 @@ export default function Inventory() {
                     onChange={(e) => setLossForm({ ...lossForm, stage: e.target.value as typeof lossForm.stage })}
                     className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
                   >
-                    <option value="juv">Juvenile ({selectedItem.stock.juv})</option>
-                    <option value="mat">Mature ({selectedItem.stock.mat})</option>
-                    <option value="flower">Flowering ({selectedItem.stock.flower})</option>
+                    <option value="growout">Grow-Out ({selectedItem.stock.growout})</option>
+                    <option value="juv">Sale-Ready ({selectedItem.stock.juv})</option>
+                    <option value="mat">Specimen ({selectedItem.stock.mat})</option>
                   </select>
                 </div>
                 <div>
@@ -642,16 +656,16 @@ export default function Inventory() {
                 </div>
                 <div className="grid grid-cols-3 gap-2 pt-2">
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase">Juv.</label>
+                     <label className="text-xs text-text-secondary uppercase" title="Too small/young to sell">Grow-Out</label>
+                     <Input type="number" min="0" required value={newPlant.growout} onChange={(e) => setNewPlant({...newPlant, growout: parseInt(e.target.value) || 0})} className="w-full" />
+                   </div>
+                   <div className="space-y-2">
+                     <label className="text-xs text-text-secondary uppercase" title="Juvenile size, sellable">Sale-Ready</label>
                      <Input type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase">Mat.</label>
+                     <label className="text-xs text-text-secondary uppercase" title="Mature/premium, sellable">Specimen</label>
                      <Input type="number" min="0" required value={newPlant.mat} onChange={(e) => setNewPlant({...newPlant, mat: parseInt(e.target.value) || 0})} className="w-full" />
-                   </div>
-                   <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase">Flw.</label>
-                     <Input type="number" min="0" required value={newPlant.flower} onChange={(e) => setNewPlant({...newPlant, flower: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                 </div>
               </form>
