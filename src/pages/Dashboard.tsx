@@ -131,11 +131,11 @@ export default function Dashboard() {
   }, [orders]);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 flex flex-col h-full">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 flex flex-col h-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
          <div>
             <h1 className="text-2xl font-semibold mb-2">Overview</h1>
-            <p className="text-sm text-text-secondary">Nursery operations and financial insights.</p>
+            <p className="text-sm text-text-secondary hidden sm:block">Nursery operations and financial insights.</p>
          </div>
          <div className="flex bg-bg-active border border-border-subtle p-2 rounded-lg">
             <button 
@@ -155,8 +155,8 @@ export default function Dashboard() {
 
       {viewMode === "operations" && (
         <>
-          {/* Top Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
+          {/* Top Stats — 2×2 on phones so all four fit one screen */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 shrink-0">
             <StatTile label="Active Orders" value={stats.activeOrders.toString()} />
             <StatTile label="Plants in Stock" value={stats.plantsInStock.toLocaleString()} />
             <StatTile label="Pending Shipments" value={stats.pendingShipments.toString()} />

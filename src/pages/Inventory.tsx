@@ -386,7 +386,7 @@ export default function Inventory() {
       </div>
 
       {/* FAB for Mobile */}
-      <div className="md:hidden fixed bottom-20 right-4 z-30">
+      <div className="md:hidden fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30">
         <button 
            onClick={() => setIsAddModalOpen(true)}
            className="w-14 h-14 rounded-2xl bg-[rgba(255,255,255,0.06)] backdrop-blur-xl border border-border-subtle flex items-center justify-center shadow-2xl text-text-secondary hover:text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brand">

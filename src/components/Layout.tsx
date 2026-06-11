@@ -161,8 +161,10 @@ export function Layout() {
 
   return (
     <div className={cn(
-      "flex h-screen bg-bg-base text-text-primary overflow-hidden",
-      settings.density === 'compact' ? 'font-compact' : '' 
+      // h-dvh (not h-screen): iOS Safari's 100vh is taller than the visible
+      // viewport when the URL bar shows, which clips the bottom of the app.
+      "flex h-dvh bg-bg-base text-text-primary overflow-hidden",
+      settings.density === 'compact' ? 'font-compact' : ''
     )}>
       {/* Sidebar - hidden on mobile and when printing */}
       <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-20 no-print">
@@ -320,7 +322,7 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen relative">
+      <div className="flex-1 flex flex-col min-w-0 h-dvh relative">
         {/* Topbar - hidden when printing */}
         <header className="h-[56px] flex-shrink-0 bg-bg-elevated backdrop-blur-md border-b border-border-subtle flex items-center px-4 md:px-6 justify-between z-10 no-print">
           <div className="flex items-center text-sm text-text-secondary truncate pr-4">
@@ -338,13 +340,13 @@ export function Layout() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-4 relative">
-            <button className="md:hidden relative transition-colors text-text-secondary hover:text-text-primary" onClick={() => setCommandPaletteOpen(true)}>
+          <div className="flex items-center gap-1 md:gap-2 relative">
+            <button className="md:hidden relative p-2.5 rounded-lg transition-colors text-text-secondary hover:text-text-primary active:bg-bg-hover" onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
               <Search className="w-5 h-5" />
             </button>
-            <button 
+            <button
               className={cn(
-                "relative transition-colors", 
+                "relative p-2.5 rounded-lg transition-colors active:bg-bg-hover",
                 tasksOpen ? "text-text-primary" : "text-text-secondary hover:text-text-primary"
               )}
               onClick={() => {
@@ -354,14 +356,14 @@ export function Layout() {
             >
               <CheckSquare className="w-5 h-5" strokeWidth={1.5} />
               {pendingTasksCount > 0 && (
-                <span className="absolute top-0 right-0 w-2 h-2 bg-accent-brand rounded-full border border-bg-base shadow-sm"></span>
+                <span className="absolute top-2 right-2 w-2 h-2 bg-accent-brand rounded-full border border-bg-base shadow-sm"></span>
               )}
             </button>
             <TasksPanel open={tasksOpen} onClose={() => setTasksOpen(false)} />
-            
-            <button 
+
+            <button
               className={cn(
-                "relative transition-colors", 
+                "relative p-2.5 rounded-lg transition-colors active:bg-bg-hover",
                 notificationsOpen ? "text-text-primary" : "text-text-secondary hover:text-text-primary"
               )}
               onClick={() => {
@@ -371,7 +373,7 @@ export function Layout() {
             >
               <Bell className="w-5 h-5" strokeWidth={1.5} />
               {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 w-2 h-2 bg-status-info rounded-full border border-bg-base shadow-sm"></span>
+                <span className="absolute top-2 right-2 w-2 h-2 bg-status-info rounded-full border border-bg-base shadow-sm"></span>
               )}
             </button>
             <NotificationCenter open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
@@ -386,12 +388,12 @@ export function Layout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto relative z-0 pb-16 md:pb-0">
+        <main className="flex-1 overflow-auto relative z-0 pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">
           <Outlet />
         </main>
 
-        {/* Mobile Bottom Nav */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 h-[64px] bg-bg-elevated backdrop-blur-xl border-t border-border-subtle flex justify-around items-center z-40 no-print">
+        {/* Mobile Bottom Nav — extends under the iPhone home indicator */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-[calc(64px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] bg-bg-elevated backdrop-blur-xl border-t border-border-subtle flex justify-around items-center z-40 no-print">
           {MOBILE_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.href}
@@ -425,7 +427,7 @@ export function Layout() {
         {mobileMenuOpen && (
           <>
             <div className="md:hidden fixed inset-0 bg-[#0E0F11]/80 backdrop-blur-sm z-50 transition-opacity" onClick={() => setMobileMenuOpen(false)} />
-            <div className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80vh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-50 p-6 flex flex-col gap-6 slide-in-from-bottom-full animate-in duration-200 ease-out">
+            <div className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80dvh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-50 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6 slide-in-from-bottom-full animate-in duration-200 ease-out">
                <div>
                   <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Management</h3>
                   <div className="grid grid-cols-2 gap-2">

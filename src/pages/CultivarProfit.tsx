@@ -113,7 +113,7 @@ export default function CultivarProfit() {
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full flex flex-col">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col">
       <div className="flex items-center gap-4 mb-8">
         <Link to="/cultivars">
           <Button variant="outline" className="w-10 px-0" aria-label="Back to cultivars">

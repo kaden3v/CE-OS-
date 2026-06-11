@@ -74,7 +74,7 @@ export default function Vendors() {
   const isEmpty = !isLoading && vendors.length === 0;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full flex flex-col relative">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col relative">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Vendors</h1>

@@ -75,7 +75,7 @@ export default function SignIn() {
   const reqValid = !!email.trim() && reqPassword.length >= 8 && reqPassword === reqConfirm;
 
   return (
-    <div className="min-h-screen bg-bg-base text-text-primary flex flex-col items-center justify-center p-6">
+    <div className="min-h-dvh bg-bg-base text-text-primary flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-2 mb-8">
           <div className="w-10 h-10 rounded-lg bg-accent-brand-dim border border-accent-brand/20 flex items-center justify-center">

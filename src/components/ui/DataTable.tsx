@@ -36,7 +36,10 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="w-full flex flex-col">
-      <table className="w-full text-sm text-left">
+      {/* Horizontal scroll on narrow screens — wide tables (orders, shipping,
+          expenses) would otherwise squash unusably on a phone. */}
+      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+      <table className="w-full min-w-max md:min-w-0 text-sm text-left">
         <thead className="text-[12px] uppercase tracking-wide text-text-secondary sticky top-0 bg-bg-base/90 backdrop-blur-md z-10 border-b border-border-subtle">
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
@@ -88,6 +91,7 @@ export function DataTable<TData, TValue>({
           )}
         </tbody>
       </table>
+      </div>
 
       {pageCount > 1 && (
         <div className="flex items-center justify-between px-4 py-2 border-t border-border-subtle text-xs text-text-secondary shrink-0">

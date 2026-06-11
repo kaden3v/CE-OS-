@@ -190,7 +190,7 @@ export default function Production() {
 
       {isOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[90vh]">
+          <Card className="w-full max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[85dvh]">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">Log Production Run</h2>
               <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">

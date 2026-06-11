@@ -66,7 +66,7 @@ export default function Supplies() {
   const isLow = (s: Supply) => s.reorder_threshold !== null && s.on_hand < s.reorder_threshold;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full flex flex-col">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Supplies</h1>

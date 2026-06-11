@@ -31,6 +31,18 @@
     font-feature-settings: "tnum";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Mobile: no grey flash on tap, no rubber-band pull-to-refresh mid-app */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  /* iOS Safari force-zooms the page when a focused form control's font-size is
+     under 16px. Bump controls to 16px on touch-size screens so focusing an
+     input never zooms; desktop keeps the 14px design. */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px;
+    }
   }
 
   /* Focus rings only on focus-visible */
@@ -46,6 +58,16 @@
   svg.lucide {
     stroke-width: 1.5;
   }
+}
+
+/* iPhone safe-area utilities (need viewport-fit=cover in index.html).
+   pb-safe was already used by page footers but never defined — it keeps
+   action buttons clear of the home-indicator bar. */
+@utility pb-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 @media print {

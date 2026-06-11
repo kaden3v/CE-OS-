@@ -80,7 +80,7 @@ export default function AccessRequests() {
   const visible = filter === "pending" ? requests.filter((r) => r.status === "pending") : requests;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto h-full flex flex-col">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto h-full flex flex-col">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-accent-brand-dim border border-accent-brand/20 flex items-center justify-center">

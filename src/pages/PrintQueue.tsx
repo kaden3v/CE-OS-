@@ -80,7 +80,7 @@ export default function PrintQueue() {
   const isEmpty = !isLoading && jobs.length === 0;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto flex flex-col h-full">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col h-full">
       <div className="mb-6 flex items-center gap-4 shrink-0 justify-between">
         <div className="flex items-center gap-4">
           <Link to="/shipping">

@@ -172,7 +172,7 @@ export default function Listings() {
   const isEmpty = !isLoading && filtered.length === 0;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full flex flex-col">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Listings</h1>
