@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
-import { Plus, X, Truck } from "lucide-react";
+import { Plus, X, Truck, ThermometerSun } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
 import { useOrders } from "@/hooks/useOrders";
+import { checkShippingWeather } from "@/lib/weather";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 
@@ -80,6 +81,55 @@ export default function Shipping() {
     addToast({ title: "Shipment updated", status: "ok" });
   };
 
+  // Weather sweep — checks the 3-day forecast at every open shipment's
+  // destination (keyless: zippopotam + Open-Meteo). Out-of-band destinations
+  // get held with a note; previously weather-held ones get released when clear.
+  const [isCheckingWeather, setIsCheckingWeather] = useState(false);
+  const handleWeatherSweep = async () => {
+    const open = shipments.filter((s) => ["pending", "ready", "held"].includes(s.status) && s.ship_to_zip);
+    if (open.length === 0) {
+      addToast({ title: "Nothing to check", description: "No open shipments with a ZIP code.", status: "info" });
+      return;
+    }
+    setIsCheckingWeather(true);
+    const byZip = new Map(await Promise.all(
+      [...new Set(open.map((s) => s.ship_to_zip!))].map(async (zip) => [zip, await checkShippingWeather(zip)] as const),
+    ));
+    let held = 0;
+    let released = 0;
+    let unknown = 0;
+    for (const sh of open) {
+      const wx = byZip.get(sh.ship_to_zip!);
+      if (!wx) {
+        unknown++;
+        continue;
+      }
+      if (!wx.ok) {
+        held++;
+        await update(sh.id, {
+          weather_hold: true,
+          weather_note: wx.note,
+          ...(sh.status !== "held" ? { status: "held" } : {}),
+        } as Partial<Shipment>);
+      } else if (wx.ok && sh.weather_hold) {
+        released++;
+        await update(sh.id, {
+          weather_hold: false,
+          weather_note: wx.note,
+          ...(sh.status === "held" ? { status: "pending" } : {}),
+        } as Partial<Shipment>);
+      } else {
+        await update(sh.id, { weather_note: wx.note } as Partial<Shipment>);
+      }
+    }
+    setIsCheckingWeather(false);
+    addToast({
+      title: "Weather checked",
+      description: `${held} held · ${released} released · ${open.length - held - released - unknown} clear${unknown > 0 ? ` · ${unknown} unknown ZIP` : ""}`,
+      status: held > 0 ? "warn" : "ok",
+    });
+  };
+
   const orderLabel = (orderId: string) => {
     const o = orders.find((x) => x.id === orderId);
     if (!o) return orderId.slice(0, 8);
@@ -112,6 +162,22 @@ export default function Shipping() {
         },
       },
       {
+        accessorKey: "weather_note",
+        header: "Weather",
+        cell: (info: any) => {
+          const sh: Shipment = info.row.original;
+          if (!sh.weather_note) return <span className="text-text-tertiary">—</span>;
+          return (
+            <span
+              className={`text-xs ${sh.weather_hold ? "text-status-warn" : "text-text-secondary"} max-w-[220px] truncate inline-block align-middle`}
+              title={sh.weather_note}
+            >
+              {sh.weather_note}
+            </span>
+          );
+        },
+      },
+      {
         id: "actions",
         header: "",
         cell: (info: any) => {
@@ -138,10 +204,16 @@ export default function Shipping() {
           <h1 className="text-2xl font-semibold mb-2">Shipping</h1>
           <p className="text-sm text-text-secondary">Track outbound shipments and weather holds.</p>
         </div>
-        <Button variant="brand" onClick={() => setIsOpen(true)} disabled={orders.length === 0}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Shipment
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleWeatherSweep} disabled={isCheckingWeather}>
+            <ThermometerSun className="w-4 h-4 mr-2" />
+            {isCheckingWeather ? "Checking…" : "Check Weather"}
+          </Button>
+          <Button variant="brand" onClick={() => setIsOpen(true)} disabled={orders.length === 0}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Shipment
+          </Button>
+        </div>
       </div>
 
       <Card className="flex-1 overflow-auto flex flex-col">
