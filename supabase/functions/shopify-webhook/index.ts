@@ -4,22 +4,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 /**
  * Shopify order-sync webhook (orders/create).
  *
- * Deploy with verify_jwt = FALSE (Shopify can't send a Supabase JWT); requests
- * are authenticated instead by Shopify's HMAC signature:
- *   X-Shopify-Hmac-Sha256 = base64(HMAC-SHA256(raw body, SHOPIFY_WEBHOOK_SECRET))
+ * Deployed with verify_jwt = FALSE. Requests are authenticated by EITHER:
+ *   1. Shopify HMAC  (X-Shopify-Hmac-Sha256 vs SHOPIFY_WEBHOOK_SECRET), or
+ *   2. a shared URL token (?token=...) matched against the server-side
+ *      integration_config row 'shopify_webhook_token'.
  *
- * Setup (when you're ready to go live):
- *   1. Shopify admin → Settings → Notifications → Webhooks → add
- *      "Order creation" pointing at this function's URL (JSON format).
- *   2. Copy the webhook signing secret shown there into the function env:
- *      supabase secrets set SHOPIFY_WEBHOOK_SECRET=...
- *   3. supabase functions deploy shopify-webhook --no-verify-jwt
+ * The token path lets the connection be armed end-to-end via the Admin API
+ * without hand-copying the HMAC secret out of the Shopify admin. HMAC is
+ * preferred whenever SHOPIFY_WEBHOOK_SECRET is configured.
  *
- * What it does per order: dedupes by external_id, upserts the customer by
- * email, inserts the order + line items (channel "shopify"), and opens a
- * pending shipment with the destination ZIP/state so the weather sweep and
- * the P1 fulfillment triggers cover synced orders exactly like manual ones.
- * (Inventory decrements when the order ships — same as every other order.)
+ * Per order: dedupe by external_id, upsert the customer by email, insert the
+ * order + line items (channel "shopify"), and open a pending shipment with the
+ * destination ZIP/state so the weather sweep and fulfillment triggers cover
+ * synced orders exactly like manual ones. (Inventory decrements on ship.)
  */
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -33,6 +30,13 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 async function verifyHmac(rawBody: string, signature: string): Promise<boolean> {
   if (!WEBHOOK_SECRET || !signature) return false;
   const key = await crypto.subtle.importKey(
@@ -44,24 +48,35 @@ async function verifyHmac(rawBody: string, signature: string): Promise<boolean> 
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
   const digest = btoa(String.fromCharCode(...new Uint8Array(mac)));
-  // Constant-time-ish comparison
-  if (digest.length !== signature.length) return false;
-  let diff = 0;
-  for (let i = 0; i < digest.length; i++) diff |= digest.charCodeAt(i) ^ signature.charCodeAt(i);
-  return diff === 0;
+  return timingSafeEqual(digest, signature);
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const rawBody = await req.text();
+  const url = new URL(req.url);
+
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // Authenticate: Shopify HMAC first, then the shared URL token fallback.
   const signature = req.headers.get("x-shopify-hmac-sha256") ?? "";
-  if (!(await verifyHmac(rawBody, signature))) {
-    return json({ error: "Invalid signature" }, 401);
+  let authed = await verifyHmac(rawBody, signature);
+  if (!authed) {
+    const provided = url.searchParams.get("token") ?? "";
+    if (provided) {
+      const { data: cfg } = await admin
+        .from("integration_config").select("value").eq("key", "shopify_webhook_token").maybeSingle();
+      const expected = cfg?.value ?? "";
+      authed = expected.length > 0 && timingSafeEqual(provided, expected);
+    }
   }
+  if (!authed) return json({ error: "Unauthorized" }, 401);
 
   const topic = req.headers.get("x-shopify-topic") ?? "";
-  if (topic !== "orders/create") {
+  if (topic && topic !== "orders/create") {
     return json({ ok: true, skipped: topic }); // ack other topics without action
   }
 
@@ -74,10 +89,6 @@ Deno.serve(async (req: Request) => {
   if (!payload?.id || !Array.isArray(payload.line_items)) {
     return json({ error: "Unexpected payload shape" }, 400);
   }
-
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 
   const externalId = `shopify:${payload.id}`;
 
