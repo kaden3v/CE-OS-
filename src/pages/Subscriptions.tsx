@@ -1,4 +1,4 @@
-import { useMemo, useState, FormEvent } from "react";
+import { useEffect, useMemo, useState, FormEvent } from "react";
 import { Repeat, Plus, X, Trash2, Pencil, Receipt, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -52,6 +52,17 @@ export default function Subscriptions() {
     const monthly = active.reduce((sum, s) => sum + monthlyEquiv(s), 0);
     return { count: active.length, monthly, annual: monthly * 12 };
   }, [subs]);
+
+  // Live monthly-equivalent of the in-progress form (for the modal preview).
+  const previewMonthly = (Number(form.amount) || 0) / (CYCLE_DIVISOR[form.billing_cycle] ?? 1);
+
+  // Escape closes the modal.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen]);
 
   const openAdd = () => { setEditId(null); setForm(emptyForm); setIsOpen(true); };
   const openEdit = (s: Recurring) => {
@@ -238,53 +249,74 @@ export default function Subscriptions() {
       </Card>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
+        >
           <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">{editId ? "Edit subscription" : "Add subscription"}</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-border-subtle">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
+                  <Repeat className="w-5 h-5 text-accent-brand" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</h2>
+                  <p className="text-xs text-text-secondary mt-0.5">A recurring bill the business pays.</p>
+                </div>
+              </div>
+              <button onClick={() => setIsOpen(false)} aria-label="Close" className="-mr-1 text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
-                <Input required placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
+                <Input autoFocus required className="w-full" placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Vendor</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Vendor</label>
+                  <select className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2.5 py-2 text-sm focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
                     <option value="">— None —</option>
                     {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Category</label>
-                  <Input placeholder="Software" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
+                  <Input className="w-full" placeholder="Software" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Amount</label>
-                  <Input type="number" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })} />
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-text-secondary pointer-events-none">$</span>
+                    <Input type="number" step="0.01" min="0" inputMode="decimal" className="w-full pl-6" value={form.amount} onFocus={(e) => e.target.select()} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })} />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Billing</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong capitalize" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Billing</label>
+                  <select className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2.5 py-2 text-sm capitalize focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
                     {CYCLES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Next renewal</label>
-                  <Input type="date" value={form.next_renewal} onChange={(e) => setForm({ ...form, next_renewal: e.target.value })} />
+              </div>
+              {form.billing_cycle !== "monthly" && (Number(form.amount) || 0) > 0 && (
+                <div className="flex items-center justify-between text-xs bg-bg-base border border-border-subtle rounded-lg px-3 py-2">
+                  <span className="text-text-tertiary">Counts toward monthly burn as</span>
+                  <span className="font-medium text-text-primary tabular-nums">${previewMonthly.toFixed(2)}/mo</span>
                 </div>
+              )}
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Next renewal</label>
+                <Input type="date" className="w-full" value={form.next_renewal} onChange={(e) => setForm({ ...form, next_renewal: e.target.value })} />
+                <p className="text-xs text-text-tertiary mt-1">Optional — when the next charge is expected.</p>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
-                <Input placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Notes</label>
+                <Input className="w-full" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsOpen(false)}>Cancel</Button>
-                <Button type="submit">{editId ? "Save Changes" : "Add Subscription"}</Button>
+                <Button type="submit" variant="brand">{editId ? "Save Changes" : "Add Subscription"}</Button>
               </div>
             </form>
           </Card>
