@@ -1,4 +1,4 @@
-import { Outlet, NavLink, Navigate, useLocation, useNavigate } from "react-router";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -70,7 +70,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setCommandPaletteOpen, notifications, tasks, settings, addToast } = useApp();
-  const { isAdmin, user, onboardedAt, profileChecked, orgRole, activeOrgId, orgChecked, signOut } = useAuth();
+  const { isAdmin, user, profileChecked, orgRole, activeOrgId, orgChecked, signOut } = useAuth();
 
   const canManage = orgRole === "owner" || orgRole === "manager";
   const isFinancesActive = location.pathname.startsWith("/finances");
@@ -134,16 +134,10 @@ export function Layout() {
     return parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ")).join(" / ");
   };
 
-  // First-login onboarding gate — must come AFTER all hooks above so we don't
-  // change the hook count between renders. Unauthed users are already handled
-  // by RequireAuth.
-  if (user && profileChecked && !onboardedAt) {
-    return <Navigate to="/welcome" replace />;
-  }
-
-  // Workspace gate — a signed-in, onboarded user who belongs to no organization
-  // can't see any shared data. New users land here until an admin adds them.
-  if (user && profileChecked && onboardedAt && orgChecked && !activeOrgId) {
+  // Workspace gate — a signed-in user who belongs to no organization can't see
+  // any shared data. New users land here until an admin adds them. (Must come
+  // AFTER all hooks above so the hook count is stable between renders.)
+  if (user && profileChecked && orgChecked && !activeOrgId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-base p-6">
         <div className="max-w-sm text-center space-y-3">

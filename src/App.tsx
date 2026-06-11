@@ -24,7 +24,6 @@ import Import from "./pages/Import";
 import Settings from "./pages/Settings";
 import SignIn from "./pages/SignIn";
 import ResetPassword from "./pages/ResetPassword";
-import Welcome from "./pages/Welcome";
 import AccessRequests from "./pages/AccessRequests";
 import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
@@ -43,7 +42,6 @@ export default function App() {
             <Routes>
               <Route path="/sign-in" element={<SignIn />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/welcome" element={<RequireAuth><Welcome /></RequireAuth>} />
               <Route element={<RequireAuth><Layout /></RequireAuth>}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/orders" element={<Orders />} />
