@@ -83,15 +83,19 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
 
 ## P3 — Integrations (already on the roadmap; ordering confirmed by user: Shopify → Etsy → Shipping)
 
-- [ ] **Shopify order sync** — webhook edge function → orders/order_items + stock push-back
-      (oversell prevention). Table stakes in every comparable system.
-- [ ] **Etsy order sync** — same; supersedes the abandoned etsy_imports CSV path.
-- [ ] **Shipping labels + rates** — integrate Shippo/EasyPost or pair with Veeqo (free, Amazon-owned,
-      native Etsy+Shopify) rather than rebuilding; print queue then receives real label PDFs.
-- [ ] **Real weather API + weather-hold automation** — rule: destination ZIP forecast <35°F or >95°F
-      within 3 days → auto-hold + tag + customer email + heat-pack suggestion. **No competitor does
-      this natively** (ShipStation rules are static; Logee's/The Sill do it manually) — this is
-      CEOS's leapfrog feature, not catch-up.
+- [x] **Shopify order sync** — `supabase/functions/shopify-webhook` (HMAC-verified, idempotent
+      by external_id): upserts the customer, creates order + items + a pending shipment, logs
+      activity. **Deploy when ready**: set SHOPIFY_WEBHOOK_SECRET, deploy with --no-verify-jwt,
+      point a Shopify "Order creation" webhook at it. Stock push-back to Shopify needs an Admin
+      API token — wire it when keys exist.
+- [ ] **Etsy order sync** — needs Etsy API keys + OAuth (no webhooks in v3 → polling edge
+      function on a cron). Follow the shopify-webhook pattern; supersedes etsy_imports.
+- [ ] **Shipping labels + rates** — needs a Shippo/EasyPost key (or run Veeqo alongside, free).
+      Edge function: rate quote + label purchase → print_jobs gets the label PDF URL.
+- [x] **Weather-hold automation — LIVE and keyless** — Shipping → "Check Weather" sweeps every
+      open shipment: ZIP → zippopotam.us → Open-Meteo 3-day forecast; out-of-band (<35°F / >95°F)
+      destinations are auto-held with a forecast note, clear ones auto-released. Customer-email +
+      heat-pack upsell can layer on later. No competitor does this natively.
 
 ## P4 — Differentiators worth building (validated by competitor research)
 
