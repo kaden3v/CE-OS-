@@ -38,10 +38,11 @@
 
   /* iOS Safari force-zooms the page when a focused form control's font-size is
      under 16px. Bump controls to 16px on touch-size screens so focusing an
-     input never zooms; desktop keeps the 14px design. */
+     input never zooms; desktop keeps the 14px design. !important is required:
+     components bake in `text-sm`/`text-xs` utilities that otherwise win. */
   @media (max-width: 767px) {
     input, select, textarea {
-      font-size: 16px;
+      font-size: 16px !important;
     }
   }
 

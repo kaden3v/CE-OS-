@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useEntity } from '@/hooks/useEntity';
 import { useAuth } from '@/contexts/AuthContext';
@@ -107,40 +107,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [globalOrderViewId, setGlobalOrderViewId] = useState<string | null>(null);
 
-  const updateSettings = (updates: Partial<SettingsState>) => {
+  // All handlers are useCallback-stable (functional setState only) so the
+  // context value below can be memoized. Critically, a stable `addToast` stops
+  // consumers like AccessRequests — which list it in a useEffect dep chain —
+  // from refiring on every unrelated toast (was an infinite refetch loop).
+  const updateSettings = useCallback((updates: Partial<SettingsState>) => {
     setSettings(prev => ({ ...prev, ...updates }));
-  };
+  }, [setSettings]);
 
-  const addToast = (
+  const addToast = useCallback((
     titleOrToast: string | (Omit<Toast, 'id' | 'status'> & { status?: ToastInput }),
     status?: ToastInput,
     description?: string,
     duration?: number,
   ) => {
-    const id = Math.random().toString(36).substring(2, 9);
+    const id = crypto.randomUUID();
     const next: Toast =
       typeof titleOrToast === 'string'
         ? { id, title: titleOrToast, status: normalizeStatus(status), description, duration }
         : { id, ...titleOrToast, status: normalizeStatus(titleOrToast.status) };
     setToasts(prev => [...prev, next]);
-  };
+  }, []);
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  }, []);
 
-  const addNotification = (notif: Omit<Notification, 'id' | 'read' | 'time'>) => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setNotifications(prev => [{ ...notif, id, read: false, time: 'Just now' }, ...prev]);
-  };
+  const addNotification = useCallback((notif: Omit<Notification, 'id' | 'read' | 'time'>) => {
+    setNotifications(prev => [{ ...notif, id: crypto.randomUUID(), read: false, time: 'Just now' }, ...prev]);
+  }, [setNotifications]);
 
-  const markNotificationRead = (id: string) => {
+  const markNotificationRead = useCallback((id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+  }, [setNotifications]);
 
-  const markAllNotificationsRead = () => {
+  const markAllNotificationsRead = useCallback(() => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
+  }, [setNotifications]);
 
   // Real notification sources: teammates' changes (via the activity log) and
   // tasks assigned to the current user. RLS already limits events to the org;
@@ -184,7 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeOrgId]);
 
-  const addTask: AppContextType['addTask'] = async (task) => {
+  const addTask = useCallback<AppContextType['addTask']>(async (task) => {
     await taskEntity.add({
       id: crypto.randomUUID(),
       title: task.title,
@@ -196,41 +199,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user_id: '',
       org_id: null,
     } as Task);
-  };
+  }, [taskEntity]);
 
-  const toggleTask: AppContextType['toggleTask'] = async (id) => {
+  const toggleTask = useCallback<AppContextType['toggleTask']>(async (id) => {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
     await taskEntity.update(id, { completed: !t.completed } as Partial<Task>);
-  };
+  }, [taskEntity, tasks]);
 
-  const deleteTask: AppContextType['deleteTask'] = async (id) => {
+  const deleteTask = useCallback<AppContextType['deleteTask']>(async (id) => {
     await taskEntity.remove(id);
-  };
+  }, [taskEntity]);
 
-  return (
-    <AppContext.Provider value={{
-      settings,
-      updateSettings,
-      toasts,
-      addToast,
-      removeToast,
-      notifications,
-      addNotification,
-      markNotificationRead,
-      markAllNotificationsRead,
-      tasks,
-      addTask,
-      toggleTask,
-      deleteTask,
-      isCommandPaletteOpen,
-      setCommandPaletteOpen,
-      globalOrderViewId,
-      setGlobalOrderViewId
-    }}>
-      {children}
-    </AppContext.Provider>
-  );
+  const value = useMemo<AppContextType>(() => ({
+    settings,
+    updateSettings,
+    toasts,
+    addToast,
+    removeToast,
+    notifications,
+    addNotification,
+    markNotificationRead,
+    markAllNotificationsRead,
+    tasks,
+    addTask,
+    toggleTask,
+    deleteTask,
+    isCommandPaletteOpen,
+    setCommandPaletteOpen,
+    globalOrderViewId,
+    setGlobalOrderViewId,
+  }), [
+    settings, updateSettings, toasts, addToast, removeToast,
+    notifications, addNotification, markNotificationRead, markAllNotificationsRead,
+    tasks, addTask, toggleTask, deleteTask, isCommandPaletteOpen, globalOrderViewId,
+  ]);
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {

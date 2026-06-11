@@ -34,7 +34,7 @@ export default function Supplies() {
 
   const { addToast } = useApp();
   const [isOpen, setIsOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", unit: "pc", on_hand: 0, reorder_threshold: 0, vendor_id: "" });
+  const [form, setForm] = useState({ name: "", unit: "pc", on_hand: 0, reorder_threshold: 0, cost: 0, vendor_id: "" });
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,7 +46,7 @@ export default function Supplies() {
       unit: form.unit.trim() || null,
       on_hand: Number(form.on_hand) || 0,
       reorder_threshold: form.reorder_threshold ? Number(form.reorder_threshold) : null,
-      cost: null,
+      cost: form.cost ? Number(form.cost) : null,
       vendor_id: form.vendor_id || null,
       notes: null,
       created_at: new Date().toISOString(),
@@ -57,7 +57,7 @@ export default function Supplies() {
       return;
     }
     setIsOpen(false);
-    setForm({ name: "", unit: "pc", on_hand: 0, reorder_threshold: 0, vendor_id: "" });
+    setForm({ name: "", unit: "pc", on_hand: 0, reorder_threshold: 0, cost: 0, vendor_id: "" });
     addToast({ title: "Supply added", description: name, status: "ok" });
   };
 
@@ -110,9 +110,18 @@ export default function Supplies() {
                   <span className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Reorder at</span>
                   <span className="text-text-secondary tabular-nums">{item.reorder_threshold ?? "—"} {item.unit ?? ""}</span>
                 </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Unit cost</span>
+                  <span className="text-text-secondary tabular-nums">{item.cost != null ? `$${Number(item.cost).toFixed(2)}` : "—"}</span>
+                </div>
               </div>
-              <div className="text-xs text-text-secondary pt-2 border-t border-border-subtle">
-                {vendorName(item.vendor_id)}
+              <div className="flex items-center justify-between text-xs text-text-secondary pt-2 border-t border-border-subtle">
+                <span>{vendorName(item.vendor_id)}</span>
+                {item.cost != null && (
+                  <span className="tabular-nums text-text-tertiary">
+                    {`$${(Number(item.cost) * item.on_hand).toFixed(2)} on hand`}
+                  </span>
+                )}
               </div>
             </Card>
           ))}
@@ -151,7 +160,7 @@ export default function Supplies() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">On hand</label>
                   <Input type="number" min="0" value={form.on_hand} onChange={(e) => setForm({ ...form, on_hand: Number(e.target.value) })} />
@@ -159,6 +168,10 @@ export default function Supplies() {
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Reorder at</label>
                   <Input type="number" min="0" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Unit cost $</label>
+                  <Input type="number" min="0" step="0.01" placeholder="0.00" value={form.cost || ""} onChange={(e) => setForm({ ...form, cost: Number(e.target.value) })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

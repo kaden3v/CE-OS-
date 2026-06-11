@@ -16,7 +16,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean, onClose: 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-[46px] right-0 w-[400px] bg-bg-base/90 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-50 flex flex-col max-h-[calc(100vh-80px)] overflow-hidden"
+            className="absolute top-[46px] right-0 w-[min(400px,calc(100vw-2rem))] bg-bg-base/90 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-50 flex flex-col max-h-[calc(100dvh-80px)] overflow-hidden"
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle shrink-0 bg-bg-base/50">
               <h3 className="font-medium text-text-primary">Notifications</h3>

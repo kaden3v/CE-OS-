@@ -249,12 +249,22 @@ export default function Licenses() {
                           <div className={cn("text-sm font-medium", info.class)}>{lic.expires_on ?? "—"}</div>
                         </div>
                       </div>
-                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                      {/* Desktop: hover-reveal over the corner. */}
+                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex gap-2">
                         <button onClick={() => openEdit(lic)} aria-label="Edit" className="p-1.5 bg-bg-elevated border border-border-subtle rounded-md text-text-secondary hover:text-text-primary shadow-sm">
                           <Edit className="w-4 h-4" />
                         </button>
                         <button onClick={() => handleDelete(lic.id)} aria-label="Delete" className="p-1.5 bg-bg-elevated border border-border-subtle rounded-md text-text-secondary hover:text-status-alert hover:border-status-alert/50 shadow-sm">
                           <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {/* Mobile: always-visible action row (hover doesn't exist on touch). */}
+                      <div className="flex md:hidden gap-2 mt-4 pt-4 border-t border-border-subtle">
+                        <button onClick={() => openEdit(lic)} className="flex-1 flex items-center justify-center gap-2 py-2 bg-bg-elevated border border-border-subtle rounded-md text-sm text-text-secondary active:bg-bg-hover">
+                          <Edit className="w-4 h-4" /> Edit
+                        </button>
+                        <button onClick={() => handleDelete(lic.id)} className="flex-1 flex items-center justify-center gap-2 py-2 bg-bg-elevated border border-border-subtle rounded-md text-sm text-status-alert active:bg-bg-hover">
+                          <Trash2 className="w-4 h-4" /> Delete
                         </button>
                       </div>
                     </div>

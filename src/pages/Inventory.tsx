@@ -272,10 +272,14 @@ export default function Inventory() {
       stock: { growout: newPlant.growout, juv: newPlant.juv, mat: newPlant.mat },
       lastUpdated: "Just now",
     };
-    await addInventoryItem(plant);
+    const result = await addInventoryItem(plant);
+    if (result.ok === false) {
+      addToast({ title: "Couldn't add plant", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
     setIsAddModalOpen(false);
     setNewPlant({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, mat: 0 });
-    addToast("Plant added to inventory", "success");
+    addToast({ title: "Plant added to inventory", status: "ok" });
   };
 
   return (

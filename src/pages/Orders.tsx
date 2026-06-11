@@ -376,11 +376,39 @@ export default function Orders() {
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between mt-4 pt-4 border-t border-border-subtle text-sm">
-                  <span className="text-text-secondary">Total</span>
-                  <span className="font-medium tabular-nums">${Number(selected.total).toFixed(2)}</span>
+                <div className="mt-4 pt-4 border-t border-border-subtle space-y-1.5 text-sm">
+                  {(Number(selected.subtotal) > 0 || Number(selected.tax) > 0 || Number(selected.shipping) > 0) && (
+                    <>
+                      <div className="flex justify-between text-text-secondary">
+                        <span>Subtotal</span><span className="tabular-nums">${Number(selected.subtotal).toFixed(2)}</span>
+                      </div>
+                      {Number(selected.shipping) > 0 && (
+                        <div className="flex justify-between text-text-secondary">
+                          <span>Shipping</span><span className="tabular-nums">${Number(selected.shipping).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {Number(selected.tax) > 0 && (
+                        <div className="flex justify-between text-text-secondary">
+                          <span>Tax</span><span className="tabular-nums">${Number(selected.tax).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="flex justify-between pt-1">
+                    <span className="text-text-secondary">Total</span>
+                    <span className="font-medium tabular-nums">${Number(selected.total).toFixed(2)}</span>
+                  </div>
                 </div>
               </section>
+
+              {selected.notes && (
+                <section>
+                  <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Buyer Note</h3>
+                  <div className="p-3 bg-status-warn/10 border border-status-warn/20 rounded-lg text-sm text-text-primary whitespace-pre-wrap break-words">
+                    {selected.notes}
+                  </div>
+                </section>
+              )}
 
               {selectedShipment && (
                 <section>

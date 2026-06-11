@@ -46,7 +46,7 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
   const completedTasks = visibleTasks.filter(t => t.completed);
 
   return (
-    <div className="absolute top-[46px] right-0 w-[360px] bg-bg-base/90 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-50 flex flex-col max-h-[calc(100vh-80px)] overflow-hidden">
+    <div className="absolute top-[46px] right-0 w-[min(360px,calc(100vw-2rem))] bg-bg-base/90 backdrop-blur-md border border-border-subtle rounded-xl shadow-2xl z-50 flex flex-col max-h-[calc(100dvh-80px)] overflow-hidden">
       <div className="p-4 border-b border-border-subtle flex items-center justify-between shrink-0">
         <h3 className="font-medium text-text-primary">Tasks</h3>
         <div className="flex items-center gap-2">
