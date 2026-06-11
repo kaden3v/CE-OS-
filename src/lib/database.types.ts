@@ -127,6 +127,60 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_expenses: {
+        Row: {
+          amount: number
+          billing_cycle: string
+          cancelled_at: string | null
+          category: string | null
+          created_at: string
+          id: string
+          name: string
+          next_renewal: string | null
+          notes: string | null
+          org_id: string | null
+          started_on: string
+          status: string
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          amount?: number
+          billing_cycle?: string
+          cancelled_at?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          next_renewal?: string | null
+          notes?: string | null
+          org_id?: string | null
+          started_on?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          amount?: number
+          billing_cycle?: string
+          cancelled_at?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          next_renewal?: string | null
+          notes?: string | null
+          org_id?: string | null
+          started_on?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: []
+      }
       organizations: {
         Row: {
           created_at: string

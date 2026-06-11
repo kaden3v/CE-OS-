@@ -15,6 +15,7 @@ import {
   FileBadge,
   ShieldCheck,
   UserCog,
+  Repeat,
   UploadCloud,
   History,
   Settings,
@@ -48,6 +49,7 @@ const NAV_ITEMS = [
 
 const FINANCE_ITEMS = [
   { name: "Expenses", href: "/finances/expenses", icon: Receipt },
+  { name: "Subscriptions", href: "/finances/subscriptions", icon: Repeat },
   { name: "Supplies", href: "/finances/supplies", icon: PackageOpen },
   { name: "Production", href: "/finances/production", icon: PackageSearch },
   { name: "Vendors", href: "/finances/vendors", icon: Store },

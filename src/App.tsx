@@ -14,6 +14,7 @@ import PrintQueue from "./pages/PrintQueue";
 import Listings from "./pages/Listings";
 import Expenses from "./pages/Expenses";
 import Production from "./pages/Production";
+import Subscriptions from "./pages/Subscriptions";
 import Supplies from "./pages/Supplies";
 import Vendors from "./pages/Vendors";
 import TaxReport from "./pages/TaxReport";
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/finances/expenses" element={<RequireManager><Expenses /></RequireManager>} />
                 <Route path="/finances/supplies" element={<RequireManager><Supplies /></RequireManager>} />
                 <Route path="/finances/production" element={<RequireManager><Production /></RequireManager>} />
+                <Route path="/finances/subscriptions" element={<RequireManager><Subscriptions /></RequireManager>} />
                 <Route path="/finances/vendors" element={<RequireManager><Vendors /></RequireManager>} />
                 <Route path="/finances/tax-report" element={<RequireManager><TaxReport /></RequireManager>} />
                 <Route path="/licenses" element={<RequireManager><Licenses /></RequireManager>} />
