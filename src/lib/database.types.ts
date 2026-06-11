@@ -144,6 +144,7 @@ export type Database = {
           updated_at: string
           user_id: string
           vendor_id: string | null
+          website: string | null
         }
         Insert: {
           amount?: number
@@ -161,6 +162,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           vendor_id?: string | null
+          website?: string | null
         }
         Update: {
           amount?: number
@@ -178,6 +180,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           vendor_id?: string | null
+          website?: string | null
         }
         Relationships: []
       }

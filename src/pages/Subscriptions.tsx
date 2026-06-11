@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/Badge";
+import { CompanyLogo } from "@/components/ui/CompanyLogo";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
@@ -18,7 +19,7 @@ type Expense = Tables<"expenses">;
 const CYCLES = ["monthly", "quarterly", "yearly"] as const;
 const CYCLE_DIVISOR: Record<string, number> = { monthly: 1, quarterly: 3, yearly: 12 };
 
-const emptyForm = { name: "", vendor_id: "", category: "Software", amount: 0, billing_cycle: "monthly", next_renewal: "", notes: "" };
+const emptyForm = { name: "", website: "", vendor_id: "", category: "Software", amount: 0, billing_cycle: "monthly", next_renewal: "", notes: "" };
 
 const monthlyEquiv = (r: Recurring) => Number(r.amount) / (CYCLE_DIVISOR[r.billing_cycle] ?? 1);
 
@@ -27,6 +28,7 @@ export default function Subscriptions() {
     orderBy: "created_at",
     toRow: (s) => ({
       name: s.name,
+      website: s.website,
       vendor_id: s.vendor_id,
       category: s.category,
       amount: s.amount,
@@ -69,6 +71,7 @@ export default function Subscriptions() {
     setEditId(s.id);
     setForm({
       name: s.name,
+      website: s.website ?? "",
       vendor_id: s.vendor_id ?? "",
       category: s.category ?? "",
       amount: Number(s.amount),
@@ -85,6 +88,7 @@ export default function Subscriptions() {
     if (!name) return;
     const payload = {
       name,
+      website: form.website.trim() || null,
       vendor_id: form.vendor_id || null,
       category: form.category.trim() || null,
       amount: Number(form.amount) || 0,
@@ -160,7 +164,19 @@ export default function Subscriptions() {
 
   const columns = useMemo(
     () => [
-      { accessorKey: "name", header: "Subscription", cell: (info: any) => <span className="font-medium">{info.getValue()}</span> },
+      {
+        accessorKey: "name",
+        header: "Subscription",
+        cell: (info: any) => {
+          const s: Recurring = info.row.original;
+          return (
+            <div className="flex items-center gap-2.5">
+              <CompanyLogo name={s.name} website={s.website} size={26} />
+              <span className="font-medium">{s.name}</span>
+            </div>
+          );
+        },
+      },
       { accessorKey: "vendor_id", header: "Vendor", cell: (info: any) => <span className="text-text-secondary">{vendorName(info.getValue())}</span> },
       { accessorKey: "category", header: "Category", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
       {
@@ -256,9 +272,13 @@ export default function Subscriptions() {
           <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-start justify-between gap-3 p-5 border-b border-border-subtle">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
-                  <Repeat className="w-5 h-5 text-accent-brand" />
-                </div>
+                {form.name.trim() ? (
+                  <CompanyLogo name={form.name} website={form.website} size={40} className="rounded-lg" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
+                    <Repeat className="w-5 h-5 text-accent-brand" />
+                  </div>
+                )}
                 <div>
                   <h2 className="text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</h2>
                   <p className="text-xs text-text-secondary mt-0.5">A recurring bill the business pays.</p>
@@ -270,6 +290,11 @@ export default function Subscriptions() {
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
                 <Input autoFocus required className="w-full" placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Website</label>
+                <Input className="w-full" placeholder="shopify.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+                <p className="text-xs text-text-tertiary mt-1">Used to fetch the logo — guessed from the name if left blank.</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
