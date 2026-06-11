@@ -70,7 +70,7 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setCommandPaletteOpen, notifications, tasks, settings, addToast } = useApp();
-  const { isAdmin, user, onboardedAt, profileChecked, orgRole, activeOrgId, orgChecked } = useAuth();
+  const { isAdmin, user, onboardedAt, profileChecked, orgRole, activeOrgId, orgChecked, signOut } = useAuth();
 
   const canManage = orgRole === "owner" || orgRole === "manager";
   const isFinancesActive = location.pathname.startsWith("/finances");
@@ -152,6 +152,12 @@ export function Layout() {
             Your account isn't part of a Canyon Exotics workspace. Ask an administrator to add you to the team, then
             sign out and back in.
           </p>
+          <button
+            onClick={async () => { await signOut(); navigate("/sign-in", { replace: true }); }}
+            className="text-sm text-accent-brand hover:underline"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     );

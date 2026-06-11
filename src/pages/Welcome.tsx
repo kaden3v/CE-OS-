@@ -40,7 +40,7 @@ const NAME_MIN = 2;
 const NAME_MAX = 50;
 
 export default function Welcome() {
-  const { user, isAdmin, onboardedAt, profileChecked, refreshProfile, setOnboardedLocal } = useAuth();
+  const { user, isAdmin, onboardedAt, profileChecked, refreshProfile, setOnboardedLocal, signOut } = useAuth();
   const { addToast } = useApp();
   const navigate = useNavigate();
 
@@ -414,6 +414,16 @@ export default function Welcome() {
 
         <p className="text-xs text-text-tertiary text-center mt-6">
           Need to change anything later? Settings → Account.
+        </p>
+        <p className="text-xs text-text-tertiary text-center mt-2">
+          Not you, or stuck here?{" "}
+          <button
+            type="button"
+            onClick={async () => { await signOut(); navigate("/sign-in", { replace: true }); }}
+            className="text-accent-brand hover:underline"
+          >
+            Sign out
+          </button>
         </p>
       </div>
     </div>
