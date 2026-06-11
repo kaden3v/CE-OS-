@@ -6,8 +6,9 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { X, Search, Plus, Trash2, Store, ShoppingBag, PackageSearch } from "lucide-react";
+import { X, Search, Plus, Trash2, Store, ShoppingBag, PackageSearch, Truck, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trackingUrl, carrierLabel } from "@/lib/tracking";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
@@ -18,6 +19,19 @@ import type { Tables } from "@/lib/database.types";
 
 type Customer = Tables<"customers">;
 type Cultivar = Tables<"cultivars">;
+type Shipment = Tables<"shipments">;
+
+const shipmentStatusColor = (s: string) => {
+  switch (s) {
+    case "pending": return "alert" as const;
+    case "ready": return "info" as const;
+    case "held": return "warn" as const;
+    case "shipped": return "ok" as const;
+    case "delivered": return "ok" as const;
+    case "exception": return "alert" as const;
+    default: return "info" as const;
+  }
+};
 
 const STATUSES = ["pending", "processing", "packed", "shipped", "delivered", "cancelled", "refunded"] as const;
 type Status = (typeof STATUSES)[number];
@@ -40,12 +54,17 @@ export default function Orders() {
   const { data: orders, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
   const { data: customers } = useEntity<Customer>("customers", [], { toRow: (c) => ({ name: c.name }) });
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
+  const { data: shipments } = useEntity<Shipment>("shipments", []);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   const selected = useMemo(() => orders.find((o) => o.id === globalOrderViewId) ?? null, [orders, globalOrderViewId]);
+  const selectedShipment = useMemo(
+    () => (selected ? shipments.find((s) => s.order_id === selected.id) ?? null : null),
+    [shipments, selected],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -362,6 +381,55 @@ export default function Orders() {
                   <span className="font-medium tabular-nums">${Number(selected.total).toFixed(2)}</span>
                 </div>
               </section>
+
+              {selectedShipment && (
+                <section>
+                  <div className="flex justify-between items-end mb-2">
+                    <h3 className="text-xs uppercase tracking-wide text-text-secondary">Shipping</h3>
+                    <Link to="/shipping" className="text-xs text-text-secondary hover:text-text-primary transition-colors">All shipments →</Link>
+                  </div>
+                  <div className="p-3 bg-bg-active rounded-lg border border-border-subtle space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-text-secondary" />
+                        <StatusDot status={shipmentStatusColor(selectedShipment.status)} />
+                        <span className="capitalize font-medium">{selectedShipment.status}</span>
+                        {selectedShipment.weather_hold && <Badge variant="default">Weather hold</Badge>}
+                      </div>
+                      <span className="text-xs text-text-secondary">
+                        {selectedShipment.ship_to_state ? `${selectedShipment.ship_to_state} ` : ""}
+                        {selectedShipment.ship_to_zip ?? ""}
+                      </span>
+                    </div>
+                    {selectedShipment.tracking_number ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-text-secondary">{carrierLabel(selectedShipment.carrier, selectedShipment.tracking_number)}</span>
+                        <a
+                          href={trackingUrl(selectedShipment.carrier, selectedShipment.tracking_number) ?? "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 font-mono text-xs text-text-primary hover:underline"
+                          title="Open carrier tracking"
+                        >
+                          {selectedShipment.tracking_number}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-text-tertiary">No tracking number yet.</div>
+                    )}
+                    {(selectedShipment.shipped_at || selectedShipment.delivered_at) && (
+                      <div className="flex gap-4 text-xs text-text-secondary pt-1 border-t border-border-subtle">
+                        {selectedShipment.shipped_at && <span>Shipped {new Date(selectedShipment.shipped_at).toLocaleDateString()}</span>}
+                        {selectedShipment.delivered_at && <span>Delivered {new Date(selectedShipment.delivered_at).toLocaleDateString()}</span>}
+                      </div>
+                    )}
+                    {selectedShipment.weather_note && (
+                      <div className="text-xs text-text-tertiary">{selectedShipment.weather_note}</div>
+                    )}
+                  </div>
+                </section>
+              )}
 
               <section>
                 <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Status</h3>

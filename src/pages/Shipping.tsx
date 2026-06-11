@@ -8,6 +8,7 @@ import { Plus, X, Truck, ThermometerSun } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
+import { trackingUrl } from "@/lib/tracking";
 import { useOrders } from "@/hooks/useOrders";
 import { checkShippingWeather } from "@/lib/weather";
 import { friendlyDbError } from "@/lib/dbErrors";
@@ -141,7 +142,27 @@ export default function Shipping() {
       { accessorKey: "id", header: "Shipment", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
       { accessorKey: "order_id", header: "Order", cell: (info: any) => <span className="font-medium">{orderLabel(info.getValue())}</span> },
       { accessorKey: "carrier", header: "Carrier", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
-      { accessorKey: "tracking_number", header: "Tracking", cell: (info: any) => <span className="font-mono text-xs">{info.getValue() ?? "—"}</span> },
+      {
+        accessorKey: "tracking_number",
+        header: "Tracking",
+        cell: (info: any) => {
+          const t = info.getValue();
+          if (!t) return <span className="font-mono text-xs">—</span>;
+          const url = trackingUrl(info.row.original.carrier ?? null, t);
+          return (
+            <a
+              href={url ?? "#"}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="font-mono text-xs text-text-primary hover:underline"
+              title="Open carrier tracking"
+            >
+              {t}
+            </a>
+          );
+        },
+      },
       {
         accessorKey: "ship_to_state",
         header: "Destination",
