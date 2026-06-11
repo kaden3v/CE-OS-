@@ -68,6 +68,12 @@ export default function SignIn() {
     if (error) console.error("reset error", error);
   };
 
+  // Live request-form validation — drives inline hints + the submit button so a
+  // click can never silently no-op (the previous "looks like it restarted" bug).
+  const reqPwTooShort = reqPassword.length > 0 && reqPassword.length < 8;
+  const reqMismatch = reqConfirm.length > 0 && reqPassword !== reqConfirm;
+  const reqValid = !!email.trim() && reqPassword.length >= 8 && reqPassword === reqConfirm;
+
   return (
     <div className="min-h-screen bg-bg-base text-text-primary flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md">
@@ -236,6 +242,7 @@ export default function SignIn() {
                       className="w-full pl-8"
                     />
                   </div>
+                  {reqPwTooShort && <p className="text-xs text-status-warn">Must be at least 8 characters.</p>}
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="req-confirm" className="text-xs uppercase tracking-wide text-text-secondary">Confirm password *</label>
@@ -252,6 +259,7 @@ export default function SignIn() {
                       className="w-full pl-8"
                     />
                   </div>
+                  {reqMismatch && <p className="text-xs text-status-warn">Passwords don't match.</p>}
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="req-name" className="text-xs uppercase tracking-wide text-text-secondary">Name</label>
@@ -276,7 +284,7 @@ export default function SignIn() {
                   />
                 </div>
                 {errorMsg && <div className="text-xs text-status-alert">{errorMsg}</div>}
-                <Button type="submit" variant="brand" className="w-full" disabled={pending}>
+                <Button type="submit" variant="brand" className="w-full" disabled={pending || !reqValid}>
                   {pending ? "Submitting…" : (<>Submit request <Send className="w-4 h-4" /></>)}
                 </Button>
               </form>
