@@ -2,8 +2,9 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { Plus, MoreHorizontal, Clock, X, ChevronRight } from "lucide-react";
+import { Plus, MoreHorizontal, Clock, X, ChevronRight, QrCode } from "lucide-react";
 import React, { useState } from "react";
+import QRCode from "qrcode";
 import { EmptyState } from "@/components/ui/StateRenderer";
 import { Link } from "react-router";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,38 @@ export default function Propagation() {
     addToast({ title: "Batch created", description: cultivar, status: "ok" });
   };
 
+  // Lot label — a batch's batch_id IS its lot code. The QR encodes a scan URL
+  // (lot:<batch_id>) so a pest/disease/inspection finding traces back to this
+  // exact flat; the printed label carries the human-readable lot + cultivar.
+  const printLotLabel = async (b: Batch) => {
+    const lot = b.batch_id;
+    const url = `https://canyonexotics.com/scan/lot-${encodeURIComponent(lot)}`;
+    let qrDataUrl = "";
+    try {
+      qrDataUrl = await QRCode.toDataURL(url, { width: 480, margin: 1 });
+    } catch {
+      addToast({ title: "Couldn't render QR", status: "alert" });
+      return;
+    }
+    const win = window.open("", "_blank", "width=420,height=560");
+    if (!win) {
+      addToast({ title: "Pop-up blocked", description: "Allow pop-ups to print labels.", status: "warn" });
+      return;
+    }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    win.document.write(`<!doctype html><html><head><title>Lot ${esc(lot)}</title>
+      <style>body{font-family:sans-serif;text-align:center;padding:24px;color:#222}img{width:220px;height:220px}
+      h2{margin:8px 0 0;font-size:18px}.lot{font-family:monospace;font-size:14px;margin-top:4px}.muted{color:#777;font-size:12px}</style>
+      </head><body>
+      <img src="${qrDataUrl}" alt="Lot ${esc(lot)}" />
+      <h2>${esc(b.cultivar)}</h2>
+      <div class="lot">LOT ${esc(lot)}</div>
+      <div class="muted">${b.started ? `started ${esc(b.started)}` : ""}${b.count ? ` · ${b.count} units` : ""}</div>
+      <script>window.onload = () => { window.print(); }<\/script>
+      </body></html>`);
+    win.document.close();
+  };
+
   const promote = async (b: Batch) => {
     const idx = STAGE_ORDER.indexOf(b.stage as (typeof STAGE_ORDER)[number]);
     if (idx < 0 || idx >= STAGE_ORDER.length - 1) return;
@@ -282,6 +315,21 @@ export default function Propagation() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8">
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs uppercase tracking-wide text-text-secondary">Lot</h3>
+                  <button onClick={() => printLotLabel(selected)} className="text-xs text-accent-brand hover:underline flex items-center gap-1">
+                    <QrCode className="w-3.5 h-3.5" /> Print lot label
+                  </button>
+                </div>
+                <div className="p-2 rounded-lg border border-border-subtle bg-bg-active font-mono text-sm">
+                  LOT {selected.batch_id}
+                </div>
+                <p className="text-xs text-text-tertiary mt-2">
+                  Scannable lot label ties every plant from this flat back to its source — for pest/disease tracebacks and state inspections.
+                </p>
+              </section>
+
               <section>
                 <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Associations</h3>
                 <Link to="/cultivars" className="flex items-center justify-between p-2 rounded-lg border border-border-subtle bg-bg-active hover:bg-bg-hover transition-colors">

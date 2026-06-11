@@ -21,6 +21,25 @@ const SEED: Listing[] = [];
 
 const channelIcon = (c: string) => (c === "shopify" ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />);
 
+/** Vela-style listing completeness: each missing field costs points. */
+const TITLE_MIN_LENGTH = 25;
+function scoreListing(l: Listing): { score: number; missing: string[] } {
+  const checks: Array<[boolean, string]> = [
+    [(l.title?.length ?? 0) >= TITLE_MIN_LENGTH, "descriptive title (25+ chars)"],
+    [!!l.cultivar_id, "linked cultivar"],
+    [Number(l.price) > 0, "price"],
+    [Number(l.stock) > 0, "stock quantity"],
+    [!!l.url, "channel URL"],
+    [!!l.external_id, "channel ID (published)"],
+  ];
+  const passed = checks.filter(([ok]) => ok).length;
+  return {
+    score: Math.round((passed / checks.length) * 100),
+    missing: checks.filter(([ok]) => !ok).map(([, label]) => label),
+  };
+}
+const scoreTone = (s: number) => (s >= 80 ? "ok" : s >= 50 ? "warn" : "alert");
+
 const renderStatus = (s: string) => {
   switch (s) {
     case "active":
@@ -129,6 +148,22 @@ export default function Listings() {
         },
       },
       { accessorKey: "status", header: "Status", cell: (info: any) => renderStatus(info.getValue()) },
+      {
+        id: "quality",
+        header: "Quality",
+        cell: (info: any) => {
+          const { score, missing } = scoreListing(info.row.original);
+          return (
+            <div
+              className="flex items-center gap-2"
+              title={missing.length ? `Missing: ${missing.join(", ")}` : "Complete listing"}
+            >
+              <StatusDot status={scoreTone(score) as any} />
+              <span className="tabular-nums text-text-secondary">{score}%</span>
+            </div>
+          );
+        },
+      },
     ],
     [cultivars, onHandByCultivar],
   );
