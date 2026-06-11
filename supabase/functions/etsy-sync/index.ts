@@ -66,6 +66,21 @@ function money(m: EtsyMoney | null | undefined): number {
   return m.amount / m.divisor;
 }
 
+/**
+ * Etsy HTML-encodes text fields (titles, names, messages) — e.g. ' arrives
+ * as "&#39;". Decode entities before storing so the app shows real text.
+ */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
 type Admin = ReturnType<typeof createClient>;
 type ConfigMap = Record<string, string>;
 
@@ -181,9 +196,9 @@ async function fetchReceiptsPage(shopId: string, apiKey: string, accessToken: st
 }
 
 function toNormalized(receipt: EtsyReceipt): NormalizedOrder {
-  const items = (receipt.transactions ?? []).map((t) => ({ name: String(t.title ?? "Item"), qty: Number(t.quantity ?? 1), price: money(t.price) }));
+  const items = (receipt.transactions ?? []).map((t) => ({ name: decodeEntities(String(t.title ?? "Item")), qty: Number(t.quantity ?? 1), price: money(t.price) }));
   const email = (receipt.buyer_email ?? "").trim().toLowerCase() || null;
-  const customerName = receipt.name?.trim() || email || "Etsy buyer";
+  const customerName = decodeEntities(receipt.name?.trim() || "") || email || "Etsy buyer";
   const placedAt = receipt.created_timestamp ? new Date(receipt.created_timestamp * 1000).toISOString() : new Date().toISOString();
   return {
     externalId: `etsy:${receipt.receipt_id}`,
@@ -195,7 +210,7 @@ function toNormalized(receipt: EtsyReceipt): NormalizedOrder {
     shipping: money(receipt.total_shipping_cost),
     tax: money(receipt.total_tax_cost),
     total: money(receipt.grandtotal ?? receipt.total_price),
-    notes: receipt.message_from_buyer ?? null,
+    notes: receipt.message_from_buyer ? decodeEntities(receipt.message_from_buyer) : null,
     placedAt,
     items,
     shipToZip: receipt.zip ? String(receipt.zip) : null,
@@ -237,7 +252,7 @@ async function upsertListing(admin: Admin, oo: OrgOwner, l: EtsyListing): Promis
     user_id: oo.userId,
     external_id: externalId,
     channel: "etsy",
-    title: String(l.title ?? "Untitled listing"),
+    title: decodeEntities(String(l.title ?? "Untitled listing")),
     price: money(l.price),
     stock: Number(l.quantity ?? 0),
     status: LISTING_STATUS[l.state ?? ""] ?? "archived",
