@@ -49,6 +49,7 @@ const NAV_ITEMS = [
 const FINANCE_ITEMS = [
   { name: "Expenses", href: "/finances/expenses", icon: Receipt },
   { name: "Supplies", href: "/finances/supplies", icon: PackageOpen },
+  { name: "Production", href: "/finances/production", icon: PackageSearch },
   { name: "Vendors", href: "/finances/vendors", icon: Store },
   { name: "Tax Report", href: "/finances/tax-report", icon: FileSpreadsheet },
 ];

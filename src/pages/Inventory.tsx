@@ -157,7 +157,42 @@ export default function Inventory() {
   };
 
   // Log loss — records a mortality event and removes the plants from stock.
-  const { user, activeOrgId } = useAuth();
+  const { user, activeOrgId, orgRole } = useAuth();
+  const canManage = orgRole === "owner" || orgRole === "manager";
+
+  // Wholesale availability list — saleable (mature/flowering) stock, printable.
+  const handleAvailabilityList = () => {
+    const saleable = inventory.filter((i) => i.stock.mat + i.stock.flower > 0);
+    if (saleable.length === 0) {
+      addToast({ title: "Nothing saleable in stock", description: "No mature or flowering plants right now.", status: "info" });
+      return;
+    }
+    const win = window.open("", "_blank", "width=720,height=900");
+    if (!win) {
+      addToast({ title: "Pop-up blocked", description: "Allow pop-ups to print the list.", status: "warn" });
+      return;
+    }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = saleable
+      .map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.common)}</td><td class="n">${i.stock.mat}</td><td class="n">${i.stock.flower}</td><td class="p"></td></tr>`)
+      .join("");
+    win.document.write(`<!doctype html><html><head><title>Availability — ${new Date().toLocaleDateString()}</title>
+      <style>
+        body{font-family:sans-serif;padding:40px;color:#222;max-width:680px;margin:0 auto}
+        h1{font-size:20px;margin:0} .muted{color:#777;font-size:12px}
+        table{width:100%;border-collapse:collapse;margin-top:24px;font-size:14px}
+        th,td{text-align:left;padding:8px;border-bottom:1px solid #ddd} .n{text-align:right} .p{width:90px;border-bottom:1px solid #ddd}
+      </style></head><body>
+      <h1>Canyon Exotics — Availability</h1>
+      <div class="muted">${new Date().toLocaleDateString()} · mature &amp; flowering stock</div>
+      <table>
+        <thead><tr><th>Cultivar</th><th>Common</th><th class="n">Mature</th><th class="n">Flowering</th><th>Price</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <script>window.onload = () => { window.print(); }<\/script>
+      </body></html>`);
+    win.document.close();
+  };
   const [isLossOpen, setIsLossOpen] = useState(false);
   const [lossForm, setLossForm] = useState({ stage: "juv" as "juv" | "mat" | "flower", count: 1, cause: "", notes: "" });
 
@@ -238,6 +273,9 @@ export default function Inventory() {
           </div>
           
           <div className="flex items-center gap-2">
+            {canManage && (
+              <Button variant="outline" onClick={handleAvailabilityList}>Availability</Button>
+            )}
             <Link to="/inventory/qr-codes"><Button variant="outline"><QrCode className="w-4 h-4 mr-2" /> QR Codes</Button></Link>
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />

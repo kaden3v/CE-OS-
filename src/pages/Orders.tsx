@@ -134,6 +134,50 @@ export default function Orders() {
     addToast({ title: "Item removed", status: "info" });
   };
 
+  const handlePrintInvoice = (order: OrderWithRelations) => {
+    const win = window.open("", "_blank", "width=720,height=900");
+    if (!win) {
+      addToast({ title: "Pop-up blocked", description: "Allow pop-ups to print invoices.", status: "warn" });
+      return;
+    }
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const itemRows = order.items
+      .map(
+        (it) =>
+          `<tr><td>${esc(it.name_snapshot)}</td><td class="n">${it.qty}</td><td class="n">$${Number(it.price).toFixed(2)}</td><td class="n">$${(Number(it.price) * it.qty).toFixed(2)}</td></tr>`,
+      )
+      .join("");
+    win.document.write(`<!doctype html><html><head><title>Invoice ${esc(order.id.slice(0, 8))}</title>
+      <style>
+        body{font-family:sans-serif;padding:40px;color:#222;max-width:640px;margin:0 auto}
+        h1{font-size:20px;margin:0} .muted{color:#777;font-size:12px}
+        table{width:100%;border-collapse:collapse;margin-top:24px;font-size:14px}
+        th,td{text-align:left;padding:8px;border-bottom:1px solid #ddd} .n{text-align:right}
+        tfoot td{font-weight:600;border-bottom:none}
+        .head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+      </style></head><body>
+      <div class="head">
+        <div><h1>Canyon Exotics</h1><div class="muted">Invoice</div></div>
+        <div class="muted" style="text-align:right">
+          Order ${esc(order.id.slice(0, 8))}<br/>${new Date(order.placed_at).toLocaleDateString()}<br/>${esc(order.channel)}
+        </div>
+      </div>
+      ${order.customer ? `<div class="muted">Bill to:<br/><strong style="color:#222">${esc(order.customer.name)}</strong>${order.customer.email ? `<br/>${esc(order.customer.email)}` : ""}</div>` : ""}
+      <table>
+        <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Unit</th><th class="n">Amount</th></tr></thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot>
+          <tr><td colspan="3" class="n">Subtotal</td><td class="n">$${Number(order.subtotal).toFixed(2)}</td></tr>
+          <tr><td colspan="3" class="n">Shipping</td><td class="n">$${Number(order.shipping).toFixed(2)}</td></tr>
+          <tr><td colspan="3" class="n">Tax</td><td class="n">$${Number(order.tax).toFixed(2)}</td></tr>
+          <tr><td colspan="3" class="n">Total</td><td class="n">$${Number(order.total).toFixed(2)}</td></tr>
+        </tfoot>
+      </table>
+      <script>window.onload = () => { window.print(); }<\/script>
+      </body></html>`);
+    win.document.close();
+  };
+
   const handleDelete = async (orderId: string) => {
     if (!confirm("Delete this order? This also removes its line items.")) return;
     const result = await deleteOrder(orderId);
@@ -332,6 +376,9 @@ export default function Orders() {
             </div>
 
             <div className="p-4 md:p-6 border-t border-border-subtle bg-bg-base/50 flex gap-2 pb-safe">
+              <Button variant="outline" className="flex-1" onClick={() => handlePrintInvoice(selected)}>
+                Invoice
+              </Button>
               <Button variant="outline" className="flex-1" onClick={() => handleDelete(selected.id)}>
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete

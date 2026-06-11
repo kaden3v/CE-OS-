@@ -49,6 +49,84 @@ export type Database = {
         }
         Relationships: []
       }
+      production_runs: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          cultivar_id: string | null
+          description: string | null
+          id: string
+          labor_hours: number
+          labor_rate: number
+          org_id: string | null
+          quantity: number
+          run_on: string
+          user_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          cultivar_id?: string | null
+          description?: string | null
+          id?: string
+          labor_hours?: number
+          labor_rate?: number
+          org_id?: string | null
+          quantity?: number
+          run_on?: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          cultivar_id?: string | null
+          description?: string | null
+          id?: string
+          labor_hours?: number
+          labor_rate?: number
+          org_id?: string | null
+          quantity?: number
+          run_on?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      production_run_items: {
+        Row: {
+          created_at: string
+          id: string
+          name_snapshot: string
+          org_id: string | null
+          qty_used: number
+          run_id: string
+          supply_id: string | null
+          unit_cost: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name_snapshot: string
+          org_id?: string | null
+          qty_used?: number
+          run_id: string
+          supply_id?: string | null
+          unit_cost?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name_snapshot?: string
+          org_id?: string | null
+          qty_used?: number
+          run_id?: string
+          supply_id?: string | null
+          unit_cost?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       organizations: {
         Row: {
           created_at: string

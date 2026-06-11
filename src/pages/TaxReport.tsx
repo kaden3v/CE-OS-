@@ -9,6 +9,8 @@ import type { Tables } from "@/lib/database.types";
 
 type Expense = Tables<"expenses">;
 type Shipment = Tables<"shipments">;
+type Run = Tables<"production_runs">;
+type RunItem = Tables<"production_run_items">;
 
 const EXCLUDED_ORDER_STATUSES = ["cancelled", "refunded"];
 
@@ -31,6 +33,8 @@ export default function TaxReport() {
   const { data: expenses } = useEntity<Expense>("expenses", []);
   const { data: orders } = useOrders();
   const { data: shipments } = useEntity<Shipment>("shipments", []);
+  const { data: runs } = useEntity<Run>("production_runs", [], { orderBy: "created_at" });
+  const { data: runItems } = useEntity<RunItem>("production_run_items", [], { orderBy: "created_at" });
   const { addToast } = useApp();
 
   const years = useMemo(() => {
@@ -73,6 +77,17 @@ export default function TaxReport() {
     }
     return { valid, byChannel, byState, byMonth, total, taxCollected };
   }, [orders, year, stateByOrder]);
+
+  // Schedule C-style COGS for the year, from production runs.
+  const cogs = useMemo(() => {
+    const yearRuns = runs.filter((r) => new Date(r.run_on).getFullYear() === year);
+    const runIds = new Set(yearRuns.map((r) => r.id));
+    const materials = runItems
+      .filter((i) => runIds.has(i.run_id))
+      .reduce((s, i) => s + Number(i.qty_used) * Number(i.unit_cost), 0);
+    const labor = yearRuns.reduce((s, r) => s + Number(r.labor_hours) * Number(r.labor_rate), 0);
+    return { materials, labor, total: materials + labor, runCount: yearRuns.length };
+  }, [runs, runItems, year]);
 
   const { byCategory, byMonth, total } = useMemo(() => {
     const filtered = expenses.filter((e) => new Date(e.occurred_on).getFullYear() === year);
@@ -223,6 +238,26 @@ export default function TaxReport() {
                 })}
             </div>
           )}
+        </Card>
+      </div>
+
+      {/* Cost of goods (Schedule C) */}
+      <h2 className="text-base font-medium mb-4">Cost of Goods (Schedule C)</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Materials</div>
+          <div className="text-3xl font-semibold tabular-nums">${cogs.materials.toFixed(2)}</div>
+          <div className="text-xs text-text-tertiary mt-1">supplies consumed in {cogs.runCount} production run{cogs.runCount === 1 ? "" : "s"}</div>
+        </Card>
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Labor</div>
+          <div className="text-3xl font-semibold tabular-nums">${cogs.labor.toFixed(2)}</div>
+          <div className="text-xs text-text-tertiary mt-1">hours × rate on production runs</div>
+        </Card>
+        <Card className="p-6">
+          <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Total COGS {year}</div>
+          <div className="text-3xl font-semibold tabular-nums">${cogs.total.toFixed(2)}</div>
+          <div className="text-xs text-text-tertiary mt-1">log runs under Finances → Production</div>
         </Card>
       </div>
 

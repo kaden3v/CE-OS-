@@ -67,16 +67,17 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
 
 ## P2 — Money truth (the owner can't see profit today)
 
-- [ ] **Production runs that consume supplies → real COGS** (pattern: Craftybase). "Potted 40
-      D. capensis" should decrement pots/media/labels and accumulate actual cost onto the batch →
-      cultivar profitability becomes margin, not just revenue. `CultivarProfit.tsx` openly admits
-      COGS isn't tracked.
+- [x] **Production runs that consume supplies → real COGS** — Finances → Production logs runs
+      (description, cultivar, units, labor hours×rate, supply lines with snapshotted unit costs),
+      decrements supply stock, and CultivarProfit now shows Est. COGS + margin per cultivar.
+      Migration `20260610110000_p2_production_cogs.sql` **pending prod apply**.
 - [x] **Sales-tax report** — TaxReport now has a Sales section: gross sales, tax collected,
       by channel, and by ship-to state (from each order's shipment), with year filter.
-- [ ] **Schedule C-ready COGS export** at tax time (Craftybase's most-loved feature).
-- [ ] **Wholesale invoicing + per-customer price tiers + availability list** (pattern: GrowPoint /
-      MyPlantShop / SBI) — wholesale plant buying runs on emailed availability lists generated from
-      saleable-stage inventory; CEOS is uniquely positioned to generate these.
+- [x] **Schedule C-ready COGS summary** — TaxReport's "Cost of Goods" section: materials,
+      labor, and total COGS for the selected year, from production runs.
+- [x] **Wholesale invoicing + availability list** — printable invoice from any order (Orders
+      detail → Invoice) and a printable availability list of mature/flowering stock (Inventory →
+      Availability, managers). *Per-customer price tiers deferred — rides with P3 channel work.*
 - [x] **Accounting export** — flat per-order Sales CSV + Expenses CSV from TaxReport
       (QuickBooks-importable columns). Deeper sync (API) can ride with P3.
 
