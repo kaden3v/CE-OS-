@@ -99,18 +99,20 @@ Severity: **P0** = trust/broken now · **P1** = connect the core workflows · **
 
 ## P4 — Differentiators worth building (validated by competitor research)
 
-- [ ] **Lot codes on propagation batches → traceability** (SBI seed-lot control): stamp lot IDs on
-      QR labels so a pest/disease/inspection finding traces to source flat and shipped orders;
-      pairs with the existing license/compliance module (CITES/state inspections are real for
-      carnivorous plants).
+- [x] **Lot codes on propagation batches → traceability** — each batch's batch_id is its lot;
+      "Print lot label" renders a scannable QR (lot:<batch_id> → /scan) + cultivar/started/count.
+      *Batch→order linkage (which orders shipped from a lot) deferred — needs order_items.batch_id.*
 - [ ] **Grow library / care schedules per cultivar** (Plant Partner): repot intervals, feeding,
       dormancy triggers auto-spawn dated tasks on the kanban.
-- [ ] **Bench/space capacity planning** (Picas/Plant Partner): stage footprint × batches vs
-      greenhouse capacity → "can I start 10 more flats of Nepenthes?"
-- [ ] **Cross-channel listing publish + listing completeness score** (Vela charges $10–40/mo for
-      just this): one-click publish a cultivar listing to Etsy + Shopify from the drafts page.
-- [ ] **Mobile scan-driven workflows** (inFlow/Sortly): QR labels already exist; scanning one on a
-      phone should open that plant's record / decrement stock / log mortality.
+- [x] **Bench/space capacity planning** — Propagation → Capacity: editable slots/plant per stage
+      and total greenhouse slots (saved per-device), live usage by stage, % utilization, and
+      "≈ N more divisions" headroom.
+- [x] **Listing completeness score** (Vela-style) — Listings "Quality" column scores title length,
+      linked cultivar, price, stock, URL, published ID with a missing-field tooltip.
+      *One-click cross-channel publish deferred — needs Shopify/Etsy API keys (P3).*
+- [ ] **Mobile scan-driven workflows** (inFlow/Sortly) — lot/plant QR labels now exist and encode
+      /scan URLs; still need an in-app /scan/:code route (increments qr_codes.scan_count, opens the
+      record) + a camera scanner. Foundation laid by the lot/QR labels.
 
 ## Platform hygiene (carried from earlier phases)
 

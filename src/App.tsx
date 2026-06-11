@@ -5,6 +5,7 @@ import Orders from "./pages/Orders";
 import Inventory from "./pages/Inventory";
 import QrGenerator from "./pages/QrGenerator";
 import Propagation from "./pages/Propagation";
+import Capacity from "./pages/Capacity";
 import Cultivars from "./pages/Cultivars";
 import CultivarProfit from "./pages/CultivarProfit";
 import Customers from "./pages/Customers";
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="/inventory" element={<Inventory />} />
                 <Route path="/inventory/qr-codes" element={<QrGenerator />} />
                 <Route path="/propagation" element={<Propagation />} />
+                <Route path="/propagation/capacity" element={<Capacity />} />
                 <Route path="/cultivars" element={<Cultivars />} />
                 <Route path="/cultivars/profit" element={<RequireManager><CultivarProfit /></RequireManager>} />
                 <Route path="/customers" element={<Customers />} />

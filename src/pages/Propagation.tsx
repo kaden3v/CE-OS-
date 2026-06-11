@@ -219,11 +219,14 @@ export default function Propagation() {
       <div className={cn("flex-1 px-4 md:px-8 py-6 flex flex-col transition-all", selected ? "md:pr-[480px] duration-200 ease-out" : "duration-150 ease-in")}>
         <div className="mb-8 flex items-center justify-between shrink-0">
           <h1 className="text-2xl font-semibold">Propagation</h1>
-          <Button variant="brand" onClick={() => setIsOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            <span className="hidden md:inline">Add Batch</span>
-            <span className="md:hidden">Add</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/propagation/capacity"><Button variant="outline">Capacity</Button></Link>
+            <Button variant="brand" onClick={() => setIsOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              <span className="hidden md:inline">Add Batch</span>
+              <span className="md:hidden">Add</span>
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
