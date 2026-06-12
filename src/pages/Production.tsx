@@ -1,4 +1,5 @@
-import { useMemo, useState, FormEvent } from "react";
+import { useEffect, useMemo, useState, FormEvent } from "react";
+import { useLocation } from "react-router";
 import { Factory, Plus, X, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +12,7 @@ import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 import { formatDate } from "@/lib/format";
+import { todayISO } from "@/lib/dates";
 
 type Run = Tables<"production_runs">;
 type RunItem = Tables<"production_run_items">;
@@ -47,6 +49,13 @@ export default function Production() {
   const { addToast } = useApp();
 
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
+  // Opened from a Finances Overview quick action.
+  useEffect(() => {
+    if ((location.state as { openNew?: boolean } | null)?.openNew) setIsOpen(true);
+  }, [location.state]);
+
   const [form, setForm] = useState({
     description: "",
     cultivar_id: "",
@@ -93,7 +102,7 @@ export default function Production() {
       quantity: Math.max(0, Number(form.quantity) || 0),
       labor_hours: Number(form.labor_hours) || 0,
       labor_rate: Number(form.labor_rate) || 0,
-      run_on: new Date().toISOString().slice(0, 10),
+      run_on: todayISO(),
       created_at: new Date().toISOString(),
       user_id: "",
       org_id: null,

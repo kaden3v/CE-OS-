@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
 import type { Tables } from "@/lib/database.types";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { formatBusinessDate } from "@/lib/dates";
 
 type Vendor = Tables<"vendors">;
 
@@ -67,7 +68,7 @@ export default function Vendors() {
       { accessorKey: "category", header: "Category", cell: (info: any) => info.getValue() ? <Badge>{info.getValue()}</Badge> : null },
       { accessorKey: "contact_email", header: "Email", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
       { accessorKey: "contact_phone", header: "Phone", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
-      { accessorKey: "created_at", header: "Added", cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span> },
+      { accessorKey: "created_at", header: "Added", cell: (info: any) => <span className="text-text-secondary">{formatBusinessDate(info.getValue())}</span> },
     ],
     [],
   );

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
@@ -11,6 +12,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { todayISO, monthStartISO, yearStartISO, formatBusinessDate } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
 
 type Expense = Tables<"expenses">;
@@ -35,8 +37,14 @@ export default function Expenses() {
   const { data: vendors } = useEntity<Vendor>("vendors", [], { toRow: (v) => ({ name: v.name }) });
   const { addToast } = useApp();
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
 
-  const [form, setForm] = useState({ amount: "", category: "Soil and media", vendor_id: "", description: "", occurred_on: new Date().toISOString().slice(0, 10) });
+  // Opened from a Finances Overview quick action.
+  useEffect(() => {
+    if ((location.state as { openNew?: boolean } | null)?.openNew) setIsOpen(true);
+  }, [location.state]);
+
+  const [form, setForm] = useState({ amount: "", category: "Soil and media", vendor_id: "", description: "", occurred_on: todayISO() });
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +69,7 @@ export default function Expenses() {
       return;
     }
     setIsOpen(false);
-    setForm({ amount: "", category: "Soil and media", vendor_id: "", description: "", occurred_on: new Date().toISOString().slice(0, 10) });
+    setForm({ amount: "", category: "Soil and media", vendor_id: "", description: "", occurred_on: todayISO() });
     addToast({ title: "Expense logged", description: `$${amount.toFixed(2)} · ${form.category}`, status: "ok" });
   };
 
@@ -72,7 +80,7 @@ export default function Expenses() {
       {
         accessorKey: "occurred_on",
         header: "Date",
-        cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span>,
+        cell: (info: any) => <span className="text-text-secondary">{formatBusinessDate(info.getValue())}</span>,
       },
       { accessorKey: "category", header: "Category", cell: (info: any) => (info.getValue() ? <Badge>{info.getValue()}</Badge> : null) },
       { accessorKey: "vendor_id", header: "Vendor", cell: (info: any) => <span className="font-medium">{vendorName(info.getValue())}</span> },
@@ -83,8 +91,8 @@ export default function Expenses() {
   );
 
   // Aggregations
-  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const yearStart = yearStartISO();
+  const monthStart = monthStartISO();
   const sumYtd = expenses.filter((e) => e.occurred_on >= yearStart).reduce((s, e) => s + Number(e.amount), 0);
   const sumMonth = expenses.filter((e) => e.occurred_on >= monthStart).reduce((s, e) => s + Number(e.amount), 0);
   const byCat = expenses.reduce<Record<string, number>>((acc, e) => {

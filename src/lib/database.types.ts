@@ -11,11 +11,58 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      access_requests: {
+        Row: {
+          decided_at: string | null
+          decided_by: string | null
+          denial_reason: string | null
+          email: string
+          id: string
+          invite_expires_at: string | null
+          invited_at: string | null
+          message: string | null
+          name: string | null
+          requested_at: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          decided_at?: string | null
+          decided_by?: string | null
+          denial_reason?: string | null
+          email: string
+          id?: string
+          invite_expires_at?: string | null
+          invited_at?: string | null
+          message?: string | null
+          name?: string | null
+          requested_at?: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          decided_at?: string | null
+          decided_by?: string | null
+          denial_reason?: string | null
+          email?: string
+          id?: string
+          invite_expires_at?: string | null
+          invited_at?: string | null
+          message?: string | null
+          name?: string | null
+          requested_at?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       activity_log: {
         Row: {
           action: string
@@ -47,49 +94,953 @@ export type Database = {
           org_id?: string | null
           summary?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "activity_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_emails: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          email: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          email: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          email?: string
+        }
         Relationships: []
       }
-      production_runs: {
+      channel_fee_rules: {
         Row: {
-          batch_id: string | null
+          active: boolean
+          channel: string
           created_at: string
-          cultivar_id: string | null
-          description: string | null
+          fixed_fee: number
           id: string
-          labor_hours: number
-          labor_rate: number
-          org_id: string | null
-          quantity: number
-          run_on: string
+          listing_fee: number
+          org_id: string
+          payment_fixed: number
+          payment_percent: number
+          percent_fee: number
+          updated_at: string
           user_id: string
         }
         Insert: {
-          batch_id?: string | null
+          active?: boolean
+          channel: string
           created_at?: string
-          cultivar_id?: string | null
-          description?: string | null
+          fixed_fee?: number
           id?: string
-          labor_hours?: number
-          labor_rate?: number
-          org_id?: string | null
-          quantity?: number
-          run_on?: string
+          listing_fee?: number
+          org_id: string
+          payment_fixed?: number
+          payment_percent?: number
+          percent_fee?: number
+          updated_at?: string
           user_id: string
         }
         Update: {
-          batch_id?: string | null
+          active?: boolean
+          channel?: string
           created_at?: string
-          cultivar_id?: string | null
-          description?: string | null
+          fixed_fee?: number
           id?: string
-          labor_hours?: number
-          labor_rate?: number
-          org_id?: string | null
-          quantity?: number
-          run_on?: string
+          listing_fee?: number
+          org_id?: string
+          payment_fixed?: number
+          payment_percent?: number
+          percent_fee?: number
+          updated_at?: string
           user_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "channel_fee_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cultivars: {
+        Row: {
+          common: string | null
+          genus: string | null
+          id: string
+          name: string
+          org_id: string | null
+          origin: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          common?: string | null
+          genus?: string | null
+          id?: string
+          name: string
+          org_id?: string | null
+          origin?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          common?: string | null
+          genus?: string | null
+          id?: string
+          name?: string
+          org_id?: string | null
+          origin?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cultivars_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          created_at: string
+          email: string | null
+          etsy_handle: string | null
+          id: string
+          name: string
+          notes: string | null
+          org_id: string | null
+          phone: string | null
+          shopify_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          etsy_handle?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          org_id?: string | null
+          phone?: string | null
+          shopify_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          etsy_handle?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          org_id?: string | null
+          phone?: string | null
+          shopify_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      etsy_imports: {
+        Row: {
+          amount: number | null
+          created_at: string
+          csv_type: string
+          etsy_key: string
+          id: string
+          import_batch_id: string
+          occurred_on: string | null
+          order_external_id: string | null
+          org_id: string | null
+          raw: Json
+          row_type: string | null
+          source_file: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          csv_type: string
+          etsy_key: string
+          id?: string
+          import_batch_id: string
+          occurred_on?: string | null
+          order_external_id?: string | null
+          org_id?: string | null
+          raw: Json
+          row_type?: string | null
+          source_file: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          csv_type?: string
+          etsy_key?: string
+          id?: string
+          import_batch_id?: string
+          occurred_on?: string | null
+          order_external_id?: string | null
+          org_id?: string | null
+          raw?: Json
+          row_type?: string | null
+          source_file?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "etsy_imports_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category: string | null
+          category_legacy: string | null
+          created_at: string
+          deductible: boolean
+          description: string | null
+          id: string
+          notes: string | null
+          occurred_on: string
+          org_id: string | null
+          payment_method: string | null
+          receipt_url: string | null
+          schedule_c_category: string | null
+          source: string
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          category_legacy?: string | null
+          created_at?: string
+          deductible?: boolean
+          description?: string | null
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          org_id?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          schedule_c_category?: string | null
+          source?: string
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          category_legacy?: string | null
+          created_at?: string
+          deductible?: boolean
+          description?: string | null
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          org_id?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          schedule_c_category?: string | null
+          source?: string
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_settings: {
+        Row: {
+          created_at: string
+          default_labor_rate: number
+          home_state: string
+          id: string
+          mileage_rate_cents: number
+          org_id: string
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_labor_rate?: number
+          home_state?: string
+          id?: string
+          mileage_rate_cents?: number
+          org_id: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          default_labor_rate?: number
+          home_state?: string
+          id?: string
+          mileage_rate_cents?: number
+          org_id?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_settings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
         Relationships: []
+      }
+      inventory: {
+        Row: {
+          common: string | null
+          cultivar_id: string | null
+          genus: string | null
+          id: string
+          name: string
+          org_id: string | null
+          stock_growout: number
+          stock_juv: number
+          stock_mat: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          common?: string | null
+          cultivar_id?: string | null
+          genus?: string | null
+          id?: string
+          name: string
+          org_id?: string | null
+          stock_growout?: number
+          stock_juv?: number
+          stock_mat?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          common?: string | null
+          cultivar_id?: string | null
+          genus?: string | null
+          id?: string
+          name?: string
+          org_id?: string | null
+          stock_growout?: number
+          stock_juv?: number
+          stock_mat?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      licenses: {
+        Row: {
+          created_at: string
+          expires_on: string | null
+          id: string
+          issued_on: string | null
+          issuer: string | null
+          name: string
+          notes: string | null
+          org_id: string | null
+          reference_number: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_on?: string | null
+          id?: string
+          issued_on?: string | null
+          issuer?: string | null
+          name: string
+          notes?: string | null
+          org_id?: string | null
+          reference_number?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_on?: string | null
+          id?: string
+          issued_on?: string | null
+          issuer?: string | null
+          name?: string
+          notes?: string | null
+          org_id?: string | null
+          reference_number?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "licenses_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listings: {
+        Row: {
+          channel: string
+          created_at: string
+          cultivar_id: string | null
+          external_id: string | null
+          id: string
+          last_synced_at: string | null
+          org_id: string | null
+          price: number
+          status: string
+          stock: number
+          title: string
+          updated_at: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          cultivar_id?: string | null
+          external_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          org_id?: string | null
+          price?: number
+          status?: string
+          stock?: number
+          title: string
+          updated_at?: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          cultivar_id?: string | null
+          external_id?: string | null
+          id?: string
+          last_synced_at?: string | null
+          org_id?: string | null
+          price?: number
+          status?: string
+          stock?: number
+          title?: string
+          updated_at?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listings_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mileage_log: {
+        Row: {
+          created_at: string
+          id: string
+          miles: number
+          org_id: string
+          purpose: string | null
+          round_trip: boolean
+          trip_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          miles?: number
+          org_id: string
+          purpose?: string | null
+          round_trip?: boolean
+          trip_date?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          miles?: number
+          org_id?: string
+          purpose?: string | null
+          round_trip?: boolean
+          trip_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mileage_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mortality_events: {
+        Row: {
+          cause: string | null
+          count: number
+          created_at: string
+          cultivar_id: string | null
+          id: string
+          inventory_id: string | null
+          noted_at: string
+          notes: string | null
+          org_id: string | null
+          user_id: string
+        }
+        Insert: {
+          cause?: string | null
+          count?: number
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          noted_at?: string
+          notes?: string | null
+          org_id?: string | null
+          user_id: string
+        }
+        Update: {
+          cause?: string | null
+          count?: number
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          noted_at?: string
+          notes?: string | null
+          org_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mortality_events_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mortality_events_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mortality_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          created_at: string
+          cultivar_id: string | null
+          id: string
+          inventory_id: string | null
+          name_snapshot: string
+          order_id: string
+          org_id: string | null
+          price: number
+          qty: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          name_snapshot: string
+          order_id: string
+          org_id?: string | null
+          price?: number
+          qty?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          name_snapshot?: string
+          order_id?: string
+          org_id?: string | null
+          price?: number
+          qty?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          channel: string
+          created_at: string
+          customer_id: string | null
+          external_id: string | null
+          id: string
+          notes: string | null
+          org_id: string | null
+          placed_at: string
+          shipping: number
+          status: string
+          subtotal: number
+          tax: number
+          total: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          customer_id?: string | null
+          external_id?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string | null
+          placed_at?: string
+          shipping?: number
+          status?: string
+          subtotal?: number
+          tax?: number
+          total?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          customer_id?: string | null
+          external_id?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string | null
+          placed_at?: string
+          shipping?: number
+          status?: string
+          subtotal?: number
+          tax?: number
+          total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_memberships_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      plant_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          cultivar_id: string | null
+          id: string
+          inventory_id: string | null
+          org_id: string | null
+          storage_path: string
+          taken_at: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          org_id?: string | null
+          storage_path: string
+          taken_at?: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          org_id?: string | null
+          storage_path?: string
+          taken_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plant_photos_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plant_photos_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plant_photos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      print_jobs: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          org_id: string | null
+          payload: Json | null
+          printed_at: string | null
+          shipment_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string | null
+          payload?: Json | null
+          printed_at?: string | null
+          shipment_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          org_id?: string | null
+          payload?: Json | null
+          printed_at?: string | null
+          shipment_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_jobs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_jobs_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       production_run_items: {
         Row: {
@@ -125,7 +1076,292 @@ export type Database = {
           unit_cost?: number
           user_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "production_run_items_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_run_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "production_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_run_items_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_run_supplies: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          qty: number
+          run_id: string
+          supply_id: string | null
+          unit_cost_snapshot: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          qty?: number
+          run_id: string
+          supply_id?: string | null
+          unit_cost_snapshot?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          qty?: number
+          run_id?: string
+          supply_id?: string | null
+          unit_cost_snapshot?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_run_supplies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_run_supplies_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "production_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_run_supplies_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_runs: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          cultivar_id: string | null
+          description: string | null
+          id: string
+          labor_hours: number
+          labor_rate: number
+          labor_type: string
+          org_id: string | null
+          quantity: number
+          run_on: string
+          unit_cost: number | null
+          user_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          cultivar_id?: string | null
+          description?: string | null
+          id?: string
+          labor_hours?: number
+          labor_rate?: number
+          labor_type?: string
+          org_id?: string | null
+          quantity?: number
+          run_on?: string
+          unit_cost?: number | null
+          user_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          cultivar_id?: string | null
+          description?: string | null
+          id?: string
+          labor_hours?: number
+          labor_rate?: number
+          labor_type?: string
+          org_id?: string | null
+          quantity?: number
+          run_on?: string
+          unit_cost?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_runs_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "propagation_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_runs_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_runs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          display_name: string | null
+          id: string
+          is_admin: boolean
+          notification_prefs: Json
+          onboarded_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          display_name?: string | null
+          id: string
+          is_admin?: boolean
+          notification_prefs?: Json
+          onboarded_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          display_name?: string | null
+          id?: string
+          is_admin?: boolean
+          notification_prefs?: Json
+          onboarded_at?: string | null
+          updated_at?: string
+        }
         Relationships: []
+      }
+      propagation_batches: {
+        Row: {
+          batch_id: string
+          count: number
+          cultivar: string
+          est_ready: string | null
+          id: string
+          notes: string | null
+          org_id: string | null
+          stage: string
+          started: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_id: string
+          count?: number
+          cultivar: string
+          est_ready?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string | null
+          stage?: string
+          started?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: string
+          count?: number
+          cultivar?: string
+          est_ready?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string | null
+          stage?: string
+          started?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "propagation_batches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qr_codes: {
+        Row: {
+          code: string
+          created_at: string
+          cultivar_id: string | null
+          id: string
+          inventory_id: string | null
+          last_scanned_at: string | null
+          org_id: string | null
+          scan_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          last_scanned_at?: string | null
+          org_id?: string | null
+          scan_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          cultivar_id?: string | null
+          id?: string
+          inventory_id?: string | null
+          last_scanned_at?: string | null
+          org_id?: string | null
+          scan_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qr_codes_cultivar_id_fkey"
+            columns: ["cultivar_id"]
+            isOneToOne: false
+            referencedRelation: "cultivars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qr_codes_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "qr_codes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recurring_expenses: {
         Row: {
@@ -182,792 +1418,19 @@ export type Database = {
           vendor_id?: string | null
           website?: string | null
         }
-        Relationships: []
-      }
-      organizations: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      org_memberships: {
-        Row: {
-          created_at: string
-          id: string
-          org_id: string
-          role: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          org_id: string
-          role?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          org_id?: string
-          role?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      access_requests: {
-        Row: {
-          decided_at: string | null
-          decided_by: string | null
-          denial_reason: string | null
-          email: string
-          id: string
-          invite_expires_at: string | null
-          invited_at: string | null
-          message: string | null
-          name: string | null
-          requested_at: string
-          status: string
-          user_id: string | null
-        }
-        Insert: {
-          decided_at?: string | null
-          decided_by?: string | null
-          denial_reason?: string | null
-          email: string
-          id?: string
-          invite_expires_at?: string | null
-          invited_at?: string | null
-          message?: string | null
-          name?: string | null
-          requested_at?: string
-          status?: string
-          user_id?: string | null
-        }
-        Update: {
-          decided_at?: string | null
-          decided_by?: string | null
-          denial_reason?: string | null
-          email?: string
-          id?: string
-          invite_expires_at?: string | null
-          invited_at?: string | null
-          message?: string | null
-          name?: string | null
-          requested_at?: string
-          status?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      admin_emails: {
-        Row: {
-          added_at: string
-          added_by: string | null
-          email: string
-        }
-        Insert: {
-          added_at?: string
-          added_by?: string | null
-          email: string
-        }
-        Update: {
-          added_at?: string
-          added_by?: string | null
-          email?: string
-        }
-        Relationships: []
-      }
-      cultivars: {
-        Row: {
-          common: string | null
-          genus: string | null
-          id: string
-          name: string
-          origin: string | null
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          common?: string | null
-          genus?: string | null
-          id?: string
-          name: string
-          origin?: string | null
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          common?: string | null
-          genus?: string | null
-          id?: string
-          name?: string
-          origin?: string | null
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: []
-      }
-      customers: {
-        Row: {
-          created_at: string
-          email: string | null
-          etsy_handle: string | null
-          id: string
-          name: string
-          notes: string | null
-          phone: string | null
-          shopify_id: string | null
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          etsy_handle?: string | null
-          id?: string
-          name: string
-          notes?: string | null
-          phone?: string | null
-          shopify_id?: string | null
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          etsy_handle?: string | null
-          id?: string
-          name?: string
-          notes?: string | null
-          phone?: string | null
-          shopify_id?: string | null
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: []
-      }
-      expenses: {
-        Row: {
-          amount: number
-          category: string | null
-          created_at: string
-          description: string | null
-          id: string
-          occurred_on: string
-          receipt_url: string | null
-          updated_at: string
-          user_id: string
-          org_id: string | null
-          vendor_id: string | null
-        }
-        Insert: {
-          amount: number
-          category?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          occurred_on?: string
-          receipt_url?: string | null
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-          vendor_id?: string | null
-        }
-        Update: {
-          amount?: number
-          category?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          occurred_on?: string
-          receipt_url?: string | null
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-          vendor_id?: string | null
-        }
         Relationships: [
           {
-            foreignKeyName: "expenses_vendor_id_fkey"
+            foreignKeyName: "recurring_expenses_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_expenses_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      inventory: {
-        Row: {
-          common: string | null
-          cultivar_id: string | null
-          genus: string | null
-          id: string
-          name: string
-          stock_growout: number
-          stock_juv: number
-          stock_mat: number
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          common?: string | null
-          cultivar_id?: string | null
-          genus?: string | null
-          id?: string
-          name: string
-          stock_growout?: number
-          stock_juv?: number
-          stock_mat?: number
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          common?: string | null
-          cultivar_id?: string | null
-          genus?: string | null
-          id?: string
-          name?: string
-          stock_growout?: number
-          stock_juv?: number
-          stock_mat?: number
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inventory_cultivar_id_fkey"
-            columns: ["cultivar_id"]
-            isOneToOne: false
-            referencedRelation: "cultivars"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      licenses: {
-        Row: {
-          created_at: string
-          expires_on: string | null
-          id: string
-          issued_on: string | null
-          issuer: string | null
-          name: string
-          notes: string | null
-          reference_number: string | null
-          status: string
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          expires_on?: string | null
-          id?: string
-          issued_on?: string | null
-          issuer?: string | null
-          name: string
-          notes?: string | null
-          reference_number?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          created_at?: string
-          expires_on?: string | null
-          id?: string
-          issued_on?: string | null
-          issuer?: string | null
-          name?: string
-          notes?: string | null
-          reference_number?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: []
-      }
-      listings: {
-        Row: {
-          channel: string
-          created_at: string
-          cultivar_id: string | null
-          external_id: string | null
-          id: string
-          last_synced_at: string | null
-          price: number
-          status: string
-          stock: number
-          title: string
-          updated_at: string
-          url: string | null
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          channel: string
-          created_at?: string
-          cultivar_id?: string | null
-          external_id?: string | null
-          id?: string
-          last_synced_at?: string | null
-          price?: number
-          status?: string
-          stock?: number
-          title: string
-          updated_at?: string
-          url?: string | null
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          channel?: string
-          created_at?: string
-          cultivar_id?: string | null
-          external_id?: string | null
-          id?: string
-          last_synced_at?: string | null
-          price?: number
-          status?: string
-          stock?: number
-          title?: string
-          updated_at?: string
-          url?: string | null
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "listings_cultivar_id_fkey"
-            columns: ["cultivar_id"]
-            isOneToOne: false
-            referencedRelation: "cultivars"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mortality_events: {
-        Row: {
-          cause: string | null
-          count: number
-          created_at: string
-          cultivar_id: string | null
-          id: string
-          inventory_id: string | null
-          noted_at: string
-          notes: string | null
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          cause?: string | null
-          count?: number
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          noted_at?: string
-          notes?: string | null
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          cause?: string | null
-          count?: number
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          noted_at?: string
-          notes?: string | null
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mortality_events_cultivar_id_fkey"
-            columns: ["cultivar_id"]
-            isOneToOne: false
-            referencedRelation: "cultivars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mortality_events_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventory"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      order_items: {
-        Row: {
-          created_at: string
-          cultivar_id: string | null
-          id: string
-          inventory_id: string | null
-          name_snapshot: string
-          order_id: string
-          price: number
-          qty: number
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          name_snapshot: string
-          order_id: string
-          price?: number
-          qty?: number
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          name_snapshot?: string
-          order_id?: string
-          price?: number
-          qty?: number
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "order_items_cultivar_id_fkey"
-            columns: ["cultivar_id"]
-            isOneToOne: false
-            referencedRelation: "cultivars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      orders: {
-        Row: {
-          channel: string
-          created_at: string
-          customer_id: string | null
-          external_id: string | null
-          id: string
-          notes: string | null
-          placed_at: string
-          shipping: number
-          status: string
-          subtotal: number
-          tax: number
-          total: number
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          channel: string
-          created_at?: string
-          customer_id?: string | null
-          external_id?: string | null
-          id?: string
-          notes?: string | null
-          placed_at?: string
-          shipping?: number
-          status?: string
-          subtotal?: number
-          tax?: number
-          total?: number
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          channel?: string
-          created_at?: string
-          customer_id?: string | null
-          external_id?: string | null
-          id?: string
-          notes?: string | null
-          placed_at?: string
-          shipping?: number
-          status?: string
-          subtotal?: number
-          tax?: number
-          total?: number
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      plant_photos: {
-        Row: {
-          caption: string | null
-          created_at: string
-          cultivar_id: string | null
-          id: string
-          inventory_id: string | null
-          storage_path: string
-          taken_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          caption?: string | null
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          storage_path: string
-          taken_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          caption?: string | null
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          storage_path?: string
-          taken_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "plant_photos_cultivar_id_fkey"
-            columns: ["cultivar_id"]
-            isOneToOne: false
-            referencedRelation: "cultivars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plant_photos_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventory"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      print_jobs: {
-        Row: {
-          created_at: string
-          id: string
-          kind: string
-          payload: Json | null
-          printed_at: string | null
-          shipment_id: string | null
-          status: string
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          kind?: string
-          payload?: Json | null
-          printed_at?: string | null
-          shipment_id?: string | null
-          status?: string
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          kind?: string
-          payload?: Json | null
-          printed_at?: string | null
-          shipment_id?: string | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "print_jobs_shipment_id_fkey"
-            columns: ["shipment_id"]
-            isOneToOne: false
-            referencedRelation: "shipments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          display_name: string | null
-          id: string
-          is_admin: boolean
-          notification_prefs: Json
-          onboarded_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          display_name?: string | null
-          id: string
-          is_admin?: boolean
-          notification_prefs?: Json
-          onboarded_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          display_name?: string | null
-          id?: string
-          is_admin?: boolean
-          notification_prefs?: Json
-          onboarded_at?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      propagation_batches: {
-        Row: {
-          batch_id: string
-          count: number
-          cultivar: string
-          est_ready: string | null
-          id: string
-          notes: string | null
-          stage: string
-          started: string | null
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          batch_id: string
-          count?: number
-          cultivar: string
-          est_ready?: string | null
-          id?: string
-          notes?: string | null
-          stage?: string
-          started?: string | null
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          batch_id?: string
-          count?: number
-          cultivar?: string
-          est_ready?: string | null
-          id?: string
-          notes?: string | null
-          stage?: string
-          started?: string | null
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: []
-      }
-      qr_codes: {
-        Row: {
-          code: string
-          created_at: string
-          cultivar_id: string | null
-          id: string
-          inventory_id: string | null
-          last_scanned_at: string | null
-          scan_count: number
-          updated_at: string
-          user_id: string
-          org_id: string | null
-        }
-        Insert: {
-          code: string
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          last_scanned_at?: string | null
-          scan_count?: number
-          updated_at?: string
-          user_id: string
-          org_id: string | null
-        }
-        Update: {
-          code?: string
-          created_at?: string
-          cultivar_id?: string | null
-          id?: string
-          inventory_id?: string | null
-          last_scanned_at?: string | null
-          scan_count?: number
-          updated_at?: string
-          user_id?: string
-          org_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "qr_codes_cultivar_id_fkey"
-            columns: ["cultivar_id"]
-            isOneToOne: false
-            referencedRelation: "cultivars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "qr_codes_inventory_id_fkey"
-            columns: ["inventory_id"]
-            isOneToOne: false
-            referencedRelation: "inventory"
             referencedColumns: ["id"]
           },
         ]
@@ -979,6 +1442,7 @@ export type Database = {
           delivered_at: string | null
           id: string
           order_id: string
+          org_id: string | null
           ship_to_state: string | null
           ship_to_zip: string | null
           shipped_at: string | null
@@ -986,7 +1450,6 @@ export type Database = {
           tracking_number: string | null
           updated_at: string
           user_id: string
-          org_id: string | null
           weather_hold: boolean
           weather_note: string | null
         }
@@ -996,6 +1459,7 @@ export type Database = {
           delivered_at?: string | null
           id?: string
           order_id: string
+          org_id?: string | null
           ship_to_state?: string | null
           ship_to_zip?: string | null
           shipped_at?: string | null
@@ -1003,7 +1467,6 @@ export type Database = {
           tracking_number?: string | null
           updated_at?: string
           user_id: string
-          org_id: string | null
           weather_hold?: boolean
           weather_note?: string | null
         }
@@ -1013,6 +1476,7 @@ export type Database = {
           delivered_at?: string | null
           id?: string
           order_id?: string
+          org_id?: string | null
           ship_to_state?: string | null
           ship_to_zip?: string | null
           shipped_at?: string | null
@@ -1020,7 +1484,6 @@ export type Database = {
           tracking_number?: string | null
           updated_at?: string
           user_id?: string
-          org_id?: string | null
           weather_hold?: boolean
           weather_note?: string | null
         }
@@ -1030,6 +1493,58 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shipments_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_price_history: {
+        Row: {
+          amount: number
+          created_at: string
+          effective_date: string
+          id: string
+          org_id: string
+          subscription_id: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          effective_date?: string
+          id?: string
+          org_id: string
+          subscription_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          effective_date?: string
+          id?: string
+          org_id?: string
+          subscription_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_price_history_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_price_history_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
             referencedColumns: ["id"]
           },
         ]
@@ -1043,13 +1558,13 @@ export type Database = {
           customer_id: string
           id: string
           notes: string | null
+          org_id: string | null
           price: number | null
           started_at: string
           status: string
           tier: string
           updated_at: string
           user_id: string
-          org_id: string | null
         }
         Insert: {
           billing_cycle?: string
@@ -1059,13 +1574,13 @@ export type Database = {
           customer_id: string
           id?: string
           notes?: string | null
+          org_id?: string | null
           price?: number | null
           started_at?: string
           status?: string
           tier: string
           updated_at?: string
           user_id: string
-          org_id: string | null
         }
         Update: {
           billing_cycle?: string
@@ -1075,13 +1590,13 @@ export type Database = {
           customer_id?: string
           id?: string
           notes?: string | null
+          org_id?: string | null
           price?: number | null
           started_at?: string
           status?: string
           tier?: string
           updated_at?: string
           user_id?: string
-          org_id?: string | null
         }
         Relationships: [
           {
@@ -1089,6 +1604,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1101,11 +1623,11 @@ export type Database = {
           name: string
           notes: string | null
           on_hand: number
+          org_id: string | null
           reorder_threshold: number | null
           unit: string | null
           updated_at: string
           user_id: string
-          org_id: string | null
           vendor_id: string | null
         }
         Insert: {
@@ -1115,11 +1637,11 @@ export type Database = {
           name: string
           notes?: string | null
           on_hand?: number
+          org_id?: string | null
           reorder_threshold?: number | null
           unit?: string | null
           updated_at?: string
           user_id: string
-          org_id: string | null
           vendor_id?: string | null
         }
         Update: {
@@ -1129,16 +1651,91 @@ export type Database = {
           name?: string
           notes?: string | null
           on_hand?: number
+          org_id?: string | null
           reorder_threshold?: number | null
           unit?: string | null
           updated_at?: string
           user_id?: string
-          org_id?: string | null
           vendor_id?: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "supplies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "supplies_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_purchases: {
+        Row: {
+          created_at: string
+          expense_id: string | null
+          id: string
+          org_id: string
+          purchase_date: string
+          qty: number
+          supply_id: string | null
+          total_cost: number
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expense_id?: string | null
+          id?: string
+          org_id: string
+          purchase_date?: string
+          qty?: number
+          supply_id?: string | null
+          total_cost?: number
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expense_id?: string | null
+          id?: string
+          org_id?: string
+          purchase_date?: string
+          qty?: number
+          supply_id?: string | null
+          total_cost?: number
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_purchases_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchases_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchases_supply_id_fkey"
+            columns: ["supply_id"]
+            isOneToOne: false
+            referencedRelation: "supplies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchases_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
@@ -1152,95 +1749,244 @@ export type Database = {
           completed: boolean
           due: string | null
           id: string
+          org_id: string | null
           title: string
           type: string | null
           updated_at: string
           user_id: string
-          org_id: string | null
         }
         Insert: {
           assigned_to?: string | null
           completed?: boolean
           due?: string | null
           id?: string
+          org_id?: string | null
           title: string
           type?: string | null
           updated_at?: string
           user_id: string
-          org_id: string | null
         }
         Update: {
           assigned_to?: string | null
           completed?: boolean
           due?: string | null
           id?: string
+          org_id?: string | null
           title?: string
           type?: string | null
           updated_at?: string
           user_id?: string
-          org_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tasks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vendors: {
         Row: {
+          address: string | null
           category: string | null
           contact_email: string | null
           contact_name: string | null
           contact_phone: string | null
           created_at: string
           id: string
+          is_1099: boolean
           name: string
           notes: string | null
+          org_id: string | null
           updated_at: string
           url: string | null
           user_id: string
-          org_id: string | null
+          website: string | null
         }
         Insert: {
+          address?: string | null
           category?: string | null
           contact_email?: string | null
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
           id?: string
+          is_1099?: boolean
           name: string
           notes?: string | null
+          org_id?: string | null
           updated_at?: string
           url?: string | null
           user_id: string
-          org_id: string | null
+          website?: string | null
         }
         Update: {
+          address?: string | null
           category?: string | null
           contact_email?: string | null
           contact_name?: string | null
           contact_phone?: string | null
           created_at?: string
           id?: string
+          is_1099?: boolean
           name?: string
           notes?: string | null
+          org_id?: string | null
           updated_at?: string
           url?: string | null
           user_id?: string
-          org_id?: string | null
+          website?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vendors_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
-    Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
-    Enums: { [_ in never]: never }
-    CompositeTypes: { [_ in never]: never }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      purge_stale_unconfirmed_users: {
+        Args: { grace_days?: number }
+        Returns: number
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
 type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
-export type Tables<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Row"]
-export type TablesInsert<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Insert"]
-export type TablesUpdate<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Update"]
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

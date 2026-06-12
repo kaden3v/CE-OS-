@@ -5,6 +5,7 @@ import { FileSpreadsheet, ChevronDown } from "lucide-react";
 import { useEntity } from "@/hooks/useEntity";
 import { useOrders } from "@/hooks/useOrders";
 import { useApp } from "@/contexts/AppContext";
+import { isoYear, currentYear, businessMonthShort, toBusinessISODate } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
 
 type Expense = Tables<"expenses">;
@@ -39,12 +40,12 @@ export default function TaxReport() {
 
   const years = useMemo(() => {
     const ys = new Set<number>();
-    expenses.forEach((e) => ys.add(new Date(e.occurred_on).getFullYear()));
-    orders.forEach((o) => ys.add(new Date(o.placed_at).getFullYear()));
-    if (ys.size === 0) ys.add(new Date().getFullYear());
+    expenses.forEach((e) => ys.add(isoYear(e.occurred_on) ?? currentYear()));
+    orders.forEach((o) => ys.add(isoYear(o.placed_at) ?? currentYear()));
+    if (ys.size === 0) ys.add(currentYear());
     return Array.from(ys).sort((a, b) => b - a);
   }, [expenses, orders]);
-  const [year, setYear] = useState<number>(years[0] ?? new Date().getFullYear());
+  const [year, setYear] = useState<number>(years[0] ?? currentYear());
 
   // Destination state per order (from its shipment) — what sales-tax nexus
   // questions actually need.
@@ -58,7 +59,7 @@ export default function TaxReport() {
 
   const sales = useMemo(() => {
     const valid = orders.filter(
-      (o) => new Date(o.placed_at).getFullYear() === year && !EXCLUDED_ORDER_STATUSES.includes(o.status),
+      (o) => isoYear(o.placed_at) === year && !EXCLUDED_ORDER_STATUSES.includes(o.status),
     );
     const byChannel: Record<string, number> = {};
     const byState: Record<string, number> = {};
@@ -72,7 +73,7 @@ export default function TaxReport() {
       byChannel[o.channel] = (byChannel[o.channel] ?? 0) + amount;
       const st = stateByOrder.get(o.id) ?? "Unknown";
       byState[st] = (byState[st] ?? 0) + amount;
-      const m = new Date(o.placed_at).toLocaleString("en-US", { month: "short" });
+      const m = businessMonthShort(o.placed_at);
       byMonth[m] = (byMonth[m] ?? 0) + amount;
     }
     return { valid, byChannel, byState, byMonth, total, taxCollected };
@@ -80,7 +81,7 @@ export default function TaxReport() {
 
   // Schedule C-style COGS for the year, from production runs.
   const cogs = useMemo(() => {
-    const yearRuns = runs.filter((r) => new Date(r.run_on).getFullYear() === year);
+    const yearRuns = runs.filter((r) => isoYear(r.run_on) === year);
     const runIds = new Set(yearRuns.map((r) => r.id));
     const materials = runItems
       .filter((i) => runIds.has(i.run_id))
@@ -90,14 +91,14 @@ export default function TaxReport() {
   }, [runs, runItems, year]);
 
   const { byCategory, byMonth, total } = useMemo(() => {
-    const filtered = expenses.filter((e) => new Date(e.occurred_on).getFullYear() === year);
+    const filtered = expenses.filter((e) => isoYear(e.occurred_on) === year);
     const byCategory: Record<string, number> = {};
     const byMonth: Record<string, number> = {};
     let total = 0;
     for (const e of filtered) {
       const cat = e.category ?? "Uncategorized";
       byCategory[cat] = (byCategory[cat] ?? 0) + Number(e.amount);
-      const m = new Date(e.occurred_on).toLocaleString("en-US", { month: "short" });
+      const m = businessMonthShort(e.occurred_on);
       byMonth[m] = (byMonth[m] ?? 0) + Number(e.amount);
       total += Number(e.amount);
     }
@@ -110,7 +111,7 @@ export default function TaxReport() {
   const handleExportExpensesCsv = () => {
     const rows: string[][] = [["Date", "Category", "Amount", "Description"]];
     expenses
-      .filter((e) => new Date(e.occurred_on).getFullYear() === year)
+      .filter((e) => isoYear(e.occurred_on) === year)
       .forEach((e) => {
         rows.push([e.occurred_on, e.category ?? "", Number(e.amount).toFixed(2), e.description ?? ""]);
       });
@@ -123,7 +124,7 @@ export default function TaxReport() {
     const rows: string[][] = [["Date", "Order", "Channel", "Customer", "Ship-to state", "Status", "Subtotal", "Shipping", "Tax", "Total"]];
     sales.valid.forEach((o) => {
       rows.push([
-        new Date(o.placed_at).toISOString().slice(0, 10),
+        toBusinessISODate(o.placed_at),
         o.id.slice(0, 8),
         o.channel,
         o.customer?.name ?? "",
@@ -274,7 +275,7 @@ export default function TaxReport() {
         </Card>
         <Card className="p-6">
           <div className="text-xs uppercase tracking-wider text-text-secondary mb-2">Entries</div>
-          <div className="text-3xl font-semibold tabular-nums">{expenses.filter((e) => new Date(e.occurred_on).getFullYear() === year).length}</div>
+          <div className="text-3xl font-semibold tabular-nums">{expenses.filter((e) => isoYear(e.occurred_on) === year).length}</div>
         </Card>
       </div>
 

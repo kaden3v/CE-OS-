@@ -12,6 +12,7 @@ import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 import { formatDate } from "@/lib/format";
+import { todayISO } from "@/lib/dates";
 
 type Recurring = Tables<"recurring_expenses">;
 type Vendor = Tables<"vendors">;
@@ -102,7 +103,7 @@ export default function Subscriptions() {
       : await add({
           id: crypto.randomUUID(),
           status: "active",
-          started_on: new Date().toISOString().slice(0, 10),
+          started_on: todayISO(),
           cancelled_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -149,7 +150,7 @@ export default function Subscriptions() {
       category: s.category ?? "Subscription",
       description: `${s.name} (${s.billing_cycle})`,
       vendor_id: s.vendor_id,
-      occurred_on: new Date().toISOString().slice(0, 10),
+      occurred_on: todayISO(),
       receipt_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
