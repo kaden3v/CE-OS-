@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { formatDate } from "@/lib/format";
 
 type Batch = Tables<"propagation_batches">;
 type InventoryRow = Tables<"inventory">;
@@ -277,11 +278,11 @@ export default function Propagation() {
                           {batch.started && (
                             <div className="flex items-center gap-2 text-text-secondary">
                               <Clock className="w-3.5 h-3.5 text-text-tertiary" />
-                              Started {batch.started}
+                              Started {formatDate(batch.started)}
                             </div>
                           )}
                           {batch.est_ready && (
-                            <div className="text-text-secondary">Ready {batch.est_ready}</div>
+                            <div className="text-text-secondary">Ready {formatDate(batch.est_ready)}</div>
                           )}
                           {batch.notes && (
                             <div className="mt-2 text-status-warn border border-status-warn/20 p-2 rounded bg-[rgba(255,255,255,0.02)] flex items-start gap-2">

@@ -10,6 +10,7 @@ import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { formatDate } from "@/lib/format";
 
 type License = Tables<"licenses">;
 
@@ -246,7 +247,7 @@ export default function Licenses() {
                         </div>
                         <div>
                           <div className="text-xs text-text-tertiary mb-1">Expiration Date</div>
-                          <div className={cn("text-sm font-medium", info.class)}>{lic.expires_on ?? "—"}</div>
+                          <div className={cn("text-sm font-medium", info.class)}>{formatDate(lic.expires_on)}</div>
                         </div>
                       </div>
                       {/* Desktop: hover-reveal over the corner. */}

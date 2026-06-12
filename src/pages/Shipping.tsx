@@ -10,6 +10,7 @@ import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
 import { trackingUrl } from "@/lib/tracking";
+import { shipmentStatusTone } from "@/lib/status";
 import { useOrders } from "@/hooks/useOrders";
 import { checkShippingWeather } from "@/lib/weather";
 import { friendlyDbError } from "@/lib/dbErrors";
@@ -174,10 +175,9 @@ export default function Shipping() {
         header: "Status",
         cell: (info: any) => {
           const s = info.getValue();
-          const tone = s === "shipped" || s === "delivered" ? "ok" : s === "held" || s === "exception" ? "alert" : "warn";
           return (
             <div className="flex items-center gap-2 capitalize">
-              <StatusDot status={tone as any} />
+              <StatusDot status={shipmentStatusTone(s)} />
               {s}
             </div>
           );

@@ -1,31 +1,35 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { lazy, Suspense } from "react";
 import { Layout } from "./components/Layout";
-import Dashboard from "./pages/Dashboard";
-import Orders from "./pages/Orders";
-import Inventory from "./pages/Inventory";
-import QrGenerator from "./pages/QrGenerator";
-import Propagation from "./pages/Propagation";
-import Capacity from "./pages/Capacity";
-import Cultivars from "./pages/Cultivars";
-import CultivarProfit from "./pages/CultivarProfit";
-import Customers from "./pages/Customers";
-import Shipping from "./pages/Shipping";
-import PrintQueue from "./pages/PrintQueue";
-import Listings from "./pages/Listings";
-import Expenses from "./pages/Expenses";
-import Production from "./pages/Production";
-import Subscriptions from "./pages/Subscriptions";
-import Supplies from "./pages/Supplies";
-import Vendors from "./pages/Vendors";
-import TaxReport from "./pages/TaxReport";
-import Licenses from "./pages/Licenses";
-import Team from "./pages/Team";
-import Activity from "./pages/Activity";
-import Import from "./pages/Import";
-import Settings from "./pages/Settings";
-import SignIn from "./pages/SignIn";
-import ResetPassword from "./pages/ResetPassword";
-import AccessRequests from "./pages/AccessRequests";
+
+// Routes are code-split: each page is its own chunk, fetched on first visit.
+// Keeps the initial bundle small (recharts/qrcode/etc. no longer load up front).
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Orders = lazy(() => import("./pages/Orders"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const QrGenerator = lazy(() => import("./pages/QrGenerator"));
+const Propagation = lazy(() => import("./pages/Propagation"));
+const Capacity = lazy(() => import("./pages/Capacity"));
+const Cultivars = lazy(() => import("./pages/Cultivars"));
+const CultivarProfit = lazy(() => import("./pages/CultivarProfit"));
+const Customers = lazy(() => import("./pages/Customers"));
+const Shipping = lazy(() => import("./pages/Shipping"));
+const PrintQueue = lazy(() => import("./pages/PrintQueue"));
+const Listings = lazy(() => import("./pages/Listings"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const Production = lazy(() => import("./pages/Production"));
+const Subscriptions = lazy(() => import("./pages/Subscriptions"));
+const Supplies = lazy(() => import("./pages/Supplies"));
+const Vendors = lazy(() => import("./pages/Vendors"));
+const TaxReport = lazy(() => import("./pages/TaxReport"));
+const Licenses = lazy(() => import("./pages/Licenses"));
+const Team = lazy(() => import("./pages/Team"));
+const Activity = lazy(() => import("./pages/Activity"));
+const Import = lazy(() => import("./pages/Import"));
+const Settings = lazy(() => import("./pages/Settings"));
+const SignIn = lazy(() => import("./pages/SignIn"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AccessRequests = lazy(() => import("./pages/AccessRequests"));
 import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
 import { Toasts } from "./components/ui/Toasts";
@@ -40,6 +44,7 @@ export default function App() {
           <Toasts />
           <BrowserRouter>
             <CommandPalette />
+            <Suspense fallback={<div className="h-dvh w-full bg-bg-base" />}>
             <Routes>
               <Route path="/sign-in" element={<SignIn />} />
               <Route path="/reset-password" element={<ResetPassword />} />
@@ -71,6 +76,7 @@ export default function App() {
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </AppProvider>
       </AuthProvider>

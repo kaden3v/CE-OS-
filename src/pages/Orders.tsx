@@ -15,39 +15,19 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { orderStatusTone, shipmentStatusTone } from "@/lib/status";
 import type { Tables } from "@/lib/database.types";
 
 type Customer = Tables<"customers">;
 type Cultivar = Tables<"cultivars">;
 type Shipment = Tables<"shipments">;
 
-const shipmentStatusColor = (s: string) => {
-  switch (s) {
-    case "pending": return "alert" as const;
-    case "ready": return "info" as const;
-    case "held": return "warn" as const;
-    case "shipped": return "ok" as const;
-    case "delivered": return "ok" as const;
-    case "exception": return "alert" as const;
-    default: return "info" as const;
-  }
-};
+const shipmentStatusColor = shipmentStatusTone;
 
 const STATUSES = ["pending", "processing", "packed", "shipped", "delivered", "cancelled", "refunded"] as const;
 type Status = (typeof STATUSES)[number];
 
-const statusColor = (s: string) => {
-  switch (s) {
-    case "pending": return "alert" as const;
-    case "processing": return "warn" as const;
-    case "packed": return "info" as const;
-    case "shipped": return "ok" as const;
-    case "delivered": return "ok" as const;
-    case "cancelled":
-    case "refunded": return "warn" as const;
-    default: return "info" as const;
-  }
-};
+const statusColor = orderStatusTone;
 
 export default function Orders() {
   const { globalOrderViewId, setGlobalOrderViewId, addToast } = useApp();

@@ -9,6 +9,7 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieC
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useApp } from "@/contexts/AppContext";
+import { orderStatusTone } from "@/lib/status";
 import { useOrders } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
 import type { Tables } from "@/lib/database.types";
@@ -185,13 +186,7 @@ export default function Dashboard() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{order.customer?.name ?? "Direct"}</span>
-                            <StatusDot
-                              status={
-                                order.status === "pending" ? "alert" :
-                                order.status === "processing" ? "warn" :
-                                order.status === "packed" ? "info" : "ok"
-                              }
-                            />
+                            <StatusDot status={orderStatusTone(order.status)} />
                           </div>
                           <div className="text-xs text-text-secondary mt-2 flex items-center gap-2 capitalize">
                             <span className="flex items-center gap-2">

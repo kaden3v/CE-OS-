@@ -10,6 +10,7 @@ import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { formatDate } from "@/lib/format";
 
 type Run = Tables<"production_runs">;
 type RunItem = Tables<"production_run_items">;
@@ -132,7 +133,7 @@ export default function Production() {
 
   const columns = useMemo(
     () => [
-      { accessorKey: "run_on", header: "Date", cell: (info: any) => <span className="text-text-secondary">{info.getValue()}</span> },
+      { accessorKey: "run_on", header: "Date", cell: (info: any) => <span className="text-text-secondary">{formatDate(info.getValue())}</span> },
       { accessorKey: "description", header: "Run", cell: (info: any) => <span className="font-medium">{info.getValue() ?? "—"}</span> },
       { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
       { accessorKey: "quantity", header: "Units", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },

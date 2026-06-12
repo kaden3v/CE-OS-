@@ -11,6 +11,7 @@ import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { formatDate } from "@/lib/format";
 
 type Recurring = Tables<"recurring_expenses">;
 type Vendor = Tables<"vendors">;
@@ -187,7 +188,7 @@ export default function Subscriptions() {
         ),
       },
       { id: "monthly", header: "Monthly", cell: (info: any) => <span className="tabular-nums text-text-secondary">${monthlyEquiv(info.row.original).toFixed(2)}</span> },
-      { accessorKey: "next_renewal", header: "Next renewal", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
+      { accessorKey: "next_renewal", header: "Next renewal", cell: (info: any) => <span className="text-text-secondary">{formatDate(info.getValue())}</span> },
       {
         accessorKey: "status",
         header: "Status",
