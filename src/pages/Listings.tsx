@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { Plus, X, Store, ShoppingBag } from "lucide-react";
+import { Plus, X, Store, ShoppingBag, ExternalLink } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
@@ -128,7 +129,20 @@ export default function Listings() {
 
   const columns = useMemo(
     () => [
-      { accessorKey: "title", header: "Title", cell: (info: any) => <span className="font-medium">{info.getValue()}</span> },
+      {
+        accessorKey: "title",
+        header: "Title",
+        cell: (info: any) => {
+          const url = info.row.original.url as string | null;
+          if (!url) return <span className="font-medium">{info.getValue()}</span>;
+          return (
+            <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-medium inline-flex items-center gap-1 hover:underline" title="Open live listing">
+              {info.getValue()}
+              <ExternalLink className="w-3 h-3 text-text-tertiary shrink-0" />
+            </a>
+          );
+        },
+      },
       { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
       { accessorKey: "channel", header: "Channel", cell: (info: any) => <div className="flex items-center gap-2 text-text-secondary capitalize">{channelIcon(info.getValue())}{info.getValue()}</div> },
       { accessorKey: "price", header: "Price", cell: (info: any) => <span className="tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
@@ -149,6 +163,17 @@ export default function Listings() {
         },
       },
       { accessorKey: "status", header: "Status", cell: (info: any) => renderStatus(info.getValue()) },
+      {
+        accessorKey: "last_synced_at",
+        header: "Synced",
+        cell: (info: any) => {
+          const v = info.getValue() as string | null;
+          if (!v) return <span className="text-text-tertiary text-xs">manual</span>;
+          const mins = Math.floor((Date.now() - new Date(v).getTime()) / 60000);
+          const label = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`;
+          return <span className="text-text-secondary text-xs" title={new Date(v).toLocaleString()}>{label}</span>;
+        },
+      },
       {
         id: "quality",
         header: "Quality",
@@ -206,15 +231,7 @@ export default function Listings() {
         )}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">New Listing</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Listing" size="lg">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Title *</label>
@@ -248,7 +265,7 @@ export default function Listings() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Price</label>
                   <Input type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
@@ -267,9 +284,7 @@ export default function Listings() {
                 <Button type="submit">Save Draft</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +23,7 @@ import { useEntity as useEntityRaw } from "@/hooks/useEntity";
 
 type InventoryRow = Tables<"inventory">;
 type CultivarRow = Tables<"cultivars">;
+type MortalityRow = Tables<"mortality_events">;
 
 // Stock tiers by sale-readiness:
 //   growout — "Grow-Out": too small/young to sell (not for sale)
@@ -87,6 +89,8 @@ export default function Inventory() {
   const { data: cultivars } = useEntityRaw<CultivarRow>("cultivars", [], {
     toRow: (c) => ({ name: c.name }),
   });
+  // Loss history — mortality_events was write-only; surface it per plant.
+  const { data: mortality, refresh: refreshMortality } = useEntityRaw<MortalityRow>("mortality_events", [], { orderBy: "noted_at", ascending: false });
   const [lowStockFilter, setLowStockFilter] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
@@ -241,6 +245,7 @@ export default function Inventory() {
       entityId: String(selectedItem.id),
       summary: `${selectedItem.name}: −${count} (loss${lossForm.cause.trim() ? ` — ${lossForm.cause.trim()}` : ""})`,
     });
+    void refreshMortality();
     setIsLossOpen(false);
     setLossForm({ stage: "growout", count: 1, cause: "", notes: "" });
     addToast({ title: "Loss logged", description: `−${count} ${selectedItem.name}`, status: "info" });
@@ -291,17 +296,17 @@ export default function Inventory() {
             <p className="text-sm text-text-secondary">Manage plant stock levels across all stages.</p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:flex-1 md:w-64 order-first sm:order-none">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+              <Input placeholder="Search inventory..." className="pl-8 w-full" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
             {canManage && (
               <Button variant="outline" onClick={handleAvailabilityList}>Availability</Button>
             )}
             <Link to="/inventory/qr-codes"><Button variant="outline"><QrCode className="w-4 h-4 mr-2" /> QR Codes</Button></Link>
-            <div className="relative flex-1 md:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-              <Input placeholder="Search inventory..." className="pl-8 w-full" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <Button 
-              variant={lowStockFilter ? "brand" : "outline"} 
+            <Button
+              variant={lowStockFilter ? "brand" : "outline"}
               onClick={() => setLowStockFilter(!lowStockFilter)}
             >
               Low Stock
@@ -519,6 +524,32 @@ export default function Inventory() {
                     </div>
                   </section>
 
+                  {/* Loss history — from mortality_events */}
+                  {(() => {
+                    const losses = mortality.filter((m) => m.inventory_id === selectedItem.id);
+                    if (losses.length === 0) return null;
+                    const total = losses.reduce((s, m) => s + (m.count ?? 0), 0);
+                    return (
+                      <section>
+                        <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">
+                          Loss History <span className="text-text-tertiary normal-case">· {total} lost</span>
+                        </h3>
+                        <div className="space-y-2">
+                          {losses.slice(0, 8).map((m) => (
+                            <div key={m.id} className="flex items-start justify-between gap-2 text-sm p-2 bg-bg-active rounded-lg border border-border-subtle">
+                              <div className="min-w-0">
+                                <span className="font-medium text-status-alert tabular-nums">−{m.count}</span>
+                                <span className="text-text-secondary"> {m.cause?.trim() || "loss"}</span>
+                                {m.notes && <div className="text-xs text-text-tertiary truncate">{m.notes}</div>}
+                              </div>
+                              <span className="text-xs text-text-tertiary shrink-0">{new Date(m.noted_at).toLocaleDateString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })()}
+
                   {/* Related */}
                   <section>
                     <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Related</h3>
@@ -606,16 +637,8 @@ export default function Inventory() {
         </div>
       )}
 
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-             <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 className="text-lg font-semibold">Add to Inventory</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-4">
+      <Modal open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add to Inventory" size="sm">
+            <div className="p-4">
               <form id="add-plant-form" onSubmit={handleAddPlant} className="space-y-4">
                 {cultivars.length > 0 && (
                   <div className="space-y-2">
@@ -678,9 +701,7 @@ export default function Inventory() {
                <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
                <Button variant="brand" type="submit" form="add-plant-form">Save Plant</Button>
             </div>
-          </Card>
-        </div>
-      )}
+      </Modal>
 
       {/* Edit Details Modal */}
       {isEditModalOpen && selectedItem && (

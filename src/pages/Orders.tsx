@@ -249,10 +249,10 @@ export default function Orders() {
             <h1 className="text-2xl font-semibold mb-2">Orders</h1>
             <p className="text-sm text-text-secondary">All sales across channels.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="relative hidden md:block">
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:flex-none">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-              <Input placeholder="Search orders..." className="pl-8 w-64" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input placeholder="Search orders..." className="pl-8 w-full md:w-64" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             <Button variant="brand" onClick={() => setIsAddOpen(true)} disabled={cultivars.length === 0}>
               <Plus className="w-4 h-4 mr-2" />
@@ -305,6 +305,15 @@ export default function Orders() {
                   </div>
                 </div>
                 <div className="text-sm text-text-secondary">{new Date(selected.placed_at).toLocaleString()}</div>
+                {selected.external_id && (
+                  <div className="text-xs text-text-tertiary mt-1 font-mono">
+                    {selected.external_id.startsWith("etsy:")
+                      ? `Etsy receipt #${selected.external_id.slice(5)}`
+                      : selected.external_id.startsWith("shopify:")
+                        ? `Shopify order ${selected.external_id.slice(8)}`
+                        : `Ref: ${selected.external_id}`}
+                  </div>
+                )}
               </div>
               <button onClick={() => setGlobalOrderViewId(null)} aria-label="Close" className="p-2 -mr-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors">
                 <X className="w-5 h-5" />
@@ -495,7 +504,7 @@ export default function Orders() {
               </button>
             </div>
             <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Customer</label>
                   <select
