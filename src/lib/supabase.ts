@@ -46,6 +46,45 @@ export async function restGet<T = unknown>(path: string, init?: { abortMs?: numb
   }
 }
 
+/**
+ * Postgres RPC via direct fetch to PostgREST (`/rest/v1/rpc/{fn}`). Same reason
+ * and shape as restGet: bypasses supabase-js (which has been observed to hang),
+ * returns parsed JSON on success, throws on failure. Sends the caller's access
+ * token so SECURITY INVOKER functions see the right RLS context.
+ */
+export async function rpcCall<T = unknown>(
+  fn: string,
+  args: Record<string, unknown>,
+  init?: { abortMs?: number },
+): Promise<T> {
+  if (!url || !anonKey) throw new Error("Supabase not configured");
+  const ref = url.replace(/^https?:\/\//, "").split(".")[0];
+  const stored = localStorage.getItem(`sb-${ref}-auth-token`);
+  const accessToken = stored ? (JSON.parse(stored)?.access_token as string | undefined) : undefined;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), init?.abortMs ?? 10000);
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: accessToken ? `Bearer ${accessToken}` : `Bearer ${anonKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(args),
+      signal: ctrl.signal,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error((json as any)?.message ?? `RPC ${fn} ${res.status}`);
+    }
+    return json as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Edge Function invoke via direct fetch (bypasses supabase-js). */
 export async function functionInvoke<T = unknown>(
   name: string,

@@ -1854,6 +1854,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _finance_kpi_window: {
+        Args: { p_end: string; p_org_id: string; p_start: string }
+        Returns: Json
+      }
+      finance_alerts: { Args: { p_org_id: string }; Returns: Json }
+      finance_cashflow: {
+        Args: { p_org_id: string }
+        Returns: {
+          money_in: number
+          money_out: number
+          month: string
+          net: number
+        }[]
+      }
+      finance_kpis: {
+        Args: { p_org_id: string; p_period?: string }
+        Returns: Json
+      }
       purge_stale_unconfirmed_users: {
         Args: { grace_days?: number }
         Returns: number

@@ -16,6 +16,8 @@ const Customers = lazy(() => import("./pages/Customers"));
 const Shipping = lazy(() => import("./pages/Shipping"));
 const PrintQueue = lazy(() => import("./pages/PrintQueue"));
 const Listings = lazy(() => import("./pages/Listings"));
+const FinancesOverview = lazy(() => import("./pages/FinancesOverview"));
+const FinancePlaceholder = lazy(() => import("./pages/FinancePlaceholder"));
 const Expenses = lazy(() => import("./pages/Expenses"));
 const Production = lazy(() => import("./pages/Production"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
@@ -30,6 +32,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const SignIn = lazy(() => import("./pages/SignIn"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AccessRequests = lazy(() => import("./pages/AccessRequests"));
+import { TrendingUp, Car } from "lucide-react";
 import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
 import { Toasts } from "./components/ui/Toasts";
@@ -61,11 +64,38 @@ export default function App() {
                 <Route path="/shipping" element={<Shipping />} />
                 <Route path="/shipping/print-queue" element={<PrintQueue />} />
                 <Route path="/listings" element={<Listings />} />
+                <Route path="/finances" element={<RequireManager><FinancesOverview /></RequireManager>} />
                 <Route path="/finances/expenses" element={<RequireManager><Expenses /></RequireManager>} />
                 <Route path="/finances/supplies" element={<RequireManager><Supplies /></RequireManager>} />
                 <Route path="/finances/production" element={<RequireManager><Production /></RequireManager>} />
                 <Route path="/finances/subscriptions" element={<RequireManager><Subscriptions /></RequireManager>} />
                 <Route path="/finances/vendors" element={<RequireManager><Vendors /></RequireManager>} />
+                <Route
+                  path="/finances/revenue"
+                  element={
+                    <RequireManager>
+                      <FinancePlaceholder
+                        title="Revenue"
+                        subtitle="Sales performance by channel, product, and customer."
+                        icon={TrendingUp}
+                        blurb="A dedicated revenue breakdown is on the way. For now, the Overview shows net revenue and Reports has sales and tax summaries."
+                      />
+                    </RequireManager>
+                  }
+                />
+                <Route
+                  path="/finances/mileage"
+                  element={
+                    <RequireManager>
+                      <FinancePlaceholder
+                        title="Mileage"
+                        subtitle="Log deductible business trips for your Schedule C."
+                        icon={Car}
+                        blurb="Mileage logging is coming soon. Trips will total against the IRS standard rate from your finance settings."
+                      />
+                    </RequireManager>
+                  }
+                />
                 <Route path="/finances/tax-report" element={<RequireManager><TaxReport /></RequireManager>} />
                 <Route path="/licenses" element={<RequireManager><Licenses /></RequireManager>} />
                 <Route path="/team" element={<Team />} />

@@ -26,6 +26,9 @@ import {
   Menu,
   List,
   CheckSquare,
+  PieChart,
+  TrendingUp,
+  Car,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -48,12 +51,15 @@ const NAV_ITEMS = [
 ];
 
 const FINANCE_ITEMS = [
+  { name: "Overview", href: "/finances", icon: PieChart },
   { name: "Expenses", href: "/finances/expenses", icon: Receipt },
+  { name: "Revenue", href: "/finances/revenue", icon: TrendingUp },
   { name: "Subscriptions", href: "/finances/subscriptions", icon: Repeat },
   { name: "Supplies", href: "/finances/supplies", icon: PackageOpen },
   { name: "Production", href: "/finances/production", icon: PackageSearch },
   { name: "Vendors", href: "/finances/vendors", icon: Store },
-  { name: "Tax Report", href: "/finances/tax-report", icon: FileSpreadsheet },
+  { name: "Mileage", href: "/finances/mileage", icon: Car },
+  { name: "Reports", href: "/finances/tax-report", icon: FileSpreadsheet },
 ];
 
 const MOBILE_NAV_ITEMS = [
@@ -64,7 +70,7 @@ const MOBILE_NAV_ITEMS = [
 ];
 
 export function Layout() {
-  const [financesOpen, setFinancesOpen] = useState(false);
+  const [financesOpen, setFinancesOpen] = useState(() => window.location.pathname.startsWith("/finances"));
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -119,7 +125,7 @@ export function Layout() {
           case 'l': navigate('/listings'); break;
           case 'u': navigate('/customers'); break;
           case 's': navigate('/shipping'); break;
-          case 'f': navigate('/finances/expenses'); break;
+          case 'f': navigate('/finances'); break;
         }
         lastKey = "";
       }
@@ -195,7 +201,7 @@ export function Layout() {
           {canManage && (
           <div>
             <button
-              onClick={() => setFinancesOpen(!financesOpen)}
+              onClick={() => { navigate("/finances"); setFinancesOpen(true); }}
               className={cn(
                 "w-full flex items-center justify-between px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors mt-2",
                 isFinancesActive ? "text-text-primary" : "text-text-secondary"
@@ -205,9 +211,16 @@ export function Layout() {
                 <DollarSign className="w-5 h-5 opacity-70" strokeWidth={1.5} />
                 Finances
               </div>
-              <ChevronDown
-                className={cn("w-4 h-4 transition-transform", financesOpen ? "rotate-180" : "")}
-              />
+              <span
+                role="button"
+                aria-label={financesOpen ? "Collapse Finances" : "Expand Finances"}
+                onClick={(e) => { e.stopPropagation(); setFinancesOpen((o) => !o); }}
+                className="p-1 -m-1 rounded hover:bg-bg-active"
+              >
+                <ChevronDown
+                  className={cn("w-4 h-4 transition-transform", financesOpen ? "rotate-180" : "")}
+                />
+              </span>
             </button>
             {financesOpen && (
               <div className="mt-2 ml-6 pl-2 border-l border-border-subtle space-y-1">
@@ -215,6 +228,7 @@ export function Layout() {
                   <NavLink
                     key={item.href}
                     to={item.href}
+                    end={item.href === "/finances"}
                     className={({ isActive }) =>
                       cn(
                         "flex items-center gap-2 px-2 py-2 hover:bg-bg-hover rounded-md text-sm transition-colors relative",
@@ -441,6 +455,7 @@ export function Layout() {
                <div>
                   <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Finances & Audit</h3>
                   <div className="grid grid-cols-2 gap-2">
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances" end className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><PieChart className="w-4 h-4 text-text-secondary"/> Overview</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/expenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Receipt className="w-4 h-4 text-text-secondary"/> Expenses</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/supplies" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><PackageOpen className="w-4 h-4 text-text-secondary"/> Supplies</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/vendors" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Store className="w-4 h-4 text-text-secondary"/> Vendors</NavLink>

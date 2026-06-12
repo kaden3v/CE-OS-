@@ -1,4 +1,5 @@
-import { useState, FormEvent } from "react";
+import { useEffect, useState, FormEvent } from "react";
+import { useLocation } from "react-router";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -35,6 +36,13 @@ export default function Supplies() {
 
   const { addToast } = useApp();
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
+  // Opened from a Finances Overview quick action.
+  useEffect(() => {
+    if ((location.state as { openNew?: boolean } | null)?.openNew) setIsOpen(true);
+  }, [location.state]);
+
   const [form, setForm] = useState({ name: "", unit: "pc", on_hand: 0, reorder_threshold: 0, cost: 0, vendor_id: "" });
 
   const handleAdd = async (e: FormEvent) => {
