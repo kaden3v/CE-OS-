@@ -28,7 +28,7 @@ export default function Reports() {
         <p className="text-sm text-text-secondary">Profit &amp; loss, cash flow, quarterly estimates, and your tax summary.</p>
       </div>
 
-      <div className="flex items-center gap-1 border-b border-border-subtle mb-6 overflow-x-auto">
+      <div className="flex items-center gap-1 border-b border-border-subtle mb-6 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
