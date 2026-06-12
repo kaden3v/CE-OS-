@@ -12,20 +12,20 @@ import type { Tables } from "@/lib/database.types";
 
 type Cultivar = Tables<"cultivars">;
 type Run = Tables<"production_runs">;
-type RunItem = Tables<"production_run_items">;
+type RunSupply = Tables<"production_run_supplies">;
 
 export default function CultivarProfit() {
   const { data: orders } = useOrders();
   const { data: cultivars } = useEntity<Cultivar>("cultivars", []);
   const { data: runs } = useEntity<Run>("production_runs", [], { orderBy: "created_at" });
-  const { data: runItems } = useEntity<RunItem>("production_run_items", [], { orderBy: "created_at" });
+  const { data: runSupplies } = useEntity<RunSupply>("production_run_supplies", [], { orderBy: "created_at" });
 
   // COGS per cultivar from production runs: materials (snapshotted unit costs)
   // plus labor, attributed to the run's cultivar.
   const costByCultivar = useMemo(() => {
     const materialsByRun = new Map<string, number>();
-    runItems.forEach((i) => {
-      materialsByRun.set(i.run_id, (materialsByRun.get(i.run_id) ?? 0) + Number(i.qty_used) * Number(i.unit_cost));
+    runSupplies.forEach((s) => {
+      materialsByRun.set(s.run_id, (materialsByRun.get(s.run_id) ?? 0) + Number(s.qty) * Number(s.unit_cost_snapshot));
     });
     const map = new Map<string, number>();
     runs.forEach((r) => {
@@ -34,7 +34,7 @@ export default function CultivarProfit() {
       map.set(r.cultivar_id, (map.get(r.cultivar_id) ?? 0) + cost);
     });
     return map;
-  }, [runs, runItems]);
+  }, [runs, runSupplies]);
 
   // Aggregate per-cultivar units & revenue from order_items; cost from runs.
   const rows = useMemo(() => {

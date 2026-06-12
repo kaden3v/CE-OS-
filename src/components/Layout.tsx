@@ -59,7 +59,7 @@ const FINANCE_ITEMS = [
   { name: "Production", href: "/finances/production", icon: PackageSearch },
   { name: "Vendors", href: "/finances/vendors", icon: Store },
   { name: "Mileage", href: "/finances/mileage", icon: Car },
-  { name: "Reports", href: "/finances/tax-report", icon: FileSpreadsheet },
+  { name: "Reports", href: "/finances/reports", icon: FileSpreadsheet },
 ];
 
 const MOBILE_NAV_ITEMS = [
@@ -460,7 +460,7 @@ export function Layout() {
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/supplies" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><PackageOpen className="w-4 h-4 text-text-secondary"/> Supplies</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/vendors" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Store className="w-4 h-4 text-text-secondary"/> Vendors</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/subscriptions" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Repeat className="w-4 h-4 text-text-secondary"/> Subscriptions</NavLink>
-                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/tax-report" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileSpreadsheet className="w-4 h-4 text-text-secondary"/> Tax Report</NavLink>
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/reports" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileSpreadsheet className="w-4 h-4 text-text-secondary"/> Reports</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/licenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileBadge className="w-4 h-4 text-text-secondary"/> Licenses</NavLink>
                   </div>
                </div>

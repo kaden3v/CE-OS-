@@ -341,6 +341,7 @@ export type Database = {
           updated_at: string
           user_id: string
           vendor_id: string | null
+          vendor_name: string | null
         }
         Insert: {
           amount: number
@@ -360,6 +361,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           vendor_id?: string | null
+          vendor_name?: string | null
         }
         Update: {
           amount?: number
@@ -379,6 +381,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           vendor_id?: string | null
+          vendor_name?: string | null
         }
         Relationships: [
           {
@@ -669,6 +672,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "mileage_log_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mileage_routes: {
+        Row: {
+          created_at: string
+          id: string
+          miles: number
+          name: string
+          org_id: string
+          round_trip: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          miles?: number
+          name: string
+          org_id: string
+          round_trip?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          miles?: number
+          name?: string
+          org_id?: string
+          round_trip?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mileage_routes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1366,6 +1407,7 @@ export type Database = {
       recurring_expenses: {
         Row: {
           amount: number
+          auto_log: boolean
           billing_cycle: string
           cancelled_at: string | null
           category: string | null
@@ -1384,6 +1426,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          auto_log?: boolean
           billing_cycle?: string
           cancelled_at?: string | null
           category?: string | null
@@ -1402,6 +1445,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          auto_log?: boolean
           billing_cycle?: string
           cancelled_at?: string | null
           category?: string | null
@@ -1544,7 +1588,7 @@ export type Database = {
             foreignKeyName: "subscription_price_history_subscription_id_fkey"
             columns: ["subscription_id"]
             isOneToOne: false
-            referencedRelation: "subscriptions"
+            referencedRelation: "recurring_expenses"
             referencedColumns: ["id"]
           },
         ]
@@ -1858,6 +1902,11 @@ export type Database = {
         Args: { p_end: string; p_org_id: string; p_start: string }
         Returns: Json
       }
+      delete_production_run: { Args: { p_run_id: string }; Returns: undefined }
+      delete_supply_purchase: {
+        Args: { p_purchase_id: string }
+        Returns: undefined
+      }
       finance_alerts: { Args: { p_org_id: string }; Returns: Json }
       finance_cashflow: {
         Args: { p_org_id: string }
@@ -1872,9 +1921,65 @@ export type Database = {
         Args: { p_org_id: string; p_period?: string }
         Returns: Json
       }
+      finance_pnl: { Args: { p_org_id: string; p_year: number }; Returns: Json }
+      finance_revenue_by_channel: {
+        Args: { p_org_id: string; p_period?: string }
+        Returns: {
+          channel: string
+          fees: number
+          gross: number
+          net: number
+          rate: number
+          refunds: number
+        }[]
+      }
+      finance_revenue_trend: {
+        Args: { p_org_id: string }
+        Returns: {
+          channel: string
+          month: string
+          net: number
+        }[]
+      }
+      log_production_run: {
+        Args: {
+          p_cultivar_id: string
+          p_description: string
+          p_labor_hours: number
+          p_labor_rate: number
+          p_labor_type: string
+          p_org_id: string
+          p_quantity: number
+          p_run_on: string
+          p_supplies: Json
+        }
+        Returns: string
+      }
+      log_subscription_charge: { Args: { p_id: string }; Returns: string }
+      log_supply_purchase: {
+        Args: {
+          p_purchase_date: string
+          p_qty: number
+          p_supply_id: string
+          p_total_cost: number
+          p_vendor_id: string
+        }
+        Returns: string
+      }
+      process_due_subscriptions: { Args: never; Returns: number }
       purge_stale_unconfirmed_users: {
         Args: { grace_days?: number }
         Returns: number
+      }
+      update_supply_purchase: {
+        Args: {
+          p_purchase_date: string
+          p_purchase_id: string
+          p_qty: number
+          p_total_cost: number
+          p_vendor_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {

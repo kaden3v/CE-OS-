@@ -31,6 +31,7 @@ function PeriodToggle({ period, onChange }: { period: FinancePeriod; onChange: (
         <button
           key={p}
           onClick={() => onChange(p)}
+          aria-pressed={period === p}
           className={cn(
             "px-3 py-1.5 rounded-md transition-colors",
             period === p ? "bg-bg-active text-text-primary" : "text-text-secondary hover:text-text-primary",
@@ -75,7 +76,7 @@ function KpiCards({
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
       <StatTile label="Net Revenue" value={v(cur && n(cur.net_revenue))} trend={t((w) => n(w.net_revenue), true)} />
       <StatTile label="Total Expenses" value={v(cur && n(cur.expenses))} trend={t((w) => n(w.expenses), false)} />
-      <StatTile label="COGS" value={v(cur && n(cur.cogs))} trend={t((w) => n(w.cogs), false)} />
+      <StatTile label="COGS" value={v(cur && n(cur.cogs))} hint="Production cost · not in net profit" trend={t((w) => n(w.cogs), false)} />
       <StatTile label="Net Profit" value={v(cur && n(cur.net_profit))} trend={t((w) => n(w.net_profit), true)} />
     </div>
   );

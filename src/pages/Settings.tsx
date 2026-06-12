@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw } from "lucide-react";
 import { Link } from "react-router";
+import { ChannelFeesSettings } from "@/components/settings/ChannelFeesSettings";
 
 type NotificationPrefs = {
   low_stock?: boolean;
@@ -410,6 +411,12 @@ export default function Settings() {
             </Card>
           </section>
         )}
+
+        {/* Finances */}
+        <section>
+          <h2 className="text-lg font-medium mb-4">Finances</h2>
+          <ChannelFeesSettings />
+        </section>
 
         {/* Connectors */}
         <section>

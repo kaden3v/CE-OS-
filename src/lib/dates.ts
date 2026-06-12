@@ -91,3 +91,39 @@ export function toBusinessISODate(value: string | Date | null | undefined): stri
   if (Number.isNaN(d.getTime())) return "";
   return isoFormatter.format(d);
 }
+
+// ---------------------------------------------------------------------------
+// Calendar-date range presets (inclusive YYYY-MM-DD), anchored to Phoenix today.
+// Pure calendar math on the Phoenix date parts — no timezone drift.
+// ---------------------------------------------------------------------------
+const isoOf = (dt: Date): string =>
+  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+
+function phoenixParts(): { y: number; m: number } {
+  const [y, m] = todayISO().split("-").map(Number);
+  return { y, m };
+}
+
+/** A whole calendar month relative to the current Phoenix month (0 = this, -1 = last). */
+export function monthRange(offset = 0): { from: string; to: string } {
+  const { y, m } = phoenixParts();
+  return {
+    from: isoOf(new Date(y, m - 1 + offset, 1)),
+    to: isoOf(new Date(y, m + offset, 0)),
+  };
+}
+
+/** The calendar quarter containing the current Phoenix month. */
+export function quarterRange(): { from: string; to: string } {
+  const { y, m } = phoenixParts();
+  const q = Math.floor((m - 1) / 3);
+  return {
+    from: isoOf(new Date(y, q * 3, 1)),
+    to: isoOf(new Date(y, q * 3 + 3, 0)),
+  };
+}
+
+/** Jan 1 of the current Phoenix year through today. */
+export function ytdRange(): { from: string; to: string } {
+  return { from: yearStartISO(), to: todayISO() };
+}

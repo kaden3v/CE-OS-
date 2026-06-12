@@ -63,3 +63,36 @@ export function mapToScheduleC(
     ? { scheduleC: hit, mappedCleanly: true }
     : { scheduleC: SCHEDULE_C_FALLBACK, mappedCleanly: false };
 }
+
+/** The app's selectable expense categories (display-cased), all mapped above. */
+export const EXPENSE_CATEGORIES: readonly string[] = [
+  "Soil and media",
+  "Packaging",
+  "Tools",
+  "Shipping",
+  "Software",
+  "Subscription",
+  "Marketing",
+  "Utilities",
+  "Permits and licenses",
+  "Other",
+];
+
+/**
+ * Expense categories grouped under their Schedule C line, in Schedule C order —
+ * for an <optgroup>-style picker that shows the tax bucket each category rolls
+ * into. Selecting a category also determines its schedule_c_category.
+ */
+export function groupedExpenseCategories(): { scheduleC: ScheduleCCategory; categories: string[] }[] {
+  const groups = new Map<ScheduleCCategory, string[]>();
+  for (const cat of EXPENSE_CATEGORIES) {
+    const { scheduleC } = mapToScheduleC(cat);
+    const list = groups.get(scheduleC) ?? [];
+    list.push(cat);
+    groups.set(scheduleC, list);
+  }
+  return SCHEDULE_C_CATEGORIES.filter((s) => groups.has(s)).map((s) => ({
+    scheduleC: s,
+    categories: groups.get(s)!,
+  }));
+}

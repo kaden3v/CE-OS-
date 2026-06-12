@@ -4,6 +4,8 @@ import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 interface StatTileProps {
   label: string;
   value: string;
+  /** Optional muted sub-line under the label (e.g. clarifying what the figure means). */
+  hint?: string;
   trend?: {
     value: string;
     direction: "up" | "down";
@@ -44,7 +46,7 @@ function Sparkline({ data, colorVariant }: { data: number[], colorVariant: 'up' 
   );
 }
 
-export function StatTile({ label, value, trend, className }: StatTileProps) {
+export function StatTile({ label, value, hint, trend, className }: StatTileProps) {
   return (
     <div
       className={cn(
@@ -78,6 +80,7 @@ export function StatTile({ label, value, trend, className }: StatTileProps) {
       <p className="text-xs text-text-secondary uppercase tracking-wide">
         {label}
       </p>
+      {hint && <p className="text-[11px] text-text-tertiary mt-1 normal-case tracking-normal">{hint}</p>}
     </div>
   );
 }

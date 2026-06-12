@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Search, PlayCircle, ArrowRight, Flower2, Users, PackageSearch, ShoppingCart } from "lucide-react";
+import { X, Search, PlayCircle, ArrowRight, Flower2, Users, PackageSearch, ShoppingCart, Receipt, Repeat, PackageOpen, Store, Factory } from "lucide-react";
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { useApp } from "@/contexts/AppContext";
@@ -65,11 +65,16 @@ export function CommandPalette() {
     const timer = setTimeout(async () => {
       const like = `%${q.replace(/[%_\\]/g, "\\$&")}%`;
       const db = supabase as any;
-      const [cult, cust, inv, ord] = await Promise.all([
+      const [cult, cust, inv, ord, ven, sup, sub, exp, run] = await Promise.all([
         db.from("cultivars").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
         db.from("customers").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
         db.from("inventory").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
         db.from("orders").select("id, customers!inner(name)").eq("org_id", activeOrgId).ilike("customers.name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("vendors").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("supplies").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("recurring_expenses").select("id,name").eq("org_id", activeOrgId).ilike("name", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("expenses").select("id,description,amount").eq("org_id", activeOrgId).ilike("description", like).limit(SEARCH_LIMIT_PER_TYPE),
+        db.from("production_runs").select("id,description").eq("org_id", activeOrgId).ilike("description", like).limit(SEARCH_LIMIT_PER_TYPE),
       ]);
       if (cancelled) return;
       const found: Command[] = [];
@@ -92,6 +97,16 @@ export function CommandPalette() {
               handleNavigate("/orders");
             },
           }));
+      (ven.data ?? []).forEach((r: { id: string; name: string }) =>
+        found.push({ id: `ven-${r.id}`, group: "Vendors", label: r.name, icon: <Store className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate(`/finances/vendors/${r.id}`) }));
+      (sup.data ?? []).forEach((r: { id: string; name: string }) =>
+        found.push({ id: `sup-${r.id}`, group: "Supplies", label: r.name, icon: <PackageOpen className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/finances/supplies") }));
+      (sub.data ?? []).forEach((r: { id: string; name: string }) =>
+        found.push({ id: `sub-${r.id}`, group: "Subscriptions", label: r.name, icon: <Repeat className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/finances/subscriptions") }));
+      (exp.data ?? []).forEach((r: { id: string; description: string | null; amount: number }) =>
+        found.push({ id: `exp-${r.id}`, group: "Expenses", label: `${r.description ?? "Expense"} · $${Number(r.amount).toFixed(2)}`, icon: <Receipt className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/finances/expenses") }));
+      (run.data ?? []).forEach((r: { id: string; description: string | null }) =>
+        found.push({ id: `run-${r.id}`, group: "Production", label: r.description ?? "Production run", icon: <Factory className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate("/finances/production") }));
       setResults(found);
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -113,10 +128,15 @@ export function CommandPalette() {
       { id: "nav-customers", group: "Navigation", label: "Go to Customers", onSelect: () => handleNavigate("/customers") },
       { id: "nav-shipping", group: "Navigation", label: "Go to Shipping", onSelect: () => handleNavigate("/shipping") },
       { id: "nav-print", group: "Navigation", label: "Go to Print Queue", onSelect: () => handleNavigate("/shipping/print-queue") },
+      { id: "nav-finances", group: "Navigation", label: "Go to Finances Overview", onSelect: () => handleNavigate("/finances") },
+      { id: "nav-revenue", group: "Navigation", label: "Go to Revenue", onSelect: () => handleNavigate("/finances/revenue") },
       { id: "nav-expenses", group: "Navigation", label: "Go to Expenses", onSelect: () => handleNavigate("/finances/expenses") },
+      { id: "nav-subscriptions", group: "Navigation", label: "Go to Subscriptions", onSelect: () => handleNavigate("/finances/subscriptions") },
       { id: "nav-supplies", group: "Navigation", label: "Go to Supplies", onSelect: () => handleNavigate("/finances/supplies") },
+      { id: "nav-production", group: "Navigation", label: "Go to Production", onSelect: () => handleNavigate("/finances/production") },
       { id: "nav-vendors", group: "Navigation", label: "Go to Vendors", onSelect: () => handleNavigate("/finances/vendors") },
-      { id: "nav-tax", group: "Navigation", label: "Go to Tax Report", onSelect: () => handleNavigate("/finances/tax-report") },
+      { id: "nav-mileage", group: "Navigation", label: "Go to Mileage", onSelect: () => handleNavigate("/finances/mileage") },
+      { id: "nav-reports", group: "Navigation", label: "Go to Reports", onSelect: () => handleNavigate("/finances/reports") },
       { id: "nav-licenses", group: "Navigation", label: "Go to Licenses", onSelect: () => handleNavigate("/licenses") },
       { id: "nav-settings", group: "Navigation", label: "Go to Settings", onSelect: () => handleNavigate("/settings") },
     );

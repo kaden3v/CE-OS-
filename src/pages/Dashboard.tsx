@@ -6,12 +6,15 @@ import { Store, ShoppingBag, CheckCircle2, BarChart3, LayoutGrid } from "lucide-
 import { cn } from "@/lib/utils";
 import { RechartsChart } from "@/components/ui/RechartsChart";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { orderStatusTone } from "@/lib/status";
 import { useOrders } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
+import { fetchKpis } from "@/lib/financeReports";
+import { formatMoney } from "@/lib/format";
 import type { Tables } from "@/lib/database.types";
 
 const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
@@ -38,6 +41,19 @@ export default function Dashboard() {
   const { data: shipments } = useEntity<Shipment>("shipments", []);
   const { data: supplies } = useEntity<Supply>("supplies", []);
   const { data: licenses } = useEntity<License>("licenses", []);
+
+  // Finance summary pulls the same month aggregate the Overview uses (managers only).
+  const { activeOrgId, orgRole } = useAuth();
+  const canManage = orgRole === "owner" || orgRole === "manager";
+  const [netRevenueMtd, setNetRevenueMtd] = useState<number | null>(null);
+  useEffect(() => {
+    if (!activeOrgId || !canManage) return;
+    let cancelled = false;
+    fetchKpis(activeOrgId, "month")
+      .then((k) => { if (!cancelled) setNetRevenueMtd(Number(k.current.net_revenue)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeOrgId, canManage]);
 
   // Things that need a human decision: low plant stock, supplies at/below their
   // reorder threshold, licenses expiring inside the warning window.
@@ -161,7 +177,10 @@ export default function Dashboard() {
             <StatTile label="Active Orders" value={stats.activeOrders.toString()} />
             <StatTile label="Plants in Stock" value={stats.plantsInStock.toLocaleString()} />
             <StatTile label="Pending Shipments" value={stats.pendingShipments.toString()} />
-            <StatTile label="Revenue (MTD)" value={`$${stats.revenueMtd.toFixed(2)}`} />
+            <StatTile
+              label={canManage ? "Net Revenue (MTD)" : "Revenue (MTD)"}
+              value={canManage && netRevenueMtd != null ? formatMoney(netRevenueMtd) : formatMoney(stats.revenueMtd)}
+            />
           </div>
 
           {/* Middle Section */}
