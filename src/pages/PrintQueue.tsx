@@ -81,7 +81,7 @@ export default function PrintQueue() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col h-full">
-      <div className="mb-6 flex items-center gap-4 shrink-0 justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 shrink-0 sm:justify-between">
         <div className="flex items-center gap-4">
           <Link to="/shipping">
             <Button variant="outline" className="w-10 px-0" aria-label="Back to shipping">

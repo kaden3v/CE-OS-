@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/StateRenderer";
 import { PackageOpen, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
@@ -127,15 +128,7 @@ export default function Supplies() {
           ))}
       </div>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">New Supply</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Supply" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
@@ -179,9 +172,7 @@ export default function Supplies() {
                 <Button type="submit">Save Supply</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -7,7 +7,7 @@ export function Toasts() {
   const { toasts, removeToast } = useApp();
 
   return (
-    <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 sm:w-[360px] pointer-events-none">
+    <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 sm:w-[360px] pointer-events-none">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={() => removeToast(toast.id)} />
       ))}

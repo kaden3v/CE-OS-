@@ -1,5 +1,6 @@
 import { useMemo, useState, FormEvent } from "react";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Input } from "@/components/ui/Input";
@@ -220,7 +221,7 @@ export default function Shipping() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Shipping</h1>
           <p className="text-sm text-text-secondary">Track outbound shipments and weather holds.</p>
@@ -252,15 +253,7 @@ export default function Shipping() {
         )}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">New Shipment</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Shipment" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Order *</label>
@@ -296,9 +289,7 @@ export default function Shipping() {
                 <Button type="submit">Save Shipment</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

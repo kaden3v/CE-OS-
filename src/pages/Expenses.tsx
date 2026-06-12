@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -127,15 +128,7 @@ export default function Expenses() {
         {!isLoading && !isEmpty && <DataTable columns={columns} data={expenses} />}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Log Expense</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Log Expense" size="lg">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Amount *</label>
@@ -181,9 +174,7 @@ export default function Expenses() {
                 <Button type="submit">Save Expense</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

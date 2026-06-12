@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { LoadingTable, ErrorState, EmptyState } from "@/components/ui/StateRenderer";
 import { Store, Plus, X } from "lucide-react";
@@ -99,17 +100,8 @@ export default function Vendors() {
         {!isLoading && !isEmpty && <DataTable columns={columns} data={vendors} />}
       </Card>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 className="text-lg font-semibold">New Vendor</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-text-secondary hover:text-text-primary" aria-label="Close">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAdd} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="New Vendor" size="sm">
+            <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Company Name</label>
                 <Input required placeholder="E.g. XYZ Nursery" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -139,9 +131,7 @@ export default function Vendors() {
                 <Button type="submit">Save Vendor</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -324,7 +324,7 @@ export function Layout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 h-dvh relative">
         {/* Topbar - hidden when printing */}
-        <header className="h-[56px] flex-shrink-0 bg-bg-elevated backdrop-blur-md border-b border-border-subtle flex items-center px-4 md:px-6 justify-between z-10 no-print">
+        <header className="min-h-[56px] flex-shrink-0 pt-[env(safe-area-inset-top)] bg-bg-elevated backdrop-blur-md border-b border-border-subtle flex items-center px-4 md:px-6 justify-between z-10 no-print">
           <div className="flex items-center text-sm text-text-secondary truncate pr-4">
             {getBreadcrumb()}
           </div>
@@ -432,8 +432,10 @@ export function Layout() {
                   <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Management</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/cultivars" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Flower2 className="w-4 h-4 text-text-secondary"/> Cultivars</NavLink>
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/listings" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><List className="w-4 h-4 text-text-secondary"/> Listings</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/customers" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Users className="w-4 h-4 text-text-secondary"/> Customers</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/shipping" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Truck className="w-4 h-4 text-text-secondary"/> Shipping</NavLink>
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/production" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Sprout className="w-4 h-4 text-text-secondary"/> Production</NavLink>
                   </div>
                </div>
                <div>
@@ -442,12 +444,20 @@ export function Layout() {
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/expenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Receipt className="w-4 h-4 text-text-secondary"/> Expenses</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/supplies" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><PackageOpen className="w-4 h-4 text-text-secondary"/> Supplies</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/vendors" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Store className="w-4 h-4 text-text-secondary"/> Vendors</NavLink>
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/subscriptions" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Repeat className="w-4 h-4 text-text-secondary"/> Subscriptions</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/finances/tax-report" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileSpreadsheet className="w-4 h-4 text-text-secondary"/> Tax Report</NavLink>
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/licenses" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><FileBadge className="w-4 h-4 text-text-secondary"/> Licenses</NavLink>
                   </div>
                </div>
                <div>
-                  <NavLink onClick={() => setMobileMenuOpen(false)} to="/settings" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Settings className="w-4 h-4 text-text-secondary"/> Settings</NavLink>
+                  <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Workspace</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/activity" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><History className="w-4 h-4 text-text-secondary"/> Activity</NavLink>
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/import" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><UploadCloud className="w-4 h-4 text-text-secondary"/> Import</NavLink>
+                    {isAdmin && <NavLink onClick={() => setMobileMenuOpen(false)} to="/team" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><UserCog className="w-4 h-4 text-text-secondary"/> Team</NavLink>}
+                    {isAdmin && <NavLink onClick={() => setMobileMenuOpen(false)} to="/admin/access-requests" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><ShieldCheck className="w-4 h-4 text-text-secondary"/> Access</NavLink>}
+                    <NavLink onClick={() => setMobileMenuOpen(false)} to="/settings" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Settings className="w-4 h-4 text-text-secondary"/> Settings</NavLink>
+                  </div>
                </div>
             </div>
           </>

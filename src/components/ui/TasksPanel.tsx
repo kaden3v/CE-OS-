@@ -129,7 +129,7 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
               </div>
               <button 
                 onClick={() => deleteTask(task.id)}
-                className="mt-1 p-1 opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-status-alert hover:bg-status-alert/10 rounded transition-all focus:opacity-100"
+                className="mt-1 p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-text-tertiary hover:text-status-alert hover:bg-status-alert/10 rounded transition-all focus:opacity-100"
                 title="Delete task"
               >
                 <X className="w-3 h-3" />
@@ -155,7 +155,7 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
                 </div>
                 <button 
                   onClick={() => deleteTask(task.id)}
-                  className="mt-1 p-1 opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-status-alert hover:bg-status-alert/10 rounded transition-all focus:opacity-100"
+                  className="mt-1 p-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 text-text-tertiary hover:text-status-alert hover:bg-status-alert/10 rounded transition-all focus:opacity-100"
                   title="Delete task"
                 >
                   <X className="w-3 h-3" />
