@@ -69,6 +69,10 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 interface EtsyMoney {
   amount?: number;
   divisor?: number;
@@ -358,13 +362,22 @@ async function fetchLedgerPage(
     min_created: String(minCreated), max_created: String(maxCreated),
     limit: String(PAGE_LIMIT), offset: String(offset),
   });
-  const res = await fetch(`${ETSY_API}/shops/${shopId}/payment-account/ledger-entries?${params}`, { headers: etsyHeaders(apiKey, accessToken) });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Etsy ledger fetch failed (${res.status}): ${text}`);
+  const url = `${ETSY_API}/shops/${shopId}/payment-account/ledger-entries?${params}`;
+  // Etsy throttles ~10 req/sec; a multi-window backfill can burst over it.
+  // Retry 429s with linear backoff before giving up.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: etsyHeaders(apiKey, accessToken) });
+    if (res.status === 429 && attempt < 5) {
+      await sleep(1000 * (attempt + 1));
+      continue;
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Etsy ledger fetch failed (${res.status}): ${text}`);
+    }
+    const data = await res.json();
+    return Array.isArray(data.results) ? data.results : [];
   }
-  const data = await res.json();
-  return Array.isArray(data.results) ? data.results : [];
 }
 
 /**
@@ -381,6 +394,7 @@ async function* iterLedger(
       if (entries.length === 0) break;
       for (const e of entries) yield e;
       if (entries.length < PAGE_LIMIT) break;
+      await sleep(150); // stay comfortably under Etsy's ~10 req/sec limit
     }
   }
 }
