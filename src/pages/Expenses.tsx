@@ -88,6 +88,7 @@ export default function Expenses() {
   const [customTo, setCustomTo] = useState("");
   const [catFilter, setCatFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -115,11 +116,12 @@ export default function Expenses() {
       if (range.to && e.occurred_on > range.to) return false;
       if (catFilter && e.category !== catFilter) return false;
       if (vendorFilter && e.vendor_id !== vendorFilter) return false;
+      if (sourceFilter && (e.source ?? "manual") !== sourceFilter) return false;
       if (uncategorizedOnly && e.category) return false;
       if (q && !(e.description ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [expenses, range, catFilter, vendorFilter, uncategorizedOnly, search]);
+  }, [expenses, range, catFilter, vendorFilter, sourceFilter, uncategorizedOnly, search]);
 
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -401,13 +403,21 @@ export default function Expenses() {
           <option value="">All vendors</option>
           {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
         </select>
+        <select className={selectCls} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+          <option value="">All sources</option>
+          <option value="manual">Manual</option>
+          <option value="etsy">Etsy</option>
+          <option value="subscription">Subscriptions</option>
+          <option value="supply_purchase">Supplies</option>
+          <option value="mileage">Mileage</option>
+        </select>
         <div className="relative flex-1 min-w-[10rem]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <Input className="pl-9" placeholder="Search memo…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        {(uncategorizedOnly || catFilter || vendorFilter || search || preset !== "all") && (
+        {(uncategorizedOnly || catFilter || vendorFilter || sourceFilter || search || preset !== "all") && (
           <button
-            onClick={() => { setPreset("all"); setCatFilter(""); setVendorFilter(""); setSearch(""); setUncategorizedOnly(false); setCustomFrom(""); setCustomTo(""); }}
+            onClick={() => { setPreset("all"); setCatFilter(""); setVendorFilter(""); setSourceFilter(""); setSearch(""); setUncategorizedOnly(false); setCustomFrom(""); setCustomTo(""); }}
             className="text-xs text-text-secondary hover:text-text-primary inline-flex items-center gap-1"
           >
             <X className="w-3.5 h-3.5" /> Clear

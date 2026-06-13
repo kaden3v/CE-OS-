@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { importNormalizedOrder, NormalizedOrder } from "../_shared/import-order.ts";
+import { importNormalizedExpense, NormalizedExpense, OrgOwner as ExpenseOrgOwner } from "../_shared/import-expense.ts";
+import { classifyLedgerEntry, normalizeLedgerAmount, LEDGER_AMOUNT_DIVISOR } from "../_shared/etsy-ledger.ts";
 
 /**
  * Etsy sync poller (Open API v3). Etsy has NO order webhooks, so this is a PULL:
@@ -43,7 +45,15 @@ const CONFIG_KEYS = {
   refresh: "etsy_refresh_token",
   shopId: "etsy_shop_id",
   cursor: "etsy_last_synced_at",
+  ledgerCursor: "etsy_ledger_cursor",
+  ledgerSync: "etsy_ledger_sync",
 } as const;
+
+// First ledger run with no cursor backfills this far; later runs page from the cursor.
+const LEDGER_BACKFILL_DAYS = 365;
+// America/Phoenix is UTC-7 year-round (no DST). The Phoenix calendar date of an
+// instant is the UTC date of (instant − 7h) — mirrors src/lib/dates.ts.
+const PHOENIX_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -312,6 +322,113 @@ async function importReceipts(admin: Admin, shopId: string, apiKey: string, acce
   return { imported, duplicates, updated, maxModified };
 }
 
+// ---------------------------------------------------------------------------
+// Payment Account Ledger → expenses. The seller's real costs (shipping labels,
+// listing/transaction/processing fees, Etsy Ads) live here, NOT on receipts —
+// a receipt's total_shipping_cost is what the BUYER paid. Needs only the
+// transactions_r scope the OAuth flow already requests. Idempotent by
+// external_id; classification verified via ?inspect=ledger before going live.
+// ---------------------------------------------------------------------------
+
+interface EtsyLedgerEntry {
+  entry_id: number;
+  amount?: number;
+  currency?: string;
+  description?: string;
+  created_timestamp?: number;
+  create_date?: number;
+}
+
+/** Phoenix calendar date (YYYY-MM-DD) for an epoch-seconds instant. */
+function phoenixDate(epochSeconds: number): string {
+  return new Date(epochSeconds * 1000 - PHOENIX_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function ledgerCreated(e: EtsyLedgerEntry): number {
+  return Number(e.created_timestamp ?? e.create_date ?? 0);
+}
+
+async function fetchLedgerPage(
+  shopId: string, apiKey: string, accessToken: string, minCreated: number, maxCreated: number, offset: number,
+): Promise<EtsyLedgerEntry[]> {
+  const params = new URLSearchParams({
+    min_created: String(minCreated), max_created: String(maxCreated),
+    limit: String(PAGE_LIMIT), offset: String(offset),
+  });
+  const res = await fetch(`${ETSY_API}/shops/${shopId}/payment-account/ledger-entries?${params}`, { headers: etsyHeaders(apiKey, accessToken) });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Etsy ledger fetch failed (${res.status}): ${text}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data.results) ? data.results : [];
+}
+
+async function importLedgerExpenses(
+  admin: Admin, oo: ExpenseOrgOwner, shopId: string, apiKey: string, accessToken: string, sinceCursor: number,
+): Promise<{ imported: number; duplicates: number; skipped: number; maxCreated: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const minCreated = sinceCursor > 0 ? sinceCursor : now - LEDGER_BACKFILL_DAYS * 86400;
+  let imported = 0, duplicates = 0, skipped = 0, maxCreated = sinceCursor;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const entries = await fetchLedgerPage(shopId, apiKey, accessToken, minCreated, now, page * PAGE_LIMIT);
+    if (entries.length === 0) break;
+    for (const e of entries) {
+      const created = ledgerCreated(e);
+      if (created > maxCreated) maxCreated = created;
+      const amount = Number(e.amount ?? 0);
+      const cls = classifyLedgerEntry(e.description ?? "", amount);
+      if (!cls) { skipped++; continue; }
+      const dollars = normalizeLedgerAmount(amount);
+      if (dollars <= 0) { skipped++; continue; }
+      const ne: NormalizedExpense = {
+        externalId: `etsy-ledger:${e.entry_id}`,
+        amount: dollars,
+        occurredOn: phoenixDate(created || now),
+        category: cls.category,
+        scheduleC: cls.scheduleC,
+        description: decodeEntities((e.description ?? "Etsy charge").trim()).slice(0, 200),
+        vendorName: "Etsy",
+        source: "etsy",
+      };
+      const r = await importNormalizedExpense(admin, oo, ne);
+      if (r.duplicate) duplicates++;
+      else if (r.ok) imported++;
+    }
+    if (entries.length < PAGE_LIMIT) break;
+  }
+  return { imported, duplicates, skipped, maxCreated };
+}
+
+/**
+ * Dry-run: aggregate the last N days of ledger entries by description (no PII in
+ * the ledger) with the bucket each would map to and the raw amount sum — so the
+ * classifier and the amount divisor can be verified before enabling writes.
+ */
+async function inspectLedger(shopId: string, apiKey: string, accessToken: string, days: number): Promise<unknown> {
+  const now = Math.floor(Date.now() / 1000);
+  const minCreated = now - days * 86400;
+  const agg = new Map<string, { count: number; sumRaw: number; sign: string; classifiedAs: string }>();
+  let sampleSize = 0;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const entries = await fetchLedgerPage(shopId, apiKey, accessToken, minCreated, now, page * PAGE_LIMIT);
+    if (entries.length === 0) break;
+    for (const e of entries) {
+      sampleSize++;
+      const desc = decodeEntities((e.description ?? "(none)").trim());
+      const amt = Number(e.amount ?? 0);
+      const cls = classifyLedgerEntry(desc, amt);
+      const cur = agg.get(desc) ?? { count: 0, sumRaw: 0, sign: amt < 0 ? "-" : "+", classifiedAs: cls ? cls.category : "SKIP" };
+      cur.count++;
+      cur.sumRaw += amt;
+      agg.set(desc, cur);
+    }
+    if (entries.length < PAGE_LIMIT) break;
+  }
+  const rows = [...agg.entries()].map(([description, v]) => ({ description, ...v })).sort((a, b) => b.count - a.count);
+  return { ok: true, mode: "inspect-ledger", days, sampleSize, divisor_assumed: LEDGER_AMOUNT_DIVISOR, entries: rows };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -348,6 +465,19 @@ Deno.serve(async (req: Request) => {
     await writeConfig(admin, CONFIG_KEYS.shopId, shopId);
   }
 
+  // Dry-run ledger inspection (no writes) — verify classification + amount
+  // divisor against real data before enabling the import. ?inspect=ledger&days=N
+  const inspect = new URL(req.url).searchParams.get("inspect");
+  if (inspect === "ledger") {
+    const days = Math.max(1, Math.min(730, Number(new URL(req.url).searchParams.get("days") ?? 90)));
+    try {
+      return json(await inspectLedger(shopId, apiKey, accessToken, days));
+    } catch (err) {
+      console.error("etsy ledger inspect failed", err);
+      return json({ error: "Etsy ledger inspect failed" }, 502);
+    }
+  }
+
   const oo = await getOrgOwner(admin);
   if (!oo) return json({ error: "No organization/owner configured" }, 500);
 
@@ -371,6 +501,23 @@ Deno.serve(async (req: Request) => {
     console.error("etsy listings sync failed", err);
   }
 
+  // Ledger → expenses (shipping labels + fees). Gated behind etsy_ledger_sync so
+  // it stays inert until classification is verified; independent of orders.
+  const ledgerStoredCursor = Number(cfg[CONFIG_KEYS.ledgerCursor] ?? 0);
+  let ledgerResult = { imported: 0, duplicates: 0, skipped: 0, maxCreated: ledgerStoredCursor };
+  const ledgerEnabled = (cfg[CONFIG_KEYS.ledgerSync] ?? "").toLowerCase() === "on";
+  if (ledgerEnabled) {
+    try {
+      const ledgerSince = fullScan ? 0 : ledgerStoredCursor;
+      ledgerResult = await importLedgerExpenses(admin, oo, shopId, apiKey, accessToken, ledgerSince);
+      if (ledgerResult.maxCreated > ledgerStoredCursor) {
+        await writeConfig(admin, CONFIG_KEYS.ledgerCursor, String(ledgerResult.maxCreated));
+      }
+    } catch (err) {
+      console.error("etsy ledger sync failed", err);
+    }
+  }
+
   if (receiptResult.maxModified > storedCursor) {
     await writeConfig(admin, CONFIG_KEYS.cursor, String(receiptResult.maxModified));
   }
@@ -383,5 +530,10 @@ Deno.serve(async (req: Request) => {
     orders_updated: receiptResult.updated,
     listings_synced: listingsCount,
     cursor: receiptResult.maxModified,
+    ledger_enabled: ledgerEnabled,
+    ledger_imported: ledgerResult.imported,
+    ledger_duplicate: ledgerResult.duplicates,
+    ledger_skipped: ledgerResult.skipped,
+    ledger_cursor: ledgerResult.maxCreated,
   });
 });

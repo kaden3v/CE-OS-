@@ -30,7 +30,7 @@ const NOTIFICATION_KEYS: { key: keyof NotificationPrefs; label: string; desc: st
 const CONNECTORS = [
   { name: "Supabase", configured: true, note: "Postgres + auth + storage" },
   { name: "Shopify", configured: true, note: "Storefront orders + listings (live webhook)" },
-  { name: "Etsy", configured: true, note: "Marketplace orders (10-min poll sync)" },
+  { name: "Etsy", configured: true, note: "Orders + shipping & fees (10-min poll sync)" },
   { name: "USPS", configured: true, note: "Tracking deep-links on shipments" },
   { name: "Weather API", configured: true, note: "Heat-window shipment holds" },
   { name: "Stripe", configured: false, note: "Payments + subscriptions" },

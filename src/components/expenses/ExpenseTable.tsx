@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUp, ArrowDown, Paperclip, Pencil, Trash2, Check, X } from "lucide-react";
+import { ArrowUp, ArrowDown, Paperclip, Pencil, Trash2, Check, X, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Toggle";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,14 @@ interface ExpenseTableProps {
   onAttachReceipt: (e: Expense) => void;
   total: number;
 }
+
+/** Short chip label per non-manual expense source (auto-created rows). */
+const SOURCE_BADGE: Record<string, string> = {
+  etsy: "Etsy",
+  subscription: "Auto",
+  supply_purchase: "Supply",
+  mileage: "Mileage",
+};
 
 const cellCls = "px-3 py-2 whitespace-nowrap";
 const editInputCls = "w-full bg-bg-base border border-border-subtle rounded px-2 py-1 text-sm focus:outline-none focus:border-border-strong";
@@ -185,6 +193,9 @@ export function ExpenseTable({
                     ) : (
                       <Badge variant="outline" className="text-status-warn border-status-warn/40">Needs review</Badge>
                     )}
+                    {e.source && SOURCE_BADGE[e.source] && (
+                      <Badge variant="outline" className="ml-2 text-text-tertiary border-border-subtle">{SOURCE_BADGE[e.source]}</Badge>
+                    )}
                     {e.deductible === false && <span className="ml-2 text-[10px] uppercase tracking-wide text-text-tertiary">Non-ded.</span>}
                   </td>
                   <td className={cn(cellCls, "font-medium")}>{vendorLabel(e)}</td>
@@ -199,10 +210,16 @@ export function ExpenseTable({
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => onStartEdit(e.id)} aria-label="Edit" className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-bg-active"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => onDelete(e)} aria-label="Delete" className="p-1.5 rounded text-text-secondary hover:text-status-alert hover:bg-bg-active"><Trash2 className="w-4 h-4" /></button>
-                    </div>
+                    {e.source === "etsy" ? (
+                      <span className="flex items-center gap-1 justify-end text-xs text-text-tertiary" title="Synced from Etsy — managed automatically">
+                        <Lock className="w-3.5 h-3.5" /> Synced
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => onStartEdit(e.id)} aria-label="Edit" className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-bg-active"><Pencil className="w-4 h-4" /></button>
+                        <button onClick={() => onDelete(e)} aria-label="Delete" className="p-1.5 rounded text-text-secondary hover:text-status-alert hover:bg-bg-active"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ),
