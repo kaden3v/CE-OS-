@@ -51,6 +51,9 @@ const CONFIG_KEYS = {
 
 // First ledger run with no cursor backfills this far; later runs page from the cursor.
 const LEDGER_BACKFILL_DAYS = 365;
+// Etsy caps each ledger query to a 31-day (2678400s) window, so we walk the
+// range in 30-day chunks and paginate within each.
+const LEDGER_WINDOW_SECONDS = 30 * 86400;
 // America/Phoenix is UTC-7 year-round (no DST). The Phoenix calendar date of an
 // instant is the UTC date of (instant − 7h) — mirrors src/lib/dates.ts.
 const PHOENIX_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -364,38 +367,51 @@ async function fetchLedgerPage(
   return Array.isArray(data.results) ? data.results : [];
 }
 
+/**
+ * Stream every ledger entry in [minCreated, maxCreated), walking the range in
+ * <=30-day windows (Etsy's 31-day cap) and paging within each.
+ */
+async function* iterLedger(
+  shopId: string, apiKey: string, accessToken: string, minCreated: number, maxCreated: number,
+): AsyncGenerator<EtsyLedgerEntry> {
+  for (let winStart = minCreated; winStart < maxCreated; winStart += LEDGER_WINDOW_SECONDS) {
+    const winEnd = Math.min(winStart + LEDGER_WINDOW_SECONDS, maxCreated);
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const entries = await fetchLedgerPage(shopId, apiKey, accessToken, winStart, winEnd, page * PAGE_LIMIT);
+      if (entries.length === 0) break;
+      for (const e of entries) yield e;
+      if (entries.length < PAGE_LIMIT) break;
+    }
+  }
+}
+
 async function importLedgerExpenses(
   admin: Admin, oo: ExpenseOrgOwner, shopId: string, apiKey: string, accessToken: string, sinceCursor: number,
 ): Promise<{ imported: number; duplicates: number; skipped: number; maxCreated: number }> {
   const now = Math.floor(Date.now() / 1000);
   const minCreated = sinceCursor > 0 ? sinceCursor : now - LEDGER_BACKFILL_DAYS * 86400;
   let imported = 0, duplicates = 0, skipped = 0, maxCreated = sinceCursor;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const entries = await fetchLedgerPage(shopId, apiKey, accessToken, minCreated, now, page * PAGE_LIMIT);
-    if (entries.length === 0) break;
-    for (const e of entries) {
-      const created = ledgerCreated(e);
-      if (created > maxCreated) maxCreated = created;
-      const amount = Number(e.amount ?? 0);
-      const cls = classifyLedgerEntry(e.description ?? "", amount);
-      if (!cls) { skipped++; continue; }
-      const dollars = normalizeLedgerAmount(amount);
-      if (dollars <= 0) { skipped++; continue; }
-      const ne: NormalizedExpense = {
-        externalId: `etsy-ledger:${e.entry_id}`,
-        amount: dollars,
-        occurredOn: phoenixDate(created || now),
-        category: cls.category,
-        scheduleC: cls.scheduleC,
-        description: decodeEntities((e.description ?? "Etsy charge").trim()).slice(0, 200),
-        vendorName: "Etsy",
-        source: "etsy",
-      };
-      const r = await importNormalizedExpense(admin, oo, ne);
-      if (r.duplicate) duplicates++;
-      else if (r.ok) imported++;
-    }
-    if (entries.length < PAGE_LIMIT) break;
+  for await (const e of iterLedger(shopId, apiKey, accessToken, minCreated, now)) {
+    const created = ledgerCreated(e);
+    if (created > maxCreated) maxCreated = created;
+    const amount = Number(e.amount ?? 0);
+    const cls = classifyLedgerEntry(e.description ?? "", amount);
+    if (!cls) { skipped++; continue; }
+    const dollars = normalizeLedgerAmount(amount);
+    if (dollars <= 0) { skipped++; continue; }
+    const ne: NormalizedExpense = {
+      externalId: `etsy-ledger:${e.entry_id}`,
+      amount: dollars,
+      occurredOn: phoenixDate(created || now),
+      category: cls.category,
+      scheduleC: cls.scheduleC,
+      description: decodeEntities((e.description ?? "Etsy charge").trim()).slice(0, 200),
+      vendorName: "Etsy",
+      source: "etsy",
+    };
+    const r = await importNormalizedExpense(admin, oo, ne);
+    if (r.duplicate) duplicates++;
+    else if (r.ok) imported++;
   }
   return { imported, duplicates, skipped, maxCreated };
 }
@@ -410,20 +426,15 @@ async function inspectLedger(shopId: string, apiKey: string, accessToken: string
   const minCreated = now - days * 86400;
   const agg = new Map<string, { count: number; sumRaw: number; sign: string; classifiedAs: string }>();
   let sampleSize = 0;
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const entries = await fetchLedgerPage(shopId, apiKey, accessToken, minCreated, now, page * PAGE_LIMIT);
-    if (entries.length === 0) break;
-    for (const e of entries) {
-      sampleSize++;
-      const desc = decodeEntities((e.description ?? "(none)").trim());
-      const amt = Number(e.amount ?? 0);
-      const cls = classifyLedgerEntry(desc, amt);
-      const cur = agg.get(desc) ?? { count: 0, sumRaw: 0, sign: amt < 0 ? "-" : "+", classifiedAs: cls ? cls.category : "SKIP" };
-      cur.count++;
-      cur.sumRaw += amt;
-      agg.set(desc, cur);
-    }
-    if (entries.length < PAGE_LIMIT) break;
+  for await (const e of iterLedger(shopId, apiKey, accessToken, minCreated, now)) {
+    sampleSize++;
+    const desc = decodeEntities((e.description ?? "(none)").trim());
+    const amt = Number(e.amount ?? 0);
+    const cls = classifyLedgerEntry(desc, amt);
+    const cur = agg.get(desc) ?? { count: 0, sumRaw: 0, sign: amt < 0 ? "-" : "+", classifiedAs: cls ? cls.category : "SKIP" };
+    cur.count++;
+    cur.sumRaw += amt;
+    agg.set(desc, cur);
   }
   const rows = [...agg.entries()].map(([description, v]) => ({ description, ...v })).sort((a, b) => b.count - a.count);
   return { ok: true, mode: "inspect-ledger", days, sampleSize, divisor_assumed: LEDGER_AMOUNT_DIVISOR, entries: rows };
@@ -474,7 +485,7 @@ Deno.serve(async (req: Request) => {
       return json(await inspectLedger(shopId, apiKey, accessToken, days));
     } catch (err) {
       console.error("etsy ledger inspect failed", err);
-      return json({ error: "Etsy ledger inspect failed" }, 502);
+      return json({ error: "Etsy ledger inspect failed", detail: err instanceof Error ? err.message : String(err) }, 502);
     }
   }
 
