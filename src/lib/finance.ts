@@ -42,6 +42,21 @@ export function productionRunCost(
   return { materials, labor, total, unitCost };
 }
 
+// --- Revenue: recognition ----------------------------------------------------
+
+/**
+ * Recognized revenue for one order, mirroring `_finance_kpi_window`'s gross base
+ * (= subtotal + shipping). Sales tax is NEVER revenue: on a marketplace
+ * facilitator (Etsy) the tax is collected and remitted by the marketplace and
+ * the seller never receives it; on a direct sale it is a liability the seller
+ * owes. Basing revenue on subtotal+shipping (instead of `orders.total`) also
+ * sidesteps the imported +$0.28 anomaly that lives only in `total`. See
+ * docs/FINANCE_AUDIT.md (finding C1/H1).
+ */
+export function recognizedOrderRevenue(o: { subtotal: number; shipping: number }): number {
+  return roundMoney(o.subtotal + o.shipping);
+}
+
 // --- Revenue: channel fee estimate ------------------------------------------
 
 export interface ChannelFeeRule {

@@ -1,20 +1,40 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { rpcCall } from "@/lib/supabase";
+import { monthStartISO, yearStartISO, todayISO } from "@/lib/dates";
 
 export type FinancePeriod = "month" | "ytd";
 
 /** One [start, end) window of KPIs, as returned by `finance_kpis`. */
 export interface FinanceKpiWindow {
   gross_sales: number;
+  /** Product + shipping (net of refunds) — the IRS gross-receipts basis for taxes. */
+  gross_receipts: number;
   refunds: number;
+  shipping_collected: number;
+  order_count: number;
+  sales_tax_owed: number;
   channel_fees: number;
   net_revenue: number;
   expenses: number;
   cogs_materials: number;
   cogs_labor: number;
   cogs: number;
+  mileage: number;
   net_profit: number;
+}
+
+/** One expense category total for a window, from `finance_expense_breakdown`. */
+export interface ExpenseBreakdownRow {
+  category: string;
+  total: number;
+}
+
+/** The day after the Phoenix calendar `iso` date — the exclusive end of a window. */
+function nextDayISO(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
 export interface FinanceKpis {
@@ -70,6 +90,7 @@ export function useFinanceOverview(period: FinancePeriod) {
   const { activeOrgId } = useAuth();
 
   const [kpis, setKpis] = useState<FinanceKpis | null>(null);
+  const [breakdown, setBreakdown] = useState<ExpenseBreakdownRow[]>([]);
   const [cashflow, setCashflow] = useState<CashflowPoint[]>([]);
   const [alerts, setAlerts] = useState<FinanceAlerts | null>(null);
   const [loadingKpis, setLoadingKpis] = useState(true);
@@ -79,9 +100,17 @@ export function useFinanceOverview(period: FinancePeriod) {
   const fetchKpis = useCallback(async () => {
     if (!activeOrgId) return;
     setLoadingKpis(true);
+    // The expense breakdown must cover the same window the KPI uses: month or
+    // YTD start, through today inclusive (exclusive upper bound = tomorrow).
+    const start = period === "ytd" ? yearStartISO() : monthStartISO();
+    const end = nextDayISO(todayISO());
     try {
-      const data = await rpcCall<FinanceKpis>("finance_kpis", { p_org_id: activeOrgId, p_period: period });
+      const [data, bd] = await Promise.all([
+        rpcCall<FinanceKpis>("finance_kpis", { p_org_id: activeOrgId, p_period: period }),
+        rpcCall<ExpenseBreakdownRow[]>("finance_expense_breakdown", { p_org_id: activeOrgId, p_start: start, p_end: end }),
+      ]);
       setKpis(data);
+      setBreakdown(bd ?? []);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load finance summary");
@@ -118,6 +147,7 @@ export function useFinanceOverview(period: FinancePeriod) {
 
   return {
     kpis,
+    breakdown,
     cashflow,
     alerts,
     loadingKpis,

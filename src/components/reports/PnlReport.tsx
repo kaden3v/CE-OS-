@@ -42,6 +42,7 @@ export function PnlReport() {
     const t = pnl.total;
     const out: Row[] = [
       { label: "Net Revenue", months: mv((w) => n(w.net_revenue)), total: n(t.net_revenue), bold: true },
+      { label: "Shipping collected", months: mv((w) => n(w.shipping_collected)), total: n(t.shipping_collected) },
       { label: "Operating Expenses", months: mv((w) => n(w.expenses)), total: n(t.expenses) },
     ];
     for (const sc of pnl.schedule_c) out.push({ label: sc.category, months: sc.months.map(n), total: n(sc.total), indent: true });

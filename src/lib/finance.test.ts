@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   weightedAvgUnitCost, reverseSupplyPurchase, productionRunCost, estimateChannelFee,
-  advanceRenewal, isSubscriptionDue, quarterlyEstimate, roundMoney,
+  advanceRenewal, isSubscriptionDue, quarterlyEstimate, roundMoney, recognizedOrderRevenue,
 } from "./finance";
 
 describe("weighted-average unit cost", () => {
@@ -48,6 +48,16 @@ describe("production run cost + reversal", () => {
     const onHandAfterRun = 10 - 4;
     const onHandAfterDelete = onHandAfterRun + 4;
     expect(onHandAfterDelete).toBe(10);
+  });
+});
+
+describe("revenue recognition (subtotal + shipping, tax excluded)", () => {
+  it("excludes pass-through sales tax and the +$0.28 import anomaly in total", () => {
+    // etsy:3993433511 — subtotal 70.47, shipping 0, tax 6.25, total 77.00 (+0.28 baked in)
+    expect(recognizedOrderRevenue({ subtotal: 70.47, shipping: 0 })).toBe(70.47);
+  });
+  it("includes shipping collected", () => {
+    expect(recognizedOrderRevenue({ subtotal: 22.99, shipping: 8.53 })).toBe(31.52);
   });
 });
 

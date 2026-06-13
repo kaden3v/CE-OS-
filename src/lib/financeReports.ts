@@ -7,7 +7,10 @@ import { rpcCall } from "./supabase";
 
 export interface FinanceWindow {
   gross_sales: number;
+  /** Product + shipping (net of refunds) — gross-receipts basis for taxes. */
+  gross_receipts: number;
   refunds: number;
+  shipping_collected: number;
   channel_fees: number;
   net_revenue: number;
   expenses: number;

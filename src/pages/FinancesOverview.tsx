@@ -15,9 +15,15 @@ import { EmptyState } from "@/components/ui/StateRenderer";
 import { formatMoney } from "@/lib/format";
 import { todayISO, businessMonthShort, formatBusinessDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { NetProfitWaterfall } from "@/components/finances/NetProfitWaterfall";
+import { quarterlyEstimate } from "@/lib/finance";
 import {
   useFinanceOverview, type FinancePeriod, type FinanceKpiWindow,
 } from "@/hooks/useFinanceOverview";
+
+// Default income-tax rate for the set-aside hint; the real rate is configurable
+// on the Quarterly Estimates tab. Kept conservative so K over-reserves, not under.
+const DEFAULT_INCOME_RATE = 12;
 
 const n = (v: unknown): number => Number(v ?? 0);
 
@@ -64,20 +70,37 @@ function trendFor(
   return { value: `${sign}${pct.toFixed(0)}%`, direction: improved ? "up" : "down", label: periodLabel };
 }
 
+interface TrendSeries { netRevenue: number[]; netProfit: number[]; expenses: number[] }
+
 function KpiCards({
-  cur, prior, loading, period,
-}: { cur: FinanceKpiWindow | undefined; prior: FinanceKpiWindow | undefined; loading: boolean; period: FinancePeriod }) {
+  cur, prior, loading, period, series,
+}: {
+  cur: FinanceKpiWindow | undefined;
+  prior: FinanceKpiWindow | undefined;
+  loading: boolean;
+  period: FinancePeriod;
+  series: TrendSeries;
+}) {
   const periodLabel = period === "month" ? "vs last month" : "vs last year";
   const v = (x: number | undefined) => (loading || cur === undefined ? "—" : formatMoney(x));
   const t = (sel: (w: FinanceKpiWindow) => number, higherIsBetter: boolean) =>
     loading || !cur || !prior ? undefined : trendFor(n(sel(cur)), n(sel(prior)), higherIsBetter, periodLabel);
+  // Attach a trailing-12-month sparkline to a trend (skip if too few points).
+  const spark = (tr: ReturnType<typeof t>, data: number[]) =>
+    tr && data.length > 1 ? { ...tr, sparklineData: data } : tr;
+
+  const marginHint =
+    cur && n(cur.net_revenue) > 0 ? `${((n(cur.net_profit) / n(cur.net_revenue)) * 100).toFixed(0)}% margin` : undefined;
+  const aov =
+    loading || !cur ? "—" : n(cur.order_count) > 0 ? formatMoney(n(cur.net_revenue) / n(cur.order_count)) : "—";
+  const ordersHint = cur ? `${n(cur.order_count)} order${n(cur.order_count) === 1 ? "" : "s"}` : undefined;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-      <StatTile label="Net Revenue" value={v(cur && n(cur.net_revenue))} trend={t((w) => n(w.net_revenue), true)} />
-      <StatTile label="Total Expenses" value={v(cur && n(cur.expenses))} trend={t((w) => n(w.expenses), false)} />
-      <StatTile label="COGS" value={v(cur && n(cur.cogs))} hint="Production cost · not in net profit" trend={t((w) => n(w.cogs), false)} />
-      <StatTile label="Net Profit" value={v(cur && n(cur.net_profit))} trend={t((w) => n(w.net_profit), true)} />
+      <StatTile label="Net Revenue" value={v(cur && n(cur.net_revenue))} hint="Plant sales, after fees" trend={spark(t((w) => n(w.net_revenue), true), series.netRevenue)} />
+      <StatTile label="Net Profit" value={v(cur && n(cur.net_profit))} hint={marginHint} trend={spark(t((w) => n(w.net_profit), true), series.netProfit)} />
+      <StatTile label="Total Expenses" value={v(cur && n(cur.expenses))} trend={spark(t((w) => n(w.expenses), false), series.expenses)} />
+      <StatTile label="Avg Order Value" value={aov} hint={ordersHint} />
     </div>
   );
 }
@@ -276,9 +299,37 @@ function QuickActions() {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+function MetricChip({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "ok" | "alert" }) {
+  return (
+    <div className="bg-bg-elevated backdrop-blur-md rounded-[14px] border border-border-subtle px-4 py-3">
+      <div className={cn("text-xl font-semibold tabular-nums", tone === "alert" ? "text-status-alert" : "text-text-primary")}>{value}</div>
+      <div className="text-[11px] text-text-secondary uppercase tracking-wide mt-0.5">{label}</div>
+      {hint && <div className="text-[10px] text-text-tertiary mt-0.5 truncate">{hint}</div>}
+    </div>
+  );
+}
+
 export default function FinancesOverview() {
   const [period, setPeriod] = useState<FinancePeriod>("month");
-  const { kpis, cashflow, alerts, loadingKpis, loadingRest } = useFinanceOverview(period);
+  const { kpis, breakdown, cashflow, alerts, loadingKpis, loadingRest } = useFinanceOverview(period);
+
+  const cur = kpis?.current;
+  // Shipping margin: what the buyer paid for shipping minus what postage cost.
+  const postage = breakdown.find((b) => /shipping/i.test(b.category))?.total ?? 0;
+  const shippingMargin = cur ? n(cur.shipping_collected) - n(postage) : 0;
+  // Income tax to set aside on the period's profit (SE + income, conservative).
+  const setAside = cur ? quarterlyEstimate(n(cur.net_profit), DEFAULT_INCOME_RATE).total : 0;
+
+  // Trailing-12-month sparklines for the KPI tiles, derived from the cash-flow
+  // series (money_in = net revenue, net = net profit, money_out = expenses).
+  const series = useMemo(
+    () => ({
+      netRevenue: cashflow.map((c) => n(c.money_in)),
+      netProfit: cashflow.map((c) => n(c.net)),
+      expenses: cashflow.map((c) => n(c.money_out)),
+    }),
+    [cashflow],
+  );
 
   const chartData = useMemo(
     () =>
@@ -305,25 +356,46 @@ export default function FinancesOverview() {
         <QuickActions />
       </div>
 
-      <div className="mb-6">
-        <KpiCards cur={kpis?.current} prior={kpis?.prior} loading={loadingKpis} period={period} />
+      <div className="mb-4">
+        <KpiCards cur={cur} prior={kpis?.prior} loading={loadingKpis} period={period} series={series} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Secondary unit economics + tax accrual */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-3">
+        <MetricChip label="Orders" value={loadingKpis || !cur ? "—" : String(n(cur.order_count))} />
+        <MetricChip
+          label="Shipping margin"
+          value={loadingKpis || !cur ? "—" : formatMoney(shippingMargin)}
+          tone={!loadingKpis && cur && shippingMargin < 0 ? "alert" : "ok"}
+          hint={loadingKpis || !cur ? undefined : `${formatMoney(n(cur.shipping_collected))} in − ${formatMoney(postage)} postage`}
+        />
+        <MetricChip label="Gross receipts" value={loadingKpis || !cur ? "—" : formatMoney(n(cur.gross_receipts))} hint="Plant sales + shipping (tax basis)" />
+        <MetricChip
+          label="Sales tax to remit"
+          value={loadingKpis || !cur ? "—" : formatMoney(n(cur.sales_tax_owed))}
+          hint="Direct sales (AZ TPT); Etsy remits its own"
+        />
+      </div>
+
+      {/* Income-tax set-aside nudge */}
+      <Link
+        to="/finances/reports?tab=quarterly"
+        className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-elevated px-3 py-2.5 mb-6 text-sm hover:border-border-strong transition-colors"
+      >
+        <span className="text-text-secondary">
+          Set aside <span className="text-text-primary tabular-nums font-medium">{loadingKpis || !cur ? "—" : formatMoney(setAside)}</span> for income tax
+          <span className="text-text-tertiary"> · est. on {period === "month" ? "this month's" : "this year's"} profit at ~{DEFAULT_INCOME_RATE}%</span>
+        </span>
+        <span className="text-accent-brand shrink-0">Refine →</span>
+      </Link>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <Card className="lg:col-span-2 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-medium">Cash Flow</h2>
-            <div className="flex items-center gap-4 text-xs text-text-secondary">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-brand" /> In</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-status-alert" /> Out</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-text-primary" /> Net</span>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-medium">Net Profit — how it's built</h2>
+            <span className="text-xs text-text-tertiary">{period === "month" ? "This month" : "Year to date"}</span>
           </div>
-          {loadingRest ? (
-            <div className="h-72 rounded-lg bg-bg-base animate-pulse" />
-          ) : (
-            <CashflowChart data={chartData} />
-          )}
+          <NetProfitWaterfall win={cur} breakdown={breakdown} loading={loadingKpis} />
         </Card>
 
         <Card className="p-6">
@@ -331,6 +403,22 @@ export default function FinancesOverview() {
           <AlertsPanel alerts={alerts} loading={loadingRest} />
         </Card>
       </div>
+
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-medium">Cash Flow</h2>
+          <div className="flex items-center gap-4 text-xs text-text-secondary">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-brand" /> In</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-status-alert" /> Out</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-text-primary" /> Net</span>
+          </div>
+        </div>
+        {loadingRest ? (
+          <div className="h-72 rounded-lg bg-bg-base animate-pulse" />
+        ) : (
+          <CashflowChart data={chartData} />
+        )}
+      </Card>
     </div>
   );
 }

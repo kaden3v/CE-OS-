@@ -17,6 +17,7 @@ const Shipping = lazy(() => import("./pages/Shipping"));
 const PrintQueue = lazy(() => import("./pages/PrintQueue"));
 const Listings = lazy(() => import("./pages/Listings"));
 const FinancesOverview = lazy(() => import("./pages/FinancesOverview"));
+const FinancesManage = lazy(() => import("./pages/FinancesManage"));
 const Revenue = lazy(() => import("./pages/Revenue"));
 const Mileage = lazy(() => import("./pages/Mileage"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -34,6 +35,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const SignIn = lazy(() => import("./pages/SignIn"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AccessRequests = lazy(() => import("./pages/AccessRequests"));
+import { FinancesLayout } from "./components/FinancesLayout";
 import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
 import { Toasts } from "./components/ui/Toasts";
@@ -65,17 +67,21 @@ export default function App() {
                 <Route path="/shipping" element={<Shipping />} />
                 <Route path="/shipping/print-queue" element={<PrintQueue />} />
                 <Route path="/listings" element={<Listings />} />
-                <Route path="/finances" element={<RequireManager><FinancesOverview /></RequireManager>} />
-                <Route path="/finances/expenses" element={<RequireManager><Expenses /></RequireManager>} />
-                <Route path="/finances/supplies" element={<RequireManager><Supplies /></RequireManager>} />
-                <Route path="/finances/production" element={<RequireManager><Production /></RequireManager>} />
-                <Route path="/finances/subscriptions" element={<RequireManager><Subscriptions /></RequireManager>} />
-                <Route path="/finances/vendors" element={<RequireManager><Vendors /></RequireManager>} />
-                <Route path="/finances/vendors/:id" element={<RequireManager><VendorDetail /></RequireManager>} />
-                <Route path="/finances/revenue" element={<RequireManager><Revenue /></RequireManager>} />
-                <Route path="/finances/mileage" element={<RequireManager><Mileage /></RequireManager>} />
-                <Route path="/finances/reports" element={<RequireManager><Reports /></RequireManager>} />
-                <Route path="/finances/tax-report" element={<Navigate to="/finances/reports?tab=tax" replace />} />
+                {/* One sidebar entry; all finance sub-views are in-page tabs under FinancesLayout. */}
+                <Route path="/finances" element={<RequireManager><FinancesLayout /></RequireManager>}>
+                  <Route index element={<FinancesOverview />} />
+                  <Route path="revenue" element={<Revenue />} />
+                  <Route path="expenses" element={<Expenses />} />
+                  <Route path="production" element={<Production />} />
+                  <Route path="reports" element={<Reports />} />
+                  <Route path="manage" element={<FinancesManage />} />
+                  <Route path="subscriptions" element={<Subscriptions />} />
+                  <Route path="supplies" element={<Supplies />} />
+                  <Route path="vendors" element={<Vendors />} />
+                  <Route path="vendors/:id" element={<VendorDetail />} />
+                  <Route path="mileage" element={<Mileage />} />
+                  <Route path="tax-report" element={<Navigate to="/finances/reports?tab=tax" replace />} />
+                </Route>
                 <Route path="/licenses" element={<RequireManager><Licenses /></RequireManager>} />
                 <Route path="/team" element={<Team />} />
                 <Route path="/activity" element={<Activity />} />

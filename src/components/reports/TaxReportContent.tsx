@@ -5,29 +5,33 @@ import { Button } from "@/components/ui/Button";
 import { useEntity } from "@/hooks/useEntity";
 import { useOrders } from "@/hooks/useOrders";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatMoney } from "@/lib/format";
 import { isoYear, currentYear, toBusinessISODate } from "@/lib/dates";
-import { downloadCsv } from "@/lib/financeReports";
+import { downloadCsv, fetchPnl, type Pnl } from "@/lib/financeReports";
 import type { Tables } from "@/lib/database.types";
 
 type Expense = Tables<"expenses">;
 type Shipment = Tables<"shipments">;
-type Run = Tables<"production_runs">;
-type RunSupply = Tables<"production_run_supplies">;
-type Trip = Tables<"mileage_log">;
 type Settings = Tables<"finance_settings">;
 
 const EXCLUDED = ["cancelled", "refunded"];
 const MARKETPLACE = ["etsy", "ebay"]; // collect + remit sales tax for the seller
 const n = (v: unknown) => Number(v ?? 0);
 
+/**
+ * Year-end tax summary. Gross receipts, COGS, Schedule-C deductions, and the
+ * mileage deduction are sourced from `finance_pnl` so this document reconciles
+ * with the P&L tab to the cent. Per the 2026-06-12 audit, gross receipts are
+ * subtotal+shipping (sales tax is a pass-through, never income). The only
+ * figure computed in the browser is the sales-tax *liability* split, which has
+ * no server equivalent and needs per-order channel + ship-to-state detail.
+ */
 export function TaxReportContent() {
+  const { activeOrgId } = useAuth();
   const { data: expenses } = useEntity<Expense>("expenses", []);
   const { data: orders } = useOrders();
   const { data: shipments } = useEntity<Shipment>("shipments", []);
-  const { data: runs } = useEntity<Run>("production_runs", [], { orderBy: "run_on" });
-  const { data: runSupplies } = useEntity<RunSupply>("production_run_supplies", [], { orderBy: "created_at" });
-  const { data: trips } = useEntity<Trip>("mileage_log", [], { orderBy: "trip_date" });
   const { data: settingsRows } = useEntity<Settings>("finance_settings", []);
   const { addToast } = useApp();
 
@@ -46,55 +50,47 @@ export function TaxReportContent() {
     if (!years.includes(year)) setYear(years[0]);
   }, [years]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Server-side P&L for the year — the single source of truth for the totals.
+  const [pnl, setPnl] = useState<Pnl | null>(null);
+  useEffect(() => {
+    if (!activeOrgId) return;
+    let cancelled = false;
+    fetchPnl(activeOrgId, year).then((p) => { if (!cancelled) setPnl(p); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeOrgId, year]);
+
+  const grossReceipts = n(pnl?.total.gross_receipts);
+  const cogs = { materials: n(pnl?.total.cogs_materials), labor: n(pnl?.total.cogs_labor), total: n(pnl?.total.cogs) };
+  const expenseTotal = n(pnl?.total.expenses);
+  const mileageDeduction = n(pnl?.total.mileage);
+  const bySchedC = useMemo(
+    () => (pnl?.schedule_c ?? []).map((c) => [c.category, n(c.total)] as [string, number]).sort((a, b) => b[1] - a[1]),
+    [pnl],
+  );
+
   const stateByOrder = useMemo(() => {
     const map = new Map<string, string>();
     shipments.forEach((s) => { if (s.ship_to_state) map.set(s.order_id, s.ship_to_state.toUpperCase()); });
     return map;
   }, [shipments]);
 
-  const sales = useMemo(() => {
+  // Sales-tax liability split (no server equivalent): who remits what.
+  const taxSplit = useMemo(() => {
     const valid = orders.filter((o) => isoYear(o.placed_at) === year && !EXCLUDED.includes(o.status));
-    let gross = 0, marketplaceTax = 0, directTax = 0, azDirectTax = 0;
-    const byChannel: Record<string, number> = {};
+    let marketplaceTax = 0, directTax = 0, azDirectTax = 0;
     for (const o of valid) {
-      gross += n(o.total);
-      byChannel[o.channel] = (byChannel[o.channel] ?? 0) + n(o.total);
-      const isMarketplace = MARKETPLACE.includes(o.channel.toLowerCase());
-      if (isMarketplace) marketplaceTax += n(o.tax);
+      if (MARKETPLACE.includes(o.channel.toLowerCase())) marketplaceTax += n(o.tax);
       else {
         directTax += n(o.tax);
         if (stateByOrder.get(o.id) === "AZ") azDirectTax += n(o.tax);
       }
     }
-    return { valid, gross, marketplaceTax, directTax, azDirectTax, byChannel };
+    return { valid, marketplaceTax, directTax, azDirectTax };
   }, [orders, year, stateByOrder]);
-
-  const cogs = useMemo(() => {
-    const yearRuns = runs.filter((r) => isoYear(r.run_on) === year);
-    const runIds = new Set(yearRuns.map((r) => r.id));
-    const materials = runSupplies.filter((s) => runIds.has(s.run_id)).reduce((sum, s) => sum + n(s.qty) * n(s.unit_cost_snapshot), 0);
-    const labor = yearRuns.filter((r) => r.labor_type === "hired").reduce((s, r) => s + n(r.labor_hours) * n(r.labor_rate), 0);
-    return { materials, labor, total: materials + labor };
-  }, [runs, runSupplies, year]);
-
-  const bySchedC = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const e of expenses.filter((e) => isoYear(e.occurred_on) === year)) {
-      const k = e.schedule_c_category ?? "Uncategorized";
-      map[k] = (map[k] ?? 0) + n(e.amount);
-    }
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, [expenses, year]);
-  const expenseTotal = useMemo(() => bySchedC.reduce((s, [, v]) => s + v, 0), [bySchedC]);
-
-  const mileageDeduction = useMemo(() => {
-    const miles = trips.filter((t) => isoYear(t.trip_date) === year).reduce((s, t) => s + n(t.miles), 0);
-    return (miles * rateCents) / 100;
-  }, [trips, year, rateCents]);
 
   const exportSales = () => {
     const rows: (string | number)[][] = [["Date", "Order", "Channel", "Ship-to state", "Status", "Subtotal", "Shipping", "Tax", "Total"]];
-    sales.valid.forEach((o) => rows.push([toBusinessISODate(o.placed_at), o.id.slice(0, 8), o.channel, stateByOrder.get(o.id) ?? "", o.status, n(o.subtotal).toFixed(2), n(o.shipping).toFixed(2), n(o.tax).toFixed(2), n(o.total).toFixed(2)]));
+    taxSplit.valid.forEach((o) => rows.push([toBusinessISODate(o.placed_at), o.id.slice(0, 8), o.channel, stateByOrder.get(o.id) ?? "", o.status, n(o.subtotal).toFixed(2), n(o.shipping).toFixed(2), n(o.tax).toFixed(2), n(o.total).toFixed(2)]));
     downloadCsv(`sales-${year}.csv`, rows);
     addToast({ title: "CSV exported", description: `sales-${year}.csv`, status: "ok" });
   };
@@ -106,7 +102,7 @@ export function TaxReportContent() {
   };
   const exportScheduleC = () => {
     const rows: (string | number)[][] = [["Schedule C line", "Amount"]];
-    rows.push(["Gross sales", sales.gross.toFixed(2)]);
+    rows.push(["Gross receipts (subtotal + shipping, tax excluded)", grossReceipts.toFixed(2)]);
     rows.push(["COGS — Materials", cogs.materials.toFixed(2)]);
     rows.push(["COGS — Hired labor", cogs.labor.toFixed(2)]);
     bySchedC.forEach(([cat, v]) => rows.push([cat, v.toFixed(2)]));
@@ -144,9 +140,9 @@ export function TaxReportContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <Card className="p-6">
           <h3 className="text-sm font-medium mb-3">Sales tax collected</h3>
-          <StatRow label="Remitted by marketplace" value={formatMoney(sales.marketplaceTax)} sub="Etsy, eBay collect and remit on your behalf" />
-          <StatRow label="Collected on direct sales" value={formatMoney(sales.directTax)} sub="Shopify and direct — you remit this (AZ TPT for Arizona orders)" strong />
-          {sales.azDirectTax > 0 && <StatRow label="— of which Arizona (AZ TPT)" value={formatMoney(sales.azDirectTax)} />}
+          <StatRow label="Remitted by marketplace" value={formatMoney(taxSplit.marketplaceTax)} sub="Etsy, eBay collect and remit on your behalf" />
+          <StatRow label="Collected on direct sales" value={formatMoney(taxSplit.directTax)} sub="Shopify and direct — you remit this (AZ TPT for Arizona orders)" strong />
+          {taxSplit.azDirectTax > 0 && <StatRow label="— of which Arizona (AZ TPT)" value={formatMoney(taxSplit.azDirectTax)} />}
         </Card>
         <Card className="p-6">
           <h3 className="text-sm font-medium mb-3">Cost of goods (live from Production)</h3>
@@ -171,7 +167,10 @@ export function TaxReportContent() {
 
       <div className="flex items-start gap-2 rounded-lg border border-border-subtle bg-bg-elevated px-3 py-2.5 text-sm text-text-secondary">
         <Info className="w-4 h-4 shrink-0 mt-0.5 text-status-info" />
-        <span>Gross sales {year}: <span className="text-text-primary tabular-nums">{formatMoney(sales.gross)}</span> across {sales.valid.length} orders.</span>
+        <span>
+          Gross receipts {year}: <span className="text-text-primary tabular-nums">{formatMoney(grossReceipts)}</span> across {taxSplit.valid.length} orders
+          <span className="text-text-tertiary"> · product + shipping, sales tax excluded.</span>
+        </span>
       </div>
     </div>
   );
