@@ -58,6 +58,7 @@ interface AppContextType {
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'time'>) => void;
   // Tasks (persisted to Supabase when authed; localStorage in demo mode)
   tasks: Task[];
+  tasksLoading: boolean;
   addTask: (task: { title: string; due?: string | null; type?: string | null }) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -94,6 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
   });
   const tasks = taskEntity.data;
+  const tasksLoading = taskEntity.isLoading;
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [globalOrderViewId, setGlobalOrderViewId] = useState<string | null>(null);
 
@@ -166,6 +168,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       markNotificationRead,
       markAllNotificationsRead,
       tasks,
+      tasksLoading,
       addTask,
       toggleTask,
       deleteTask,

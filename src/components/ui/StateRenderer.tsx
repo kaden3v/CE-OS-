@@ -32,6 +32,29 @@ export function LoadingTable({ rows = 8, cols = 5 }: { rows?: number; cols?: num
   );
 }
 
+export function LoadingList({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="divide-y divide-border-subtle">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-bg-elevated animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-3 w-32 bg-bg-elevated rounded animate-pulse" />
+              <div className="h-3 w-48 bg-bg-elevated rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="h-3 w-16 bg-bg-elevated rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ChartSkeleton() {
+  return <div className="w-full h-full bg-bg-elevated/60 rounded-lg animate-pulse" />;
+}
+
 export function ErrorState({ title = "Couldn't load data", description = "There was a problem loading this information.", onRetry }: { title?: string, description?: string, onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center p-12 text-center h-[300px]">

@@ -4,6 +4,7 @@ import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 interface StatTileProps {
   label: string;
   value: string;
+  loading?: boolean;
   trend?: {
     value: string;
     direction: "up" | "down";
@@ -44,7 +45,7 @@ function Sparkline({ data, colorVariant }: { data: number[], colorVariant: 'up' 
   );
 }
 
-export function StatTile({ label, value, trend, className }: StatTileProps) {
+export function StatTile({ label, value, loading, trend, className }: StatTileProps) {
   return (
     <div
       className={cn(
@@ -54,7 +55,7 @@ export function StatTile({ label, value, trend, className }: StatTileProps) {
     >
       <div className="flex items-start justify-between mb-2">
         <h3 className="text-4xl font-semibold tabular-nums text-text-primary">
-          {value}
+          {loading ? <span className="inline-block h-9 w-24 bg-bg-active rounded animate-pulse align-middle" /> : value}
         </h3>
         {trend && (
            <div className="flex items-center">

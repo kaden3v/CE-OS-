@@ -1,6 +1,7 @@
 import { StatTile } from "@/components/ui/StatTile";
 import { Card } from "@/components/ui/Card";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { LoadingList, ChartSkeleton } from "@/components/ui/StateRenderer";
 import { Store, ShoppingBag, CheckCircle2, BarChart3, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RechartsChart } from "@/components/ui/RechartsChart";
@@ -11,33 +12,26 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrders } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
 import type { Tables } from "@/lib/database.types";
+import { trailingMonthlyRevenue, salesByChannel, topCultivarsByUnits, cohortRetention } from "@/lib/dashboardMetrics";
 
-const REVENUE_DATA = [
-  { name: 'Jan', value: 2400 }, { name: 'Feb', value: 1398 }, { name: 'Mar', value: 4800 },
-  { name: 'Apr', value: 3908 }, { name: 'May', value: 4800 }, { name: 'Jun', value: 3800 },
-  { name: 'Jul', value: 4300 }
-];
-
-const CHANNEL_DATA = [
-  { name: 'Shopify', value: 450 }, { name: 'Etsy', value: 320 }, { name: 'Wholesale', value: 150 }
-];
-
-const CULTIVAR_DATA = [
-  { name: "'Pirouette'", value: 400 }, { name: "'El Lobo'", value: 300 }, { name: 'gigantea', value: 300 }, { name: 'esseriana', value: 200 }
-];
-const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518'];
+// Donut palette: cultivar slices first, neutral grey reserved for the trailing "Other" slice.
+const COLORS = ['#C2714F', '#8A9A5B', '#4A5D23', '#2C3518', '#6B7280'];
 
 type Inventory = Tables<"inventory">;
 type Shipment = Tables<"shipments">;
+type Cultivar = Tables<"cultivars">;
 
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"operations" | "reporting">("operations");
-  const { tasks, toggleTask } = useApp();
+  const { tasks, tasksLoading, toggleTask } = useApp();
   const pendingTasks = tasks.filter(t => !t.completed).slice(0, 5);
 
-  const { data: orders } = useOrders();
-  const { data: inventory } = useEntity<Inventory>("inventory", []);
-  const { data: shipments } = useEntity<Shipment>("shipments", []);
+  const { data: orders, isLoading: ordersLoading } = useOrders();
+  const { data: inventory, isLoading: inventoryLoading } = useEntity<Inventory>("inventory", []);
+  const { data: shipments, isLoading: shipmentsLoading } = useEntity<Shipment>("shipments", []);
+  const { data: cultivars } = useEntity<Cultivar>("cultivars", []);
+
+  const statsLoading = ordersLoading || inventoryLoading || shipmentsLoading;
 
   const stats = useMemo(() => {
     const activeOrders = orders.filter((o) => ["pending", "processing", "packed"].includes(o.status)).length;
@@ -50,8 +44,20 @@ export default function Dashboard() {
     return { activeOrders, plantsInStock, pendingShipments, revenueMtd };
   }, [orders, inventory, shipments]);
 
+  // Reporting aggregates — all derived from live order/line-item data.
+  const revenueData = useMemo(() => trailingMonthlyRevenue(orders), [orders]);
+  const channelData = useMemo(() => salesByChannel(orders), [orders]);
+  const { slices: cultivarSlices, totalUnits } = useMemo(() => topCultivarsByUnits(orders, cultivars), [orders, cultivars]);
+  const cohort = useMemo(() => cohortRetention(orders), [orders]);
+
+  const hasRevenue = revenueData.some((d) => d.value > 0);
+  const hasChannel = channelData.length > 0;
+  const hasCultivars = totalUnits > 0;
+
   const recent = orders.slice(0, 5);
   const watch = shipments.filter((s) => s.status === "pending" || s.status === "ready").slice(0, 3);
+
+  const formatUnits = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString());
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 flex flex-col h-full">
@@ -61,13 +67,13 @@ export default function Dashboard() {
             <p className="text-sm text-text-secondary">Nursery operations and financial insights.</p>
          </div>
          <div className="flex bg-bg-active border border-border-subtle p-2 rounded-lg">
-            <button 
+            <button
               onClick={() => setViewMode("operations")}
               className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2", viewMode === "operations" ? "bg-bg-elevated shadow-sm text-text-primary" : "text-text-secondary hover:text-text-primary")}
             >
               <LayoutGrid className="w-4 h-4" /> Operations
             </button>
-            <button 
+            <button
               onClick={() => setViewMode("reporting")}
               className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2", viewMode === "reporting" ? "bg-bg-elevated shadow-sm text-text-primary" : "text-text-secondary hover:text-text-primary")}
             >
@@ -80,10 +86,10 @@ export default function Dashboard() {
         <>
           {/* Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
-            <StatTile label="Active Orders" value={stats.activeOrders.toString()} />
-            <StatTile label="Plants in Stock" value={stats.plantsInStock.toLocaleString()} />
-            <StatTile label="Pending Shipments" value={stats.pendingShipments.toString()} />
-            <StatTile label="Revenue (MTD)" value={`$${stats.revenueMtd.toFixed(2)}`} />
+            <StatTile label="Active Orders" value={stats.activeOrders.toString()} loading={statsLoading} />
+            <StatTile label="Plants in Stock" value={stats.plantsInStock.toLocaleString()} loading={statsLoading} />
+            <StatTile label="Pending Shipments" value={stats.pendingShipments.toString()} loading={statsLoading} />
+            <StatTile label="Revenue (MTD)" value={`$${stats.revenueMtd.toFixed(2)}`} loading={statsLoading} />
           </div>
 
           {/* Middle Section */}
@@ -96,10 +102,11 @@ export default function Dashboard() {
               </div>
               <Card>
                 <div className="p-0">
-                  {recent.length === 0 && (
+                  {ordersLoading && <LoadingList rows={4} />}
+                  {!ordersLoading && recent.length === 0 && (
                     <div className="p-6 text-sm text-text-tertiary text-center">No orders yet. <Link to="/orders" className="text-accent-brand hover:underline">Create one</Link>.</div>
                   )}
-                  {recent.map((order) => (
+                  {!ordersLoading && recent.map((order) => (
                     <Link key={order.id} to="/orders" className="flex items-center justify-between p-4 border-b border-border-subtle last:border-0 hover:bg-bg-hover transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-bg-active flex items-center justify-center text-sm font-medium border border-border-subtle shrink-0">
@@ -129,7 +136,7 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-medium whitespace-nowrap">${Number(order.total).toFixed(2)}</div>
+                        <div className="font-medium whitespace-nowrap tabular-nums">${Number(order.total).toFixed(2)}</div>
                         <div className="text-xs text-text-secondary mt-2">{order.items.length} item{order.items.length !== 1 ? "s" : ""}</div>
                       </div>
                     </Link>
@@ -145,10 +152,17 @@ export default function Dashboard() {
                 <Link to="/shipping" className="text-xs text-text-secondary hover:text-text-primary">All →</Link>
               </div>
               <div className="space-y-3">
-                {watch.length === 0 && (
+                {shipmentsLoading && (
+                  <Card className="p-4 space-y-3">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div key={i} className="h-12 bg-bg-elevated rounded animate-pulse" />
+                    ))}
+                  </Card>
+                )}
+                {!shipmentsLoading && watch.length === 0 && (
                   <Card className="p-4 text-sm text-text-tertiary text-center">No shipments queued.</Card>
                 )}
-                {watch.map((sh) => (
+                {!shipmentsLoading && watch.map((sh) => (
                   <Card key={sh.id} className="p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div>
@@ -175,18 +189,25 @@ export default function Dashboard() {
             <h2 className="text-base font-medium">Pending Tasks</h2>
             <Card>
               <div className="p-2 min-h-[48px]">
-                {pendingTasks.length === 0 && (
+                {tasksLoading && (
+                  <div className="space-y-1 p-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-8 bg-bg-elevated rounded animate-pulse" />
+                    ))}
+                  </div>
+                )}
+                {!tasksLoading && pendingTasks.length === 0 && (
                    <div className="text-center py-4 text-sm text-text-tertiary">
                      All caught up for now!
                    </div>
                 )}
-                {pendingTasks.map((task) => (
+                {!tasksLoading && pendingTasks.map((task) => (
                   <div key={task.id} className="flex items-center gap-2 p-2 hover:bg-bg-hover rounded-lg transition-colors cursor-pointer group" onClick={() => toggleTask(task.id)}>
                     <div className="w-5 h-5 rounded-full border border-border-strong flex items-center justify-center group-hover:border-status-ok group-hover:text-status-ok transition-colors">
                       <CheckCircle2 className="w-3 h-3 opacity-0 group-hover:opacity-100" />
                     </div>
                     <div className="flex-1 text-sm">{task.title}</div>
-                    {task.due !== "No date" && (
+                    {task.due !== "No date" && task.due && (
                       <div className="text-xs text-text-secondary px-2 py-2 rounded bg-bg-active">
                         {task.due}
                       </div>
@@ -203,11 +224,16 @@ export default function Dashboard() {
         <div className="flex-1 flex flex-col gap-8 pb-12 overflow-y-auto pr-2">
            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
               <Card className="p-6 h-[340px] flex flex-col">
-                 <h3 className="text-sm font-medium text-text-secondary mb-6">Revenue Growth (YTD)</h3>
+                 <h3 className="text-sm font-medium text-text-secondary mb-6">Revenue (last 12 months)</h3>
                  <div className="flex-1 min-h-0">
+                    {ordersLoading ? (
+                      <ChartSkeleton />
+                    ) : !hasRevenue ? (
+                      <div className="h-full flex items-center justify-center text-sm text-text-tertiary">No revenue recorded yet.</div>
+                    ) : (
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={REVENUE_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                        <AreaChart data={revenueData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                           <defs>
                             <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="var(--color-accent-brand)" stopOpacity={0.3}/>
@@ -219,25 +245,32 @@ export default function Dashboard() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </RechartsChart>
+                    )}
                  </div>
               </Card>
 
               <Card className="p-6 h-[340px] flex flex-col">
                  <h3 className="text-sm font-medium text-text-secondary mb-6">Sales by Channel</h3>
                  <div className="flex-1 min-h-0">
+                    {ordersLoading ? (
+                      <ChartSkeleton />
+                    ) : !hasChannel ? (
+                      <div className="h-full flex items-center justify-center text-sm text-text-tertiary">No sales recorded yet.</div>
+                    ) : (
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={CHANNEL_DATA} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} layout="vertical">
+                        <BarChart data={channelData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} layout="vertical">
                           <XAxis type="number" hide />
                           <YAxis dataKey="name" type="category" stroke="var(--color-text-secondary)" fontSize={12} tickLine={false} axisLine={false} width={80} />
                           <Bar dataKey="value" fill="var(--color-bg-active)" radius={[0, 4, 4, 0]}>
-                             {CHANNEL_DATA.map((entry, index) => (
+                             {channelData.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={index === 0 ? "var(--color-accent-brand)" : "var(--color-border-strong)"} />
                              ))}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </RechartsChart>
+                    )}
                  </div>
               </Card>
            </div>
@@ -246,11 +279,17 @@ export default function Dashboard() {
               <Card className="p-6 h-[320px] lg:col-span-1 flex flex-col">
                  <h3 className="text-sm font-medium text-text-secondary mb-2">Top Cultivars (Units)</h3>
                  <div className="flex-1 flex items-center justify-center min-h-0 relative">
+                    {ordersLoading ? (
+                      <ChartSkeleton />
+                    ) : !hasCultivars ? (
+                      <div className="h-full flex items-center justify-center text-sm text-text-tertiary">No units sold yet.</div>
+                    ) : (
+                    <>
                     <RechartsChart>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={CULTIVAR_DATA}
+                            data={cultivarSlices}
                             cx="50%"
                             cy="50%"
                             innerRadius={60}
@@ -259,48 +298,55 @@ export default function Dashboard() {
                             dataKey="value"
                             stroke="none"
                           >
-                            {CULTIVAR_DATA.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            {cultivarSlices.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.name === "Other" ? COLORS[4] : COLORS[index % 4]} />
                             ))}
                           </Pie>
                         </PieChart>
                       </ResponsiveContainer>
                     </RechartsChart>
-                    {/* Legend */}
+                    {/* Center total */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                        <div className="text-xs text-text-tertiary uppercase tracking-widest">Total</div>
-                       <div className="text-xl font-medium">1.2K</div>
+                       <div className="text-xl font-medium tabular-nums">{formatUnits(totalUnits)}</div>
                     </div>
+                    </>
+                    )}
                  </div>
               </Card>
 
               <Card className="p-6 lg:col-span-2 flex flex-col">
                  <h3 className="text-sm font-medium text-text-secondary mb-6">Customer Cohort Retention</h3>
+                 {ordersLoading ? (
+                   <div className="flex-1 min-h-[160px]"><ChartSkeleton /></div>
+                 ) : cohort.rows.length === 0 ? (
+                   <div className="flex-1 flex items-center justify-center text-sm text-text-tertiary">Not enough order history yet to compute retention.</div>
+                 ) : (
                  <div className="flex-1 overflow-x-auto">
                     <div className="min-w-[600px]">
                        <div className="flex text-xs text-text-tertiary mb-2 font-mono">
                           <div className="w-[100px] shrink-0"></div>
-                          {Array.from({length: 12}).map((_, i) => <div key={i} className="flex-1 text-center">Mo {i+1}</div>)}
+                          {Array.from({ length: cohort.offsets }).map((_, i) => <div key={i} className="flex-1 text-center">M{i}</div>)}
                        </div>
                        <div className="space-y-1">
-                          {["Jan", "Feb", "Mar", "Apr", "May"].map((month, mIdx) => (
-                             <div key={month} className="flex text-xs font-mono items-center">
-                                <div className="w-[100px] shrink-0 font-medium text-text-secondary">{month} <span className="opacity-50">({120 - mIdx*10})</span></div>
-                                {Array.from({length: 12}).map((_, i) => {
-                                   if (i > 11 - mIdx) return <div key={i} className="flex-1 m-2 h-6 rounded bg-transparent"></div>;
-                                   const val = Math.max(5, 100 - (i * 15) - (mIdx * 5) + Math.random() * 10);
+                          {cohort.rows.map((row) => (
+                             <div key={row.label} className="flex text-xs font-mono items-center">
+                                <div className="w-[100px] shrink-0 font-medium text-text-secondary">{row.label} <span className="opacity-50">({row.size})</span></div>
+                                {row.cells.map((val, i) => {
+                                   if (val === null) return <div key={i} className="flex-1 m-2 h-6 rounded bg-transparent"></div>;
                                    return (
                                      <div key={i} className="flex-1 m-2 h-6 rounded border border-border-subtle relative group flex items-center justify-center cursor-help">
-                                        <div className="absolute inset-0 bg-accent-brand" style={{ opacity: val / 100 }}></div>
+                                        <div className="absolute inset-0 bg-accent-brand rounded" style={{ opacity: Math.max(0.05, val / 100) }}></div>
                                         <div className="relative z-10 opacity-0 group-hover:opacity-100 font-medium">{val.toFixed(0)}%</div>
                                      </div>
-                                   )
+                                   );
                                 })}
                              </div>
                           ))}
                        </div>
                     </div>
                  </div>
+                 )}
               </Card>
            </div>
         </div>
