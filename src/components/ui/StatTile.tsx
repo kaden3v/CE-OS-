@@ -15,24 +15,36 @@ interface StatTileProps {
   className?: string;
 }
 
-function Sparkline({ data, colorVariant }: { data: number[], colorVariant: 'up' | 'down' }) {
-  if (!data || data.length === 0) return null;
+/**
+ * Full-width sparkline that scales to its container.
+ *
+ * Uses a fixed viewBox with `preserveAspectRatio="none"` so the path stretches
+ * to whatever width the tile gives it, and `vector-effect="non-scaling-stroke"`
+ * so the line stays a crisp 1.5px regardless of that horizontal stretch. Living
+ * on its own row (never beside the value), it can't overflow the card.
+ */
+function Sparkline({ data, colorVariant }: { data: number[]; colorVariant: "up" | "down" }) {
+  if (!data || data.length < 2) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
-  const h = 24;
-  const w = 60;
-  
-  const points = data.map((d, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((d - min) / range) * h;
-    return `${x},${y}`;
-  }).join(' ');
-
-  const color = colorVariant === 'up' ? 'text-status-ok' : 'text-status-alert';
-
+  const W = 100;
+  const H = 24;
+  const points = data
+    .map((d, i) => {
+      const x = (i / (data.length - 1)) * W;
+      const y = H - ((d - min) / range) * H;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  const color = colorVariant === "up" ? "text-status-ok" : "text-status-alert";
   return (
-    <svg width={w} height={h} className="overflow-visible ml-4">
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className={cn("w-full h-6 mt-3 shrink-0", color)}
+      aria-hidden="true"
+    >
       <polyline
         fill="none"
         stroke="currentColor"
@@ -40,7 +52,7 @@ function Sparkline({ data, colorVariant }: { data: number[], colorVariant: 'up' 
         strokeLinecap="round"
         strokeLinejoin="round"
         points={points}
-        className={color}
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   );
@@ -50,37 +62,27 @@ export function StatTile({ label, value, hint, trend, className }: StatTileProps
   return (
     <div
       className={cn(
-        "bg-bg-elevated backdrop-blur-md rounded-[16px] border border-border-subtle p-6 flex flex-col",
-        className
+        "bg-bg-elevated backdrop-blur-md rounded-[16px] border border-border-subtle p-5 sm:p-6 flex flex-col overflow-hidden",
+        className,
       )}
     >
-      <div className="flex items-start justify-between mb-2">
-        <h3 className="text-4xl font-semibold tabular-nums text-text-primary">
-          {value}
-        </h3>
-        {trend && (
-           <div className="flex items-center">
-              <div className="flex flex-col items-end gap-2 text-xs text-text-secondary">
-                <div className="flex items-center gap-2">
-                  {trend.direction === "up" ? (
-                    <ArrowUpRight className="w-3 h-3 text-status-ok" />
-                  ) : (
-                    <ArrowDownRight className="w-3 h-3 text-status-alert" />
-                  )}
-                  <span>{trend.value}</span>
-                </div>
-                {trend.label && <span className="text-text-tertiary ml-2">{trend.label}</span>}
-              </div>
-              {trend.sparklineData && (
-                 <Sparkline data={trend.sparklineData} colorVariant={trend.direction} />
-              )}
-           </div>
-        )}
-      </div>
-      <p className="text-xs text-text-secondary uppercase tracking-wide">
-        {label}
-      </p>
+      <h3 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tabular-nums text-text-primary truncate">
+        {value}
+      </h3>
+      {trend && (
+        <div className="flex items-center gap-1 text-xs text-text-secondary mt-1 min-w-0">
+          {trend.direction === "up" ? (
+            <ArrowUpRight className="w-3 h-3 shrink-0 text-status-ok" />
+          ) : (
+            <ArrowDownRight className="w-3 h-3 shrink-0 text-status-alert" />
+          )}
+          <span className="shrink-0">{trend.value}</span>
+          {trend.label && <span className="text-text-tertiary truncate hidden sm:inline">· {trend.label}</span>}
+        </div>
+      )}
+      <p className="text-xs text-text-secondary uppercase tracking-wide mt-2">{label}</p>
       {hint && <p className="text-[11px] text-text-tertiary mt-1 normal-case tracking-normal">{hint}</p>}
+      {trend?.sparklineData && <Sparkline data={trend.sparklineData} colorVariant={trend.direction} />}
     </div>
   );
 }
