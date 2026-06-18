@@ -142,7 +142,7 @@ export default function Shipping() {
   const columns = useMemo(
     () => [
       { accessorKey: "id", header: "Shipment", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
-      { accessorKey: "order_id", header: "Order", cell: (info: any) => <span className="font-medium">{orderLabel(info.getValue())}</span> },
+      { accessorKey: "order_id", header: "Order", cell: (info: any) => { const label = orderLabel(info.getValue()); return <span className="font-medium truncate inline-block align-middle max-w-[220px]" title={label}>{label}</span>; } },
       { accessorKey: "carrier", header: "Carrier", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
       {
         accessorKey: "tracking_number",
@@ -220,7 +220,7 @@ export default function Shipping() {
   const isEmpty = !isLoading && shipments.length === 0;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto h-full flex flex-col">
+    <div className="p-4 md:p-8 w-full h-full flex flex-col">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold mb-2">Shipping</h1>
