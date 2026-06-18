@@ -369,9 +369,9 @@ export default function Customers() {
 
       {isEditOpen && selected && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
+          <Card role="dialog" aria-modal="true" aria-labelledby="customer-edit-title" className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Edit Customer</h2>
+              <h2 id="customer-edit-title" className="text-lg font-semibold">Edit Customer</h2>
               <button onClick={() => setIsEditOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
                 <X className="w-5 h-5" />
               </button>
@@ -415,9 +415,9 @@ export default function Customers() {
 
       {isAddOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
+          <Card role="dialog" aria-modal="true" aria-labelledby="customer-add-title" className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">New Customer</h2>
+              <h2 id="customer-add-title" className="text-lg font-semibold">New Customer</h2>
               <button onClick={() => setIsAddOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
                 <X className="w-5 h-5" />
               </button>

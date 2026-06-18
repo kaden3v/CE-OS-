@@ -331,7 +331,7 @@ export default function Subscriptions() {
 
       {isOpen && (
         <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}>
-          <Card className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl max-h-[90dvh] overflow-y-auto">
+          <Card role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title" className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl max-h-[90dvh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3 p-5 border-b border-border-subtle">
               <div className="flex items-center gap-3">
                 {form.name.trim() ? (
@@ -342,7 +342,7 @@ export default function Subscriptions() {
                   </div>
                 )}
                 <div>
-                  <h2 className="text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</h2>
+                  <h2 id="subscription-modal-title" className="text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</h2>
                   <p className="text-xs text-text-secondary mt-0.5">A recurring bill the business pays.</p>
                 </div>
               </div>

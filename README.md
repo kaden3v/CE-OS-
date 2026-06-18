@@ -52,7 +52,7 @@ CEOS is invitation-only. There is no public signup.
 
 **Why the ban-and-clear pattern**: it gates the user behind admin review without us having to store the password ourselves (Supabase manages the bcrypt hash like any normal user). The unban is a single column flip — fastest possible "approve" UX.
 
-**Demo mode** is still available — clicks "Try the demo" button → localStorage backend, no signup, no DB writes. For tryers/testers.
+**No demo mode.** CEOS is invitation-only — every session requires a Supabase account. (The earlier localStorage demo backend has been removed.)
 
 ### Preventing dangling no-password accounts
 

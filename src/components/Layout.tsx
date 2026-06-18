@@ -124,8 +124,15 @@ export function Layout() {
   const getBreadcrumb = () => {
     const path = location.pathname;
     if (path === "/") return "Dashboard";
-    const parts = path.split("/").filter(Boolean);
-    return parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, " ")).join(" / ");
+    // Title-case each hyphenated word, keeping known acronyms uppercase
+    // (e.g. "qr-codes" → "QR Codes" instead of "Qr codes").
+    const ACRONYMS = new Set(["qr"]);
+    const titleCase = (segment: string) =>
+      segment
+        .split("-")
+        .map((word) => (ACRONYMS.has(word) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)))
+        .join(" ");
+    return path.split("/").filter(Boolean).map(titleCase).join(" / ");
   };
 
   // Workspace gate — a signed-in user who belongs to no organization can't see
@@ -308,6 +315,9 @@ export function Layout() {
               <Search className="w-5 h-5" />
             </button>
             <button
+              aria-label="Tasks"
+              aria-haspopup="dialog"
+              aria-expanded={tasksOpen}
               className={cn(
                 "relative p-2.5 rounded-lg transition-colors active:bg-bg-hover",
                 tasksOpen ? "text-text-primary" : "text-text-secondary hover:text-text-primary"
@@ -325,6 +335,9 @@ export function Layout() {
             <TasksPanel open={tasksOpen} onClose={() => setTasksOpen(false)} />
 
             <button
+              aria-label="Notifications"
+              aria-haspopup="dialog"
+              aria-expanded={notificationsOpen}
               className={cn(
                 "relative p-2.5 rounded-lg transition-colors active:bg-bg-hover",
                 notificationsOpen ? "text-text-primary" : "text-text-secondary hover:text-text-primary"
