@@ -70,7 +70,7 @@ export function ChannelFeesSettings() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {FIELDS.map((f) => (
-                <div key={String(f.key)}>
+                <div key={String(f.key)} className="min-w-0">
                   <label className="block text-[10px] uppercase tracking-wide text-text-tertiary mb-1">{f.label}</label>
                   <div className="relative">
                     {f.suffix === "$" && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-tertiary">$</span>}
@@ -78,7 +78,7 @@ export function ChannelFeesSettings() {
                       type="number"
                       step="0.01"
                       min="0"
-                      className={f.suffix === "$" ? "pl-5" : ""}
+                      className={`w-full ${f.suffix === "$" ? "pl-5" : ""}`}
                       value={String(val(r, f.key))}
                       onChange={(e) => setField(r.id, f.key, Number(e.target.value) || 0)}
                     />
