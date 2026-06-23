@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { RechartsChart } from "@/components/ui/RechartsChart";
 import { EmptyState } from "@/components/ui/StateRenderer";
-import { cn } from "@/lib/utils";
+import { PeriodToggle } from "@/components/finances/PeriodToggle";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatMoney } from "@/lib/format";
 import { businessMonthShort } from "@/lib/dates";
@@ -18,18 +18,6 @@ import {
 const CHANNEL_COLORS = ["var(--color-accent-brand)", "var(--color-status-info)", "var(--color-status-warn)", "var(--color-border-strong)", "var(--color-status-alert)"];
 const n = (v: unknown) => Number(v ?? 0);
 const yTick = (v: number) => (Math.abs(v) >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`);
-
-function PeriodToggle({ period, onChange }: { period: FinancePeriod; onChange: (p: FinancePeriod) => void }) {
-  return (
-    <div className="inline-flex rounded-lg border border-border-subtle bg-bg-base p-0.5 text-sm self-start">
-      {(["month", "ytd"] as const).map((p) => (
-        <button key={p} onClick={() => onChange(p)} className={cn("px-3 py-1.5 rounded-md transition-colors", period === p ? "bg-bg-active text-text-primary" : "text-text-secondary hover:text-text-primary")}>
-          {p === "month" ? "This month" : "Year to date"}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export default function Revenue() {
   const { activeOrgId } = useAuth();
@@ -76,7 +64,7 @@ export default function Revenue() {
           <h1 className="text-2xl font-semibold mb-1 flex items-center gap-2"><TrendingUp className="w-6 h-6 text-text-secondary" /> Revenue</h1>
           <p className="text-sm text-text-secondary">Sales, refunds, and estimated marketplace fees by channel.</p>
         </div>
-        <PeriodToggle period={period} onChange={setPeriod} />
+        <PeriodToggle<FinancePeriod> period={period} onChange={setPeriod} options={[{ value: "month", label: "This month" }, { value: "ytd", label: "Year to date" }]} />
       </div>
 
       <div className="flex items-start gap-2 rounded-lg border border-border-subtle bg-bg-elevated px-3 py-2.5 mb-6 text-sm text-text-secondary">

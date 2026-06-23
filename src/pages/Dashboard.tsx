@@ -6,14 +6,15 @@ import { Store, ShoppingBag, CheckCircle2, BarChart3, LayoutGrid } from "lucide-
 import { cn } from "@/lib/utils";
 import { RechartsChart } from "@/components/ui/RechartsChart";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { orderStatusTone } from "@/lib/status";
 import { useOrders } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
-import { fetchKpis } from "@/lib/financeReports";
+import { useMonthGoalPace } from "@/hooks/useRevenueGoals";
+import { GoalPaceStrip } from "@/components/finances/GoalPaceStrip";
 import { formatMoney } from "@/lib/format";
 import type { Tables } from "@/lib/database.types";
 
@@ -42,18 +43,12 @@ export default function Dashboard() {
   const { data: supplies } = useEntity<Supply>("supplies", []);
   const { data: licenses } = useEntity<License>("licenses", []);
 
-  // Finance summary pulls the same month aggregate the Overview uses (managers only).
-  const { activeOrgId, orgRole } = useAuth();
+  // Current-month finance pace (managers only): one source for the MTD tile and
+  // the ambient goal-pace strip, so the dashboard doesn't double-fetch KPIs.
+  const { orgRole } = useAuth();
   const canManage = orgRole === "owner" || orgRole === "manager";
-  const [netRevenueMtd, setNetRevenueMtd] = useState<number | null>(null);
-  useEffect(() => {
-    if (!activeOrgId || !canManage) return;
-    let cancelled = false;
-    fetchKpis(activeOrgId, "month")
-      .then((k) => { if (!cancelled) setNetRevenueMtd(Number(k.current.net_revenue)); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [activeOrgId, canManage]);
+  const { pace: monthPace, loading: paceLoading } = useMonthGoalPace();
+  const netRevenueMtd = canManage ? (monthPace?.actualNet ?? null) : null;
 
   // Things that need a human decision: low plant stock, supplies at/below their
   // reorder threshold, licenses expiring inside the warning window.
@@ -182,6 +177,9 @@ export default function Dashboard() {
               value={canManage && netRevenueMtd != null ? formatMoney(netRevenueMtd) : formatMoney(stats.revenueMtd)}
             />
           </div>
+
+          {/* Ambient revenue-goal pace (managers only; renders nothing without a goal/data) */}
+          {canManage && <div className="shrink-0"><GoalPaceStrip pace={monthPace} loading={paceLoading} /></div>}
 
           {/* Middle Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 shrink-0">

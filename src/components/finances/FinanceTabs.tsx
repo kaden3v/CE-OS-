@@ -1,5 +1,5 @@
 import { NavLink } from "react-router";
-import { PieChart, TrendingUp, Receipt, Factory, FileSpreadsheet, SlidersHorizontal } from "lucide-react";
+import { PieChart, TrendingUp, Target, Receipt, Factory, FileSpreadsheet, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 const TABS: { to: string; label: string; icon: typeof PieChart; end?: boolean }[] = [
   { to: "/finances", label: "Overview", icon: PieChart, end: true },
   { to: "/finances/revenue", label: "Revenue", icon: TrendingUp },
+  { to: "/finances/goals", label: "Goals", icon: Target },
   { to: "/finances/expenses", label: "Expenses", icon: Receipt },
   { to: "/finances/production", label: "Production", icon: Factory },
   { to: "/finances/reports", label: "Reports", icon: FileSpreadsheet },

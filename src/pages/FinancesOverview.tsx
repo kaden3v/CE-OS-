@@ -5,13 +5,14 @@ import {
 } from "recharts";
 import {
   Receipt, Factory, PackageOpen, Car, Plus, AlertTriangle, Clock, RefreshCw,
-  CalendarClock, CheckCircle2, ChevronRight, PieChart,
+  CalendarClock, CheckCircle2, ChevronRight, PieChart, Target,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { RechartsChart } from "@/components/ui/RechartsChart";
 import { EmptyState } from "@/components/ui/StateRenderer";
+import { PeriodToggle } from "@/components/finances/PeriodToggle";
 import { formatMoney } from "@/lib/format";
 import { todayISO, businessMonthShort, formatBusinessDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -20,35 +21,14 @@ import { quarterlyEstimate } from "@/lib/finance";
 import {
   useFinanceOverview, type FinancePeriod, type FinanceKpiWindow,
 } from "@/hooks/useFinanceOverview";
+import { useMonthGoalPace } from "@/hooks/useRevenueGoals";
+import { paceSeverity } from "@/lib/revenueGoals";
 
 // Default income-tax rate for the set-aside hint; the real rate is configurable
 // on the Quarterly Estimates tab. Kept conservative so K over-reserves, not under.
 const DEFAULT_INCOME_RATE = 12;
 
 const n = (v: unknown): number => Number(v ?? 0);
-
-// ---------------------------------------------------------------------------
-// Period toggle (segmented control)
-// ---------------------------------------------------------------------------
-function PeriodToggle({ period, onChange }: { period: FinancePeriod; onChange: (p: FinancePeriod) => void }) {
-  return (
-    <div className="inline-flex rounded-lg border border-border-subtle bg-bg-base p-0.5 text-sm self-start">
-      {(["month", "ytd"] as const).map((p) => (
-        <button
-          key={p}
-          onClick={() => onChange(p)}
-          aria-pressed={period === p}
-          className={cn(
-            "px-3 py-1.5 rounded-md transition-colors",
-            period === p ? "bg-bg-active text-text-primary" : "text-text-secondary hover:text-text-primary",
-          )}
-        >
-          {p === "month" ? "This month" : "Year to date"}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // KPI deltas — green means "better than the prior period", whichever direction
@@ -187,15 +167,20 @@ function useTaxDue(): { date: Date; days: number } | null {
 }
 
 function AlertsPanel({
-  alerts, loading,
-}: { alerts: ReturnType<typeof useFinanceOverview>["alerts"]; loading: boolean }) {
+  alerts, loading, paceAlert,
+}: {
+  alerts: ReturnType<typeof useFinanceOverview>["alerts"];
+  loading: boolean;
+  paceAlert?: { tone: "warn" | "alert"; detail: string } | null;
+}) {
   const taxDue = useTaxDue();
   const total =
     (alerts?.renewing.length ?? 0) +
     (alerts?.overdue.length ?? 0) +
     (alerts?.low_stock.length ?? 0) +
     (alerts?.uncategorized.length ?? 0) +
-    (taxDue ? 1 : 0);
+    (taxDue ? 1 : 0) +
+    (paceAlert ? 1 : 0);
 
   if (loading) {
     return <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 rounded-lg bg-bg-base animate-pulse" />)}</div>;
@@ -213,6 +198,15 @@ function AlertsPanel({
 
   return (
     <div className="space-y-1 -mx-1">
+      {paceAlert && (
+        <AlertRow
+          to="/finances/goals"
+          icon={Target}
+          tone={paceAlert.tone}
+          title="Revenue goal off pace"
+          detail={paceAlert.detail}
+        />
+      )}
       {taxDue && (
         <AlertRow
           to="/finances/tax-report"
@@ -313,6 +307,18 @@ export default function FinancesOverview() {
   const [period, setPeriod] = useState<FinancePeriod>("month");
   const { kpis, breakdown, cashflow, alerts, loadingKpis, loadingRest } = useFinanceOverview(period);
 
+  // Proactive off-pace nudge for the current month (independent of the period
+  // toggle). Only fires once the projection is confident and the month is behind.
+  const { pace: monthPace } = useMonthGoalPace();
+  const monthSev = monthPace ? paceSeverity(monthPace) : "none";
+  const paceAlert =
+    monthPace?.hasGoal && monthPace.confident && monthSev !== "ok"
+      ? {
+          tone: (monthSev === "alert" ? "alert" : "warn") as "warn" | "alert",
+          detail: `On pace to finish ${formatMoney(Math.abs(monthPace.projectedDelta))} short${monthPace.daysRemaining > 0 ? ` · ${formatMoney(monthPace.neededPerDay)}/day for ${monthPace.daysRemaining}d` : ""}`,
+        }
+      : null;
+
   const cur = kpis?.current;
   // Shipping margin: what the buyer paid for shipping minus what postage cost.
   const postage = breakdown.find((b) => /shipping/i.test(b.category))?.total ?? 0;
@@ -349,7 +355,7 @@ export default function FinancesOverview() {
           <h1 className="text-2xl font-semibold mb-1">Finances</h1>
           <p className="text-sm text-text-secondary">Revenue, costs, and what needs attention.</p>
         </div>
-        <PeriodToggle period={period} onChange={setPeriod} />
+        <PeriodToggle<FinancePeriod> period={period} onChange={setPeriod} options={[{ value: "month", label: "This month" }, { value: "ytd", label: "Year to date" }]} />
       </div>
 
       <div className="mb-6">
@@ -400,7 +406,7 @@ export default function FinancesOverview() {
 
         <Card className="p-6">
           <h2 className="text-base font-medium mb-4">Needs Attention</h2>
-          <AlertsPanel alerts={alerts} loading={loadingRest} />
+          <AlertsPanel alerts={alerts} loading={loadingRest} paceAlert={paceAlert} />
         </Card>
       </div>
 

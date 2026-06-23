@@ -51,7 +51,7 @@ export interface RevenueTrendPoint {
   net: number;
 }
 
-export type FinancePeriod = "month" | "ytd";
+export type FinancePeriod = "month" | "quarter" | "ytd";
 
 export const fetchKpis = (orgId: string, period: FinancePeriod) =>
   rpcCall<{ period: string; current: FinanceWindow; prior: FinanceWindow }>("finance_kpis", { p_org_id: orgId, p_period: period });

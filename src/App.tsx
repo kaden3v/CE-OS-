@@ -19,6 +19,7 @@ const Listings = lazy(() => import("./pages/Listings"));
 const FinancesOverview = lazy(() => import("./pages/FinancesOverview"));
 const FinancesManage = lazy(() => import("./pages/FinancesManage"));
 const Revenue = lazy(() => import("./pages/Revenue"));
+const Goals = lazy(() => import("./pages/Goals"));
 const Mileage = lazy(() => import("./pages/Mileage"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Expenses = lazy(() => import("./pages/Expenses"));
@@ -71,6 +72,7 @@ export default function App() {
                 <Route path="/finances" element={<RequireManager><FinancesLayout /></RequireManager>}>
                   <Route index element={<FinancesOverview />} />
                   <Route path="revenue" element={<Revenue />} />
+                  <Route path="goals" element={<Goals />} />
                   <Route path="expenses" element={<Expenses />} />
                   <Route path="production" element={<Production />} />
                   <Route path="reports" element={<Reports />} />
