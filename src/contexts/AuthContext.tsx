@@ -169,8 +169,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadOrg, user?.id]);
 
   useEffect(() => {
-    loadOrg(user?.id);
-  }, [loadOrg, user?.id]);
+    if (user?.id) {
+      loadOrg(user.id);
+    } else if (!isLoading) {
+      // Boot finished with genuinely no signed-in user — safe to conclude
+      // "no workspace". During boot, user?.id is briefly undefined; concluding
+      // orgChecked=true here (the old behavior) made RequireManager/RequireAdmin
+      // redirect owners/admins off any hard-refreshed or deep-linked gated route
+      // before the real membership/profile load completed.
+      setActiveOrgId(null);
+      setOrgRole(null);
+      setOrgChecked(true);
+    }
+  }, [loadOrg, user?.id, isLoading]);
 
   useEffect(() => {
     if (!supabase) {
@@ -429,8 +440,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
 /** Gate a route to admins only. */
 export function RequireAdmin({ children }: { children: ReactNode }) {
-  const { isAdmin, isLoading, user } = useAuth();
-  if (isLoading) {
+  const { isAdmin, isLoading, user, profileChecked } = useAuth();
+  if (isLoading || !profileChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-base">
         <div className="text-text-secondary text-sm">Loading…</div>
