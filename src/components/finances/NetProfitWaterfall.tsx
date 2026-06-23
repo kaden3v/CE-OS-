@@ -1,80 +1,10 @@
-import { useState, type ReactNode } from "react";
-import { Link } from "react-router";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { useState } from "react";
 import { formatMoney } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { num as n } from "@/lib/finance";
+import { BreakdownRow } from "./BreakdownRow";
 import type { FinanceKpiWindow, ExpenseBreakdownRow } from "@/hooks/useFinanceOverview";
 
-const n = (v: unknown): number => Number(v ?? 0);
 const isPostage = (category: string) => /shipping/i.test(category);
-
-interface RowProps {
-  label: string;
-  sub?: string;
-  amount: number;
-  outflow?: boolean;
-  bold?: boolean;
-  result?: boolean;
-  indent?: boolean;
-  to?: string;
-  expandable?: boolean;
-  expanded?: boolean;
-  onToggle?: () => void;
-}
-
-/** One line of the derivation. Outflows render in red with a leading minus. */
-function Row({ label, sub, amount, outflow, bold, result, indent, to, expandable, expanded, onToggle }: RowProps) {
-  const amountStr = (outflow ? "−" : "") + formatMoney(amount);
-  const interactive = Boolean(to || expandable);
-
-  const inner: ReactNode = (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-2 py-2 px-2 rounded-md border-t",
-        indent ? "pl-7 border-border-subtle/30" : "border-border-subtle/60",
-        (bold || result) && "bg-bg-elevated/60 border-border-subtle",
-        interactive && "hover:bg-bg-hover",
-      )}
-    >
-      <div className="flex items-center gap-1.5 min-w-0">
-        {expandable &&
-          (expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-          ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-          ))}
-        <span className={cn("truncate", indent ? "text-text-secondary" : bold || result ? "font-semibold" : "")}>
-          {label}
-        </span>
-        {sub && <span className="text-[11px] text-text-tertiary hidden sm:inline whitespace-nowrap">· {sub}</span>}
-      </div>
-      <span
-        className={cn(
-          "tabular-nums shrink-0",
-          outflow ? "text-status-alert" : result ? "text-text-primary font-semibold" : bold ? "font-medium" : "text-text-secondary",
-        )}
-      >
-        {amountStr}
-      </span>
-    </div>
-  );
-
-  if (expandable) {
-    return (
-      <button type="button" onClick={onToggle} className="w-full text-left">
-        {inner}
-      </button>
-    );
-  }
-  if (to) {
-    return (
-      <Link to={to} className="block">
-        {inner}
-      </Link>
-    );
-  }
-  return inner;
-}
 
 interface Props {
   win: FinanceKpiWindow | undefined;
@@ -108,12 +38,12 @@ export function NetProfitWaterfall({ win, breakdown, loading }: Props) {
 
   return (
     <div className="text-sm">
-      <Row label="Product revenue" sub="plant sales" amount={n(win.gross_sales)} to="/finances/revenue" />
-      {fees > 0 && <Row label="Channel & processing fees" sub="modeled, non-Etsy" amount={fees} outflow to="/finances/revenue" />}
-      <Row label="Net revenue" amount={n(win.net_revenue)} bold />
+      <BreakdownRow label="Product revenue" sub="plant sales" amount={n(win.gross_sales)} to="/finances/revenue" />
+      {fees > 0 && <BreakdownRow label="Channel & processing fees" sub="modeled, non-Etsy" amount={fees} outflow to="/finances/revenue" />}
+      <BreakdownRow label="Net revenue" amount={n(win.net_revenue)} bold />
 
       {(shippingCollected > 0 || postage > 0) && (
-        <Row
+        <BreakdownRow
           label="Shipping"
           sub={`collected ${formatMoney(shippingCollected)} − postage ${formatMoney(postage)}`}
           amount={Math.abs(shippingNet)}
@@ -121,7 +51,7 @@ export function NetProfitWaterfall({ win, breakdown, loading }: Props) {
           to="/finances/expenses"
         />
       )}
-      <Row
+      <BreakdownRow
         label="Operating expenses"
         sub="ads, marketplace fees, other"
         amount={otherExpensesTotal}
@@ -133,12 +63,12 @@ export function NetProfitWaterfall({ win, breakdown, loading }: Props) {
       />
       {expExpanded &&
         (otherExpenses.length > 0 ? (
-          otherExpenses.map((b) => <Row key={b.category} label={b.category} amount={n(b.total)} outflow indent />)
+          otherExpenses.map((b) => <BreakdownRow key={b.category} label={b.category} amount={n(b.total)} outflow indent />)
         ) : (
           <div className="pl-7 py-2 text-xs text-text-tertiary border-t border-border-subtle/30">No operating expenses in this period.</div>
         ))}
-      {mileage > 0 && <Row label="Mileage deduction" amount={mileage} outflow to="/finances/mileage" />}
-      <Row label="Net profit" amount={n(win.net_profit)} result />
+      {mileage > 0 && <BreakdownRow label="Mileage deduction" amount={mileage} outflow to="/finances/mileage" />}
+      <BreakdownRow label="Net profit" amount={n(win.net_profit)} result />
 
       {cogs > 0 && (
         <p className="text-[11px] text-text-tertiary mt-3 px-1 leading-relaxed">

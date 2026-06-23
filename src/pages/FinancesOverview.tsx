@@ -14,13 +14,18 @@ import { RechartsChart } from "@/components/ui/RechartsChart";
 import { EmptyState } from "@/components/ui/StateRenderer";
 import { PeriodToggle } from "@/components/finances/PeriodToggle";
 import { formatMoney } from "@/lib/format";
-import { todayISO, businessMonthShort, formatBusinessDate } from "@/lib/dates";
+import { todayISO, businessMonthShort, formatBusinessDate, monthStartISO, yearStartISO, toBusinessISODate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import { NetProfitWaterfall } from "@/components/finances/NetProfitWaterfall";
-import { quarterlyEstimate } from "@/lib/finance";
+import { quarterlyEstimate, trendFor } from "@/lib/finance";
 import {
-  useFinanceOverview, type FinancePeriod, type FinanceKpiWindow,
+  useFinanceOverview, nextDayISO, type FinancePeriod, type FinanceKpiWindow,
 } from "@/hooks/useFinanceOverview";
+import { useOrders } from "@/hooks/useOrders";
+import { useEntity } from "@/hooks/useEntity";
+import type { Expense } from "@/components/expenses/types";
+import { MetricChip } from "@/components/finances/MetricChip";
+import { StatDetailModal } from "@/components/finances/StatDetailModal";
+import { buildStatDetail, type StatKey } from "@/lib/financeStatDetails";
 import { useMonthGoalPace } from "@/hooks/useRevenueGoals";
 import { paceSeverity } from "@/lib/revenueGoals";
 
@@ -30,36 +35,17 @@ const DEFAULT_INCOME_RATE = 12;
 
 const n = (v: unknown): number => Number(v ?? 0);
 
-// ---------------------------------------------------------------------------
-// KPI deltas — green means "better than the prior period", whichever direction
-// that is for the metric (revenue/profit up = good; expenses/COGS down = good).
-// ---------------------------------------------------------------------------
-function trendFor(
-  cur: number,
-  prior: number,
-  higherIsBetter: boolean,
-  periodLabel: string,
-): { value: string; direction: "up" | "down"; label: string } | undefined {
-  const improved = higherIsBetter ? cur >= prior : cur <= prior;
-  if (prior === 0) {
-    if (cur === 0) return undefined;
-    return { value: "new", direction: improved ? "up" : "down", label: periodLabel };
-  }
-  const pct = ((cur - prior) / Math.abs(prior)) * 100;
-  const sign = pct > 0 ? "+" : "";
-  return { value: `${sign}${pct.toFixed(0)}%`, direction: improved ? "up" : "down", label: periodLabel };
-}
-
 interface TrendSeries { netRevenue: number[]; netProfit: number[]; expenses: number[] }
 
 function KpiCards({
-  cur, prior, loading, period, series,
+  cur, prior, loading, period, series, onOpen,
 }: {
   cur: FinanceKpiWindow | undefined;
   prior: FinanceKpiWindow | undefined;
   loading: boolean;
   period: FinancePeriod;
   series: TrendSeries;
+  onOpen: (k: StatKey) => void;
 }) {
   const periodLabel = period === "month" ? "vs last month" : "vs last year";
   const v = (x: number | undefined) => (loading || cur === undefined ? "—" : formatMoney(x));
@@ -77,10 +63,10 @@ function KpiCards({
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-      <StatTile label="Net Revenue" value={v(cur && n(cur.net_revenue))} hint="Plant sales, after fees" trend={spark(t((w) => n(w.net_revenue), true), series.netRevenue)} />
-      <StatTile label="Net Profit" value={v(cur && n(cur.net_profit))} hint={marginHint} trend={spark(t((w) => n(w.net_profit), true), series.netProfit)} />
-      <StatTile label="Total Expenses" value={v(cur && n(cur.expenses))} trend={spark(t((w) => n(w.expenses), false), series.expenses)} />
-      <StatTile label="Avg Order Value" value={aov} hint={ordersHint} />
+      <StatTile label="Net Revenue" value={v(cur && n(cur.net_revenue))} hint="Plant sales, after fees" trend={spark(t((w) => n(w.net_revenue), true), series.netRevenue)} onClick={() => onOpen("net_revenue")} />
+      <StatTile label="Net Profit" value={v(cur && n(cur.net_profit))} hint={marginHint} trend={spark(t((w) => n(w.net_profit), true), series.netProfit)} onClick={() => onOpen("net_profit")} />
+      <StatTile label="Total Expenses" value={v(cur && n(cur.expenses))} trend={spark(t((w) => n(w.expenses), false), series.expenses)} onClick={() => onOpen("total_expenses")} />
+      <StatTile label="Avg Order Value" value={aov} hint={ordersHint} onClick={() => onOpen("avg_order_value")} />
     </div>
   );
 }
@@ -293,19 +279,23 @@ function QuickActions() {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-function MetricChip({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: "ok" | "alert" }) {
-  return (
-    <div className="bg-bg-elevated backdrop-blur-md rounded-[14px] border border-border-subtle px-4 py-3">
-      <div className={cn("text-xl font-semibold tabular-nums", tone === "alert" ? "text-status-alert" : "text-text-primary")}>{value}</div>
-      <div className="text-[11px] text-text-secondary uppercase tracking-wide mt-0.5">{label}</div>
-      {hint && <div className="text-[10px] text-text-tertiary mt-0.5 truncate">{hint}</div>}
-    </div>
-  );
+const inWindow = (iso: string, w: { from: string; to: string }) => iso >= w.from && iso < w.to;
+
+/** The same [start, end) window the KPIs use — end is exclusive (tomorrow), so
+ *  drill-down line items reconcile to the displayed tile on the current day. */
+function overviewWindow(period: FinancePeriod): { from: string; to: string } {
+  return { from: period === "ytd" ? yearStartISO() : monthStartISO(), to: nextDayISO(todayISO()) };
 }
 
 export default function FinancesOverview() {
   const [period, setPeriod] = useState<FinancePeriod>("month");
   const { kpis, breakdown, cashflow, alerts, loadingKpis, loadingRest } = useFinanceOverview(period);
+
+  // Stat drill-downs: which stat's detail modal is open, plus the raw orders +
+  // expenses behind the figures (fetched once, sliced to the active window).
+  const [openStat, setOpenStat] = useState<StatKey | null>(null);
+  const { data: allOrders, isLoading: ordersLoading } = useOrders();
+  const { data: allExpenses, isLoading: expensesLoading } = useEntity<Expense>("expenses", []);
 
   // Proactive off-pace nudge for the current month (independent of the period
   // toggle). Only fires once the projection is confident and the month is behind.
@@ -348,6 +338,28 @@ export default function FinancesOverview() {
     [cashflow],
   );
 
+  // Orders/expenses sliced to the active window for the drill-down line items.
+  // Cancelled orders are dropped (the server excludes them from every sum);
+  // refunded orders stay so the modal can show them netting out.
+  const win = useMemo(() => overviewWindow(period), [period]);
+  const windowOrders = useMemo(
+    () => allOrders.filter((o) => o.status !== "cancelled" && inWindow(toBusinessISODate(o.placed_at), win)),
+    [allOrders, win],
+  );
+  const windowExpenses = useMemo(
+    () => allExpenses.filter((e) => inWindow(e.occurred_on, win)),
+    [allExpenses, win],
+  );
+  const detail = useMemo(
+    () =>
+      openStat
+        ? buildStatDetail(openStat, {
+            current: cur, prior: kpis?.prior, breakdown, cashflow, period, windowOrders, windowExpenses,
+          })
+        : null,
+    [openStat, cur, kpis?.prior, breakdown, cashflow, period, windowOrders, windowExpenses],
+  );
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
@@ -363,23 +375,25 @@ export default function FinancesOverview() {
       </div>
 
       <div className="mb-4">
-        <KpiCards cur={cur} prior={kpis?.prior} loading={loadingKpis} period={period} series={series} />
+        <KpiCards cur={cur} prior={kpis?.prior} loading={loadingKpis} period={period} series={series} onOpen={setOpenStat} />
       </div>
 
       {/* Secondary unit economics + tax accrual */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-3">
-        <MetricChip label="Orders" value={loadingKpis || !cur ? "—" : String(n(cur.order_count))} />
+        <MetricChip label="Orders" value={loadingKpis || !cur ? "—" : String(n(cur.order_count))} onClick={() => setOpenStat("orders")} />
         <MetricChip
           label="Shipping margin"
           value={loadingKpis || !cur ? "—" : formatMoney(shippingMargin)}
           tone={!loadingKpis && cur && shippingMargin < 0 ? "alert" : "ok"}
           hint={loadingKpis || !cur ? undefined : `${formatMoney(n(cur.shipping_collected))} in − ${formatMoney(postage)} postage`}
+          onClick={() => setOpenStat("shipping_margin")}
         />
-        <MetricChip label="Gross receipts" value={loadingKpis || !cur ? "—" : formatMoney(n(cur.gross_receipts))} hint="Plant sales + shipping (tax basis)" />
+        <MetricChip label="Gross receipts" value={loadingKpis || !cur ? "—" : formatMoney(n(cur.gross_receipts))} hint="Plant sales + shipping (tax basis)" onClick={() => setOpenStat("gross_receipts")} />
         <MetricChip
           label="Sales tax to remit"
           value={loadingKpis || !cur ? "—" : formatMoney(n(cur.sales_tax_owed))}
           hint="Direct sales (AZ TPT); Etsy remits its own"
+          onClick={() => setOpenStat("sales_tax")}
         />
       </div>
 
@@ -395,20 +409,10 @@ export default function FinancesOverview() {
         <span className="text-accent-brand shrink-0">Refine →</span>
       </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <Card className="lg:col-span-2 p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-medium">Net Profit — how it's built</h2>
-            <span className="text-xs text-text-tertiary">{period === "month" ? "This month" : "Year to date"}</span>
-          </div>
-          <NetProfitWaterfall win={cur} breakdown={breakdown} loading={loadingKpis} />
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-base font-medium mb-4">Needs Attention</h2>
-          <AlertsPanel alerts={alerts} loading={loadingRest} paceAlert={paceAlert} />
-        </Card>
-      </div>
+      <Card className="p-6 mb-6">
+        <h2 className="text-base font-medium mb-4">Needs Attention</h2>
+        <AlertsPanel alerts={alerts} loading={loadingRest} paceAlert={paceAlert} />
+      </Card>
 
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -425,6 +429,14 @@ export default function FinancesOverview() {
           <CashflowChart data={chartData} />
         )}
       </Card>
+
+      <StatDetailModal
+        open={openStat !== null}
+        onClose={() => setOpenStat(null)}
+        detail={detail}
+        loadingLineItems={ordersLoading || expensesLoading}
+        waterfall={{ win: cur, breakdown }}
+      />
     </div>
   );
 }

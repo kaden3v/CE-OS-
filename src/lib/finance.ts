@@ -9,6 +9,39 @@
 export const roundMoney = (n: number): number => Math.round(n * 100) / 100;
 export const roundCost = (n: number): number => Math.round(n * 10000) / 10000;
 
+/** Coerce a possibly-null DB numeric (which can arrive as a string) to a number. */
+export const num = (v: unknown): number => Number(v ?? 0);
+
+// --- KPI deltas --------------------------------------------------------------
+
+export interface Trend {
+  value: string;
+  direction: "up" | "down";
+  label: string;
+}
+
+/**
+ * Period-over-period delta for a KPI. Green ("up") means "better than the prior
+ * period", whichever direction that is for the metric (revenue/profit up = good;
+ * expenses/COGS down = good). Shared by the Overview tiles and the drill-down
+ * modals so both compute the delta identically.
+ */
+export function trendFor(
+  cur: number,
+  prior: number,
+  higherIsBetter: boolean,
+  periodLabel: string,
+): Trend | undefined {
+  const improved = higherIsBetter ? cur >= prior : cur <= prior;
+  if (prior === 0) {
+    if (cur === 0) return undefined;
+    return { value: "new", direction: improved ? "up" : "down", label: periodLabel };
+  }
+  const pct = ((cur - prior) / Math.abs(prior)) * 100;
+  const sign = pct > 0 ? "+" : "";
+  return { value: `${sign}${pct.toFixed(0)}%`, direction: improved ? "up" : "down", label: periodLabel };
+}
+
 // --- Supplies: weighted-average (moving) unit cost ---------------------------
 
 /** New unit cost after buying `qty` for `totalCost`, mirroring log_supply_purchase. */

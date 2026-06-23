@@ -13,6 +13,8 @@ interface StatTileProps {
     sparklineData?: number[];
   };
   className?: string;
+  /** When provided, the tile becomes an interactive button (e.g. to open a drill-down). */
+  onClick?: () => void;
 }
 
 /**
@@ -58,14 +60,12 @@ function Sparkline({ data, colorVariant }: { data: number[]; colorVariant: "up" 
   );
 }
 
-export function StatTile({ label, value, hint, trend, className }: StatTileProps) {
-  return (
-    <div
-      className={cn(
-        "bg-bg-elevated backdrop-blur-md rounded-[16px] border border-border-subtle p-5 sm:p-6 flex flex-col overflow-hidden",
-        className,
-      )}
-    >
+const TILE_BASE =
+  "bg-bg-elevated backdrop-blur-md rounded-[16px] border border-border-subtle p-5 sm:p-6 flex flex-col overflow-hidden";
+
+export function StatTile({ label, value, hint, trend, className, onClick }: StatTileProps) {
+  const body = (
+    <>
       <h3 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tabular-nums text-text-primary truncate">
         {value}
       </h3>
@@ -83,6 +83,24 @@ export function StatTile({ label, value, hint, trend, className }: StatTileProps
       <p className="text-xs text-text-secondary uppercase tracking-wide mt-2">{label}</p>
       {hint && <p className="text-[11px] text-text-tertiary mt-1 normal-case tracking-normal">{hint}</p>}
       {trend?.sparklineData && <Sparkline data={trend.sparklineData} colorVariant={trend.direction} />}
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          TILE_BASE,
+          "text-left w-full cursor-pointer transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-brand",
+          className,
+        )}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return <div className={cn(TILE_BASE, className)}>{body}</div>;
 }
