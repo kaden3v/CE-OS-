@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Toggle";
 import { useApp } from "@/contexts/AppContext";
 import { parseCsv, parseCsvAmount, parseCsvDate } from "@/lib/csv";
-import { normalizeExpenseCategory } from "@/lib/scheduleC";
+import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
 import { isInflow, passesPolarity, type Polarity } from "@/lib/expenseImport";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate } from "@/lib/dates";
@@ -39,6 +39,7 @@ const guess = (headers: string[], re: RegExp): number => headers.findIndex((h) =
 
 export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImportWizardProps) {
   const { addToast } = useApp();
+  const book = useCategoryBook();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<"upload" | "map" | "preview">("upload");
@@ -94,14 +95,14 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
       const inflow = isInflow(raw); // positive = money in (deposit/refund), not an expense
       const description = mapping.description >= 0 ? (r[mapping.description] ?? "").trim() || null : null;
       const rawCategory = mapping.category >= 0 ? (r[mapping.category] ?? "").trim() || null : null;
-      const { category, legacy } = normalizeExpenseCategory(rawCategory);
+      const { category, legacy } = book.normalize(rawCategory);
       const valid = !!occurred_on && amount != null && amount > 0;
       const duplicate =
         valid &&
         existing.some((e) => e.occurred_on === occurred_on && Math.abs(Number(e.amount) - (amount as number)) < 0.005);
       return { occurred_on, amount, inflow, description, category, category_legacy: legacy, valid, duplicate };
     });
-  }, [dataRows, mapping, existing]);
+  }, [dataRows, mapping, existing, book]);
 
   const stats = useMemo(() => {
     const valid = parsed.filter((p) => p.valid);

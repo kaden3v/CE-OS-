@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
 import { useApp } from "@/contexts/AppContext";
-import { mapToScheduleC } from "@/lib/scheduleC";
+import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
 import { todayISO } from "@/lib/dates";
 import { RECEIPT_ACCEPT, isAcceptedReceipt, receiptTooLarge } from "@/lib/receipts";
 import type { ReceiptDraft } from "@/lib/receiptScan";
@@ -41,6 +41,7 @@ const selectCls =
 
 export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCreateVendor, draft, initialReceiptFile }: ExpenseModalProps) {
   const { addToast } = useApp();
+  const book = useCategoryBook();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState(emptyForm());
@@ -118,7 +119,7 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
       amount,
       occurred_on: form.occurred_on,
       category,
-      schedule_c_category: category ? mapToScheduleC(category).scheduleC : null,
+      schedule_c_category: category ? book.scheduleCFor(category) : null,
       payment_method: form.payment_method || null,
       vendor_id: form.vendor_id || null,
       deductible: form.deductible,

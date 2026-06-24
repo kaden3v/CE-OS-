@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Store, PackageOpen, Repeat, Car, ChevronRight } from "lucide-react";
+import { Store, PackageOpen, Repeat, Car, Tags, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 
 /**
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
  */
 const ITEMS = [
   { to: "/finances/vendors", icon: Store, title: "Vendors", desc: "Suppliers, 1099 contractors, and contacts." },
+  { to: "/finances/categories", icon: Tags, title: "Categories", desc: "Expense categories and the Schedule C line each maps to." },
   { to: "/finances/supplies", icon: PackageOpen, title: "Supplies", desc: "Consumable inventory, unit costs, and reorder points." },
   { to: "/finances/subscriptions", icon: Repeat, title: "Subscriptions", desc: "Recurring business expenses and upcoming renewals." },
   { to: "/finances/mileage", icon: Car, title: "Mileage", desc: "Business trips and the standard-rate deduction." },

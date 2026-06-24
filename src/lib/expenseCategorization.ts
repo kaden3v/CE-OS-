@@ -17,6 +17,10 @@ import { normalizeExpenseCategory } from "@/lib/scheduleC";
 /** A suggestion is only surfaced when this share of matching history agrees. */
 export const MIN_SUGGESTION_CONFIDENCE = 0.6;
 
+/** Resolves a raw category to its canonical name, or null if not a known one. */
+export type Canonicalizer = (raw: string | null | undefined) => string | null;
+const defaultCanonical: Canonicalizer = (raw) => normalizeExpenseCategory(raw).category;
+
 export interface CategorySuggestion {
   /** A known app category (always passes the controlled vocabulary). */
   category: string;
@@ -53,12 +57,12 @@ const bump = (map: Map<string, Counts>, key: string, category: string): void => 
 };
 
 /** Build a frequency model from already-categorized expenses. */
-export function buildCategoryModel(history: Expense[]): CategoryModel {
+export function buildCategoryModel(history: Expense[], canonical: Canonicalizer = defaultCanonical): CategoryModel {
   const byVendor = new Map<string, Counts>();
   const byMemo = new Map<string, Counts>();
   for (const e of history) {
-    // Only learn from rows that resolve to a known app category.
-    const known = normalizeExpenseCategory(e.category).category;
+    // Only learn from rows that resolve to a known category.
+    const known = canonical(e.category);
     if (!known) continue;
     const vk = vendorKey(e);
     if (vk) bump(byVendor, vk, known);
@@ -115,13 +119,21 @@ export function suggestCategory(
  * categorized ones in the same list. Returns a map keyed by expense id; rows
  * with no confident suggestion are omitted.
  */
-export function suggestForRows(rows: Expense[], minConfidence = MIN_SUGGESTION_CONFIDENCE): Map<string, CategorySuggestion> {
+export interface SuggestOptions {
+  minConfidence?: number;
+  /** How to recognize a known category (defaults to the static vocabulary). */
+  canonical?: Canonicalizer;
+}
+
+export function suggestForRows(rows: Expense[], opts: SuggestOptions = {}): Map<string, CategorySuggestion> {
+  const canonical = opts.canonical ?? defaultCanonical;
+  const minConfidence = opts.minConfidence ?? MIN_SUGGESTION_CONFIDENCE;
   // buildCategoryModel already skips uncategorized rows, so pass the whole list
-  // (one normalize pass per row instead of two).
-  const model = buildCategoryModel(rows);
+  // (one canonical pass per row instead of two).
+  const model = buildCategoryModel(rows, canonical);
   const out = new Map<string, CategorySuggestion>();
   for (const e of rows) {
-    if (normalizeExpenseCategory(e.category).category) continue; // already categorized
+    if (canonical(e.category)) continue; // already categorized
     const s = suggestCategory(e, model, minConfidence);
     if (s) out.set(e.id, s);
   }

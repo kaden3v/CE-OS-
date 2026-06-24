@@ -406,6 +406,7 @@ export type Database = {
         Row: {
           created_at: string
           default_labor_rate: number
+          expense_categories: Json | null
           home_state: string
           id: string
           mileage_rate_cents: number
@@ -417,6 +418,7 @@ export type Database = {
         Insert: {
           created_at?: string
           default_labor_rate?: number
+          expense_categories?: Json | null
           home_state?: string
           id?: string
           mileage_rate_cents?: number
@@ -428,6 +430,7 @@ export type Database = {
         Update: {
           created_at?: string
           default_labor_rate?: number
+          expense_categories?: Json | null
           home_state?: string
           id?: string
           mileage_rate_cents?: number

@@ -1,4 +1,4 @@
-import { groupedExpenseCategories } from "@/lib/scheduleC";
+import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
 import { cn } from "@/lib/utils";
 
 interface CategorySelectProps {
@@ -25,7 +25,7 @@ export function CategorySelect({
   id,
   ...rest
 }: CategorySelectProps) {
-  const groups = groupedExpenseCategories();
+  const groups = useCategoryBook().groups;
   return (
     <select
       id={id}

@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEntity } from "@/hooks/useEntity";
 import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
-import { mapToScheduleC } from "@/lib/scheduleC";
+import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
 import { monthRange, quarterRange, ytdRange } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { uploadReceipt, removeReceipt, RECEIPT_ACCEPT, isAcceptedReceipt, receiptTooLarge } from "@/lib/receipts";
@@ -59,6 +59,7 @@ export default function Expenses() {
   const { user, activeOrgId } = useAuth();
   const { addToast } = useApp();
   const location = useLocation();
+  const book = useCategoryBook();
 
   const { data: expenses, add, update, updateMany, remove, removeMany, isLoading, refresh } = useEntity<Expense>("expenses", SEED, {
     orderBy: "occurred_on",
@@ -194,7 +195,7 @@ export default function Expenses() {
   const uncategorizedCount = useMemo(() => expenses.filter((e) => !e.category).length, [expenses]);
 
   // ---- Auto-categorization (learned from the ledger's own history) ---------
-  const suggestions = useMemo(() => suggestForRows(expenses), [expenses]);
+  const suggestions = useMemo(() => suggestForRows(expenses, { canonical: book.canonical }), [expenses, book]);
   const suggestionCategoryById = useMemo(
     () => new Map([...suggestions].map(([id, s]) => [id, s.category])),
     [suggestions],
@@ -217,7 +218,7 @@ export default function Expenses() {
     if (pendingSuggestionIds.has(id)) return;
     setPendingSuggestionIds((p) => { const n = new Set(p); n.add(id); return n; });
     try {
-      const schedule_c_category = mapToScheduleC(category).scheduleC;
+      const schedule_c_category = book.scheduleCFor(category);
       const r = await update(id, { category, schedule_c_category } as Partial<Expense>);
       if (!r.ok) {
         addToast({ title: "Couldn't categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
@@ -241,7 +242,7 @@ export default function Expenses() {
     let ok = 0;
     let failed = 0;
     for (const [category, ids] of byCategory) {
-      const schedule_c_category = mapToScheduleC(category).scheduleC;
+      const schedule_c_category = book.scheduleCFor(category);
       const r = await updateMany(ids, { category, schedule_c_category } as Partial<Expense>);
       if (r.ok) ok += ids.length;
       else failed += ids.length;
@@ -375,7 +376,7 @@ export default function Expenses() {
     if (!category) return;
     const targets = expenses.filter((e) => selected.has(e.id) && !isManaged(e));
     if (targets.length === 0) return;
-    const schedule_c_category = mapToScheduleC(category).scheduleC;
+    const schedule_c_category = book.scheduleCFor(category);
     const r = await updateMany(targets.map((e) => e.id), { category, schedule_c_category } as Partial<Expense>);
     clearSelection();
     if (!r.ok) {
@@ -419,7 +420,7 @@ export default function Expenses() {
       description: r.description,
       category: r.category,
       category_legacy: r.category_legacy,
-      schedule_c_category: r.category ? mapToScheduleC(r.category).scheduleC : null,
+      schedule_c_category: r.category ? book.scheduleCFor(r.category) : null,
       source: "manual",
       deductible: true,
     }));
