@@ -92,7 +92,7 @@ function LineItems({ detail, loading }: { detail: StatDetail; loading: boolean }
       <SectionTitle>{heading}</SectionTitle>
       <div className="max-h-80 overflow-y-auto rounded-lg border border-border-subtle">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-bg-elevated z-10">
+          <thead className="sticky top-0 z-10 bg-bg-base">
             <tr className="text-[11px] uppercase tracking-wide text-text-secondary">
               {lineItems.columns.map((c, i) => (
                 <th key={i} className={cn("px-3 py-2 font-medium", c.align === "right" ? "text-right" : "text-left")}>{c.header}</th>
@@ -118,7 +118,7 @@ function LineItems({ detail, loading }: { detail: StatDetail; loading: boolean }
             ))}
           </tbody>
           {lineItems.footer && (
-            <tfoot className="sticky bottom-0 bg-bg-elevated">
+            <tfoot className="sticky bottom-0 z-10 bg-bg-base">
               <tr className="border-t border-border-strong font-medium">
                 <td className="px-3 py-2 text-text-secondary" colSpan={Math.max(1, lastCol)}>{lineItems.footer.label}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-text-primary">{lineItems.footer.value}</td>
