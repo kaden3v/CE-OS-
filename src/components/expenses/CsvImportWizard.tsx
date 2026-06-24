@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Toggle";
 import { useApp } from "@/contexts/AppContext";
 import { parseCsv, parseCsvAmount, parseCsvDate } from "@/lib/csv";
+import { normalizeExpenseCategory } from "@/lib/scheduleC";
+import { isInflow, passesPolarity, type Polarity } from "@/lib/expenseImport";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate } from "@/lib/dates";
 import type { Expense } from "./types";
@@ -15,6 +17,7 @@ export interface ImportRow {
   amount: number;
   description: string | null;
   category: string | null;
+  category_legacy: string | null;
 }
 
 interface CsvImportWizardProps {
@@ -29,6 +32,8 @@ type Mapping = { date: number; amount: number; description: number; category: nu
 const NONE = -1;
 const selectCls =
   "w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong";
+const selectClsSmall =
+  "bg-bg-base border border-border-subtle rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-border-strong";
 
 const guess = (headers: string[], re: RegExp): number => headers.findIndex((h) => re.test(h));
 
@@ -42,6 +47,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
   const [dataRows, setDataRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Mapping>({ date: NONE, amount: NONE, description: NONE, category: NONE });
   const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [polarity, setPolarity] = useState<Polarity>("all");
   const [importing, setImporting] = useState(false);
 
   const reset = () => {
@@ -51,6 +57,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
     setDataRows([]);
     setMapping({ date: NONE, amount: NONE, description: NONE, category: NONE });
     setSkipDuplicates(true);
+    setPolarity("all");
   };
 
   const close = () => {
@@ -84,31 +91,36 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
       const occurred_on = parseCsvDate(r[mapping.date] ?? "");
       const raw = parseCsvAmount(r[mapping.amount] ?? "");
       const amount = raw == null ? null : Math.abs(raw);
+      const inflow = isInflow(raw); // positive = money in (deposit/refund), not an expense
       const description = mapping.description >= 0 ? (r[mapping.description] ?? "").trim() || null : null;
-      const category = mapping.category >= 0 ? (r[mapping.category] ?? "").trim() || null : null;
+      const rawCategory = mapping.category >= 0 ? (r[mapping.category] ?? "").trim() || null : null;
+      const { category, legacy } = normalizeExpenseCategory(rawCategory);
       const valid = !!occurred_on && amount != null && amount > 0;
       const duplicate =
         valid &&
         existing.some((e) => e.occurred_on === occurred_on && Math.abs(Number(e.amount) - (amount as number)) < 0.005);
-      return { occurred_on, amount, description, category, valid, duplicate };
+      return { occurred_on, amount, inflow, description, category, category_legacy: legacy, valid, duplicate };
     });
   }, [dataRows, mapping, existing]);
 
   const stats = useMemo(() => {
     const valid = parsed.filter((p) => p.valid);
-    const dupes = valid.filter((p) => p.duplicate);
-    const toImport = valid.filter((p) => !skipDuplicates || !p.duplicate);
-    return { total: parsed.length, valid: valid.length, dupes: dupes.length, toImport: toImport.length };
-  }, [parsed, skipDuplicates]);
+    const inflows = valid.filter((p) => p.inflow);
+    const eligible = valid.filter((p) => passesPolarity(polarity, p.inflow));
+    const dupes = eligible.filter((p) => p.duplicate);
+    const toImport = eligible.filter((p) => !skipDuplicates || !p.duplicate);
+    return { total: parsed.length, valid: valid.length, inflows: inflows.length, dupes: dupes.length, toImport: toImport.length };
+  }, [parsed, skipDuplicates, polarity]);
 
   const runImport = async () => {
     const rows: ImportRow[] = parsed
-      .filter((p) => p.valid && (!skipDuplicates || !p.duplicate))
+      .filter((p) => p.valid && passesPolarity(polarity, p.inflow) && (!skipDuplicates || !p.duplicate))
       .map((p) => ({
         occurred_on: p.occurred_on as string,
         amount: p.amount as number,
         description: p.description,
         category: p.category,
+        category_legacy: p.category_legacy,
       }));
     if (rows.length === 0) {
       addToast({ title: "Nothing to import", description: "No valid rows after filtering.", status: "warn" });
@@ -194,13 +206,33 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
               <span className="text-text-secondary">{stats.valid} valid of {stats.total}</span>
+              {stats.inflows > 0 && polarity !== "out" && (
+                <span className="flex items-center gap-1.5 text-status-warn" title="Positive amounts look like deposits/refunds — set Import to “Money out only” to skip them.">
+                  <AlertTriangle className="w-3.5 h-3.5" /> {stats.inflows} look like income
+                </span>
+              )}
               {stats.dupes > 0 && (
                 <span className="flex items-center gap-1.5 text-status-warn"><Copy className="w-3.5 h-3.5" /> {stats.dupes} likely duplicate{stats.dupes === 1 ? "" : "s"}</span>
               )}
-              <label className="flex items-center gap-2 ml-auto text-text-secondary">
-                Skip duplicates
-                <Toggle checked={skipDuplicates} onChange={setSkipDuplicates} ariaLabel="Skip duplicates" />
-              </label>
+              <div className="flex items-center gap-4 ml-auto">
+                <label className="flex items-center gap-2 text-text-secondary">
+                  Import
+                  <select
+                    className={selectClsSmall}
+                    value={polarity}
+                    onChange={(e) => setPolarity(e.target.value as Polarity)}
+                    aria-label="Which rows to import"
+                  >
+                    <option value="all">All rows</option>
+                    <option value="out">Money out only</option>
+                    <option value="in">Money in only</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-text-secondary">
+                  Skip duplicates
+                  <Toggle checked={skipDuplicates} onChange={setSkipDuplicates} ariaLabel="Skip duplicates" />
+                </label>
+              </div>
             </div>
 
             <div className="max-h-[40vh] overflow-auto rounded-lg border border-border-subtle">
@@ -220,10 +252,18 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                       <td className="px-3 py-1.5 whitespace-nowrap">{p.occurred_on ? formatBusinessDate(p.occurred_on) : <span className="text-status-alert">—</span>}</td>
                       <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{p.amount != null ? formatMoney(p.amount) : <span className="text-status-alert">—</span>}</td>
                       <td className="px-3 py-1.5 max-w-[14rem] truncate text-text-secondary">{p.description ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-text-secondary">{p.category ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-text-secondary">
+                        {p.category ?? (p.category_legacy
+                          ? <span className="text-status-warn" title={`“${p.category_legacy}” isn't a known category — imports as Needs review`}>Needs review</span>
+                          : "—")}
+                      </td>
                       <td className="px-3 py-1.5">
                         {!p.valid ? (
                           <span className="inline-flex items-center gap-1 text-status-alert text-xs"><AlertTriangle className="w-3.5 h-3.5" /> Invalid</span>
+                        ) : !passesPolarity(polarity, p.inflow) ? (
+                          <span className="text-text-tertiary text-xs">Skipped</span>
+                        ) : p.inflow ? (
+                          <Badge variant="outline" className="text-status-warn border-status-warn/40">Income</Badge>
                         ) : p.duplicate ? (
                           <Badge variant="outline" className="text-status-warn border-status-warn/40">Duplicate</Badge>
                         ) : (

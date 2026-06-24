@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
-import { Plus, UploadCloud, Search, FileText, Trash2, X } from "lucide-react";
+import { Plus, UploadCloud, Search, FileText, Trash2, X, Sparkles, ScanLine } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,11 @@ import { ExpenseTable, type SortKey, type SortState } from "@/components/expense
 import { CsvImportWizard, type ImportRow } from "@/components/expenses/CsvImportWizard";
 import { ReceiptDrawer } from "@/components/expenses/ReceiptDrawer";
 import { CategorySelect } from "@/components/expenses/CategorySelect";
-import type { Expense, ExpenseFormData, Vendor } from "@/components/expenses/types";
+import { SmartCategorizeModal, type SuggestionItem } from "@/components/expenses/SmartCategorizeModal";
+import { suggestForRows } from "@/lib/expenseCategorization";
+import { scanReceipt, type ReceiptDraft } from "@/lib/receiptScan";
+import { summarizeWrites } from "@/lib/writeSummary";
+import { isManaged, type Expense, type ExpenseFormData, type Vendor } from "@/components/expenses/types";
 
 const SEED: Expense[] = [];
 
@@ -56,7 +60,7 @@ export default function Expenses() {
   const { addToast } = useApp();
   const location = useLocation();
 
-  const { data: expenses, add, update, remove, isLoading, refresh } = useEntity<Expense>("expenses", SEED, {
+  const { data: expenses, add, update, updateMany, remove, removeMany, isLoading, refresh } = useEntity<Expense>("expenses", SEED, {
     orderBy: "occurred_on",
     toRow: (e) => ({
       vendor_id: e.vendor_id,
@@ -77,8 +81,8 @@ export default function Expenses() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [smartOpen, setSmartOpen] = useState(false);
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ key: "occurred_on", dir: "desc" });
 
@@ -96,12 +100,43 @@ export default function Expenses() {
   const attachRef = useRef<HTMLInputElement>(null);
   const [attachTarget, setAttachTarget] = useState<Expense | null>(null);
 
+  // Scan receipt → drafted expense
+  const scanRef = useRef<HTMLInputElement>(null);
+  const [scanDraft, setScanDraft] = useState<ReceiptDraft | null>(null);
+  const [scanFile, setScanFile] = useState<File | null>(null);
+
+  // Rows whose inline suggestion is mid-write — guards against double-click dupes.
+  const [pendingSuggestionIds, setPendingSuggestionIds] = useState<Set<string>>(new Set());
+
   // Opened from a Finances Overview quick action.
   useEffect(() => {
     if ((location.state as { openNew?: boolean } | null)?.openNew) openCreate();
   }, [location.state]);
 
+  const clearScan = () => {
+    setScanDraft(null);
+    setScanFile(null);
+  };
+
   const openCreate = () => {
+    setEditing(null);
+    clearScan();
+    setModalOpen(true);
+  };
+
+  // Scan a receipt, then open the create modal pre-filled with whatever we read.
+  const handleScanFile = async (file: File) => {
+    if (!isAcceptedReceipt(file)) {
+      addToast({ title: "Unsupported file", description: "Use an image (PNG/JPEG/WebP/HEIC) or PDF.", status: "warn" });
+      return;
+    }
+    if (receiptTooLarge(file)) {
+      addToast({ title: "File too large", description: "Max 10 MB.", status: "warn" });
+      return;
+    }
+    const draft = await scanReceipt(file);
+    setScanFile(file);
+    setScanDraft(draft);
     setEditing(null);
     setModalOpen(true);
   };
@@ -125,13 +160,21 @@ export default function Expenses() {
 
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
-    const vName = (id: string | null) => (id ? vendors.find((v) => v.id === id)?.name ?? "" : "");
+    // Match the table's label: live vendor name, else the denormalized
+    // vendor_name kept on synced/orphaned rows — so vendor sort isn't blank.
+    const vName = (e: Expense) => {
+      if (e.vendor_id) {
+        const v = vendors.find((x) => x.id === e.vendor_id);
+        if (v) return v.name;
+      }
+      return e.vendor_name ?? "";
+    };
     return [...filtered].sort((a, b) => {
       let cmp = 0;
       switch (sort.key) {
         case "amount": cmp = Number(a.amount) - Number(b.amount); break;
         case "category": cmp = (a.category ?? "").localeCompare(b.category ?? ""); break;
-        case "vendor": cmp = vName(a.vendor_id).localeCompare(vName(b.vendor_id)); break;
+        case "vendor": cmp = vName(a).localeCompare(vName(b)); break;
         default: cmp = a.occurred_on.localeCompare(b.occurred_on);
       }
       return cmp * dir;
@@ -150,15 +193,76 @@ export default function Expenses() {
   }, [expenses]);
   const uncategorizedCount = useMemo(() => expenses.filter((e) => !e.category).length, [expenses]);
 
+  // ---- Auto-categorization (learned from the ledger's own history) ---------
+  const suggestions = useMemo(() => suggestForRows(expenses), [expenses]);
+  const suggestionCategoryById = useMemo(
+    () => new Map([...suggestions].map(([id, s]) => [id, s.category])),
+    [suggestions],
+  );
+  const suggestionItems = useMemo<SuggestionItem[]>(() => {
+    if (!smartOpen) return []; // only materialize the modal's row list when it's open
+    const byId = new Map(expenses.map((e) => [e.id, e]));
+    return [...suggestions.entries()]
+      .map(([id, suggestion]) => {
+        const expense = byId.get(id);
+        return expense ? { expense, suggestion } : null;
+      })
+      .filter((it): it is SuggestionItem => it !== null);
+  }, [suggestions, expenses, smartOpen]);
+
+  // Write a category (and its Schedule C line) to one row — sync-safe even on
+  // managed rows, so the inline accept works for Etsy/imported entries too.
+  // Guarded so a double-click on the chip can't fire two writes.
+  const applySuggestion = async (id: string, category: string) => {
+    if (pendingSuggestionIds.has(id)) return;
+    setPendingSuggestionIds((p) => { const n = new Set(p); n.add(id); return n; });
+    try {
+      const schedule_c_category = mapToScheduleC(category).scheduleC;
+      const r = await update(id, { category, schedule_c_category } as Partial<Expense>);
+      if (!r.ok) {
+        addToast({ title: "Couldn't categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+        return;
+      }
+      addToast({ title: "Categorized", description: category, status: "ok" });
+    } finally {
+      setPendingSuggestionIds((p) => { const n = new Set(p); n.delete(id); return n; });
+    }
+  };
+
+  // Apply a batch of suggestions. Rows sharing a category are one query each
+  // (suggestions cluster heavily), so N selections collapse to a few writes.
+  const applySuggestions = async (selections: { id: string; category: string }[]) => {
+    const byCategory = new Map<string, string[]>();
+    for (const { id, category } of selections) {
+      const ids = byCategory.get(category) ?? [];
+      ids.push(id);
+      byCategory.set(category, ids);
+    }
+    let ok = 0;
+    let failed = 0;
+    for (const [category, ids] of byCategory) {
+      const schedule_c_category = mapToScheduleC(category).scheduleC;
+      const r = await updateMany(ids, { category, schedule_c_category } as Partial<Expense>);
+      if (r.ok) ok += ids.length;
+      else failed += ids.length;
+    }
+    setSmartOpen(false);
+    addToast(summarizeWrites(ok, failed, { verbPast: "categorized" }));
+  };
+
   // ---- Selection -----------------------------------------------------------
-  const allSelected = sorted.length > 0 && sorted.every((e) => selected.has(e.id));
+  // Managed rows (Etsy/recurring/supplies/mileage) are read-only here, so only
+  // hand-entered rows are selectable — bulk delete/recategorize can never touch
+  // a system-generated row.
+  const selectableRows = useMemo(() => sorted.filter((e) => !isManaged(e)), [sorted]);
+  const allSelected = selectableRows.length > 0 && selectableRows.every((e) => selected.has(e.id));
   const toggleRow = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(sorted.map((e) => e.id)));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectableRows.map((e) => e.id)));
   const clearSelection = () => setSelected(new Set());
 
   const onSort = (k: SortKey) =>
@@ -240,17 +344,6 @@ export default function Expenses() {
     return r.row;
   };
 
-  // ---- Inline edit ---------------------------------------------------------
-  const saveInline = async (id: string, data: ExpenseFormData) => {
-    const r = await update(id, data as Partial<Expense>);
-    if (!r.ok) {
-      addToast({ title: "Couldn't save", description: friendlyDbError({ code: r.code } as any), status: "alert" });
-      return;
-    }
-    setEditingId(null);
-    addToast({ title: "Expense updated", status: "ok" });
-  };
-
   // ---- Delete (single + bulk) ----------------------------------------------
   const deleteExpense = async (e: Expense) => {
     if (!confirm("Delete this expense?")) return;
@@ -265,25 +358,31 @@ export default function Expenses() {
   };
 
   const bulkDelete = async () => {
-    const ids = [...selected];
-    if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} expense${ids.length === 1 ? "" : "s"}?`)) return;
-    for (const id of ids) {
-      const e = expenses.find((x) => x.id === id);
-      const r = await remove(id);
-      if (r.ok && e?.receipt_url) await removeReceipt(e.receipt_url); // only after the row is gone
-    }
+    const targets = expenses.filter((e) => selected.has(e.id) && !isManaged(e));
+    if (targets.length === 0) return;
+    if (!confirm(`Delete ${targets.length} expense${targets.length === 1 ? "" : "s"}?`)) return;
+    const r = await removeMany(targets.map((e) => e.id));
     clearSelection();
-    addToast({ title: `${ids.length} deleted`, status: "info" });
+    if (!r.ok) {
+      addToast({ title: "Couldn't delete", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+      return;
+    }
+    for (const e of targets) if (e.receipt_url) await removeReceipt(e.receipt_url); // only after the rows are gone
+    addToast(summarizeWrites(targets.length, 0, { verbPast: "deleted", successStatus: "info" }));
   };
 
   const bulkRecategorize = async (category: string) => {
     if (!category) return;
-    const ids = [...selected];
+    const targets = expenses.filter((e) => selected.has(e.id) && !isManaged(e));
+    if (targets.length === 0) return;
     const schedule_c_category = mapToScheduleC(category).scheduleC;
-    for (const id of ids) await update(id, { category, schedule_c_category } as Partial<Expense>);
+    const r = await updateMany(targets.map((e) => e.id), { category, schedule_c_category } as Partial<Expense>);
     clearSelection();
-    addToast({ title: `${ids.length} re-categorized`, description: category, status: "ok" });
+    if (!r.ok) {
+      addToast({ title: "Couldn't re-categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+      return;
+    }
+    addToast({ ...summarizeWrites(targets.length, 0, { verbPast: "re-categorized" }), description: category });
   };
 
   // ---- Attach receipt to an existing row -----------------------------------
@@ -319,6 +418,7 @@ export default function Expenses() {
       occurred_on: r.occurred_on,
       description: r.description,
       category: r.category,
+      category_legacy: r.category_legacy,
       schedule_c_category: r.category ? mapToScheduleC(r.category).scheduleC : null,
       source: "manual",
       deductible: true,
@@ -349,6 +449,20 @@ export default function Expenses() {
           e.target.value = "";
         }}
       />
+      {/* hidden input for scan-receipt → drafted expense. No `capture` attr: on
+          mobile that forces the camera and hides the gallery/Files picker, which
+          would block selecting a saved photo or a PDF receipt. */}
+      <input
+        ref={scanRef}
+        type="file"
+        accept={RECEIPT_ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleScanFile(f);
+          e.target.value = "";
+        }}
+      />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
@@ -356,6 +470,9 @@ export default function Expenses() {
           <p className="text-sm text-text-secondary">A working ledger — categorize, attach receipts, import.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => scanRef.current?.click()}>
+            <ScanLine className="w-4 h-4" /> Scan receipt
+          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <UploadCloud className="w-4 h-4" /> Import CSV
           </Button>
@@ -441,6 +558,20 @@ export default function Expenses() {
         </div>
       )}
 
+      {/* Smart-categorize nudge — learned from how you've categorized before */}
+      {suggestions.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-3 px-3 py-2.5 rounded-lg bg-accent-brand/10 border border-accent-brand/30">
+          <Sparkles className="w-4 h-4 text-accent-brand shrink-0" />
+          <span className="text-sm">
+            <span className="font-medium">{suggestions.size}</span>{" "}
+            {suggestions.size === 1 ? "expense can" : "expenses can"} be auto-categorized from your history.
+          </span>
+          <Button variant="brand" className="ml-auto" onClick={() => setSmartOpen(true)}>
+            Review &amp; apply
+          </Button>
+        </div>
+      )}
+
       <Card className="flex-1 flex flex-col min-h-0 mb-12">
         {isLoading && <LoadingTable cols={9} rows={8} />}
         {isEmpty && (
@@ -461,13 +592,13 @@ export default function Expenses() {
             onToggleAll={toggleAll}
             sort={sort}
             onSort={onSort}
-            editingId={editingId}
-            onStartEdit={(id) => { const e = sorted.find((x) => x.id === id); if (e) { setEditing(e); setModalOpen(true); } }}
-            onCancelEdit={() => setEditingId(null)}
-            onSaveEdit={saveInline}
+            onStartEdit={(id) => { const e = sorted.find((x) => x.id === id); if (e) { clearScan(); setEditing(e); setModalOpen(true); } }}
             onDelete={deleteExpense}
             onOpenReceipt={setDrawerPath}
             onAttachReceipt={onAttachReceipt}
+            suggestions={suggestionCategoryById}
+            onApplySuggestion={applySuggestion}
+            pendingSuggestionIds={pendingSuggestionIds}
             total={filteredTotal}
           />
         )}
@@ -475,13 +606,22 @@ export default function Expenses() {
 
       <ExpenseModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); clearScan(); }}
         vendors={vendors}
         editing={editing}
+        draft={scanDraft}
+        initialReceiptFile={scanFile}
         onSubmit={handleModalSubmit}
         onCreateVendor={createVendor}
       />
       <CsvImportWizard open={importOpen} onClose={() => setImportOpen(false)} existing={expenses} onImport={importRows} />
+      <SmartCategorizeModal
+        open={smartOpen}
+        onClose={() => setSmartOpen(false)}
+        items={suggestionItems}
+        vendors={vendors}
+        onApply={applySuggestions}
+      />
       <ReceiptDrawer path={drawerPath} onClose={() => setDrawerPath(null)} />
     </div>
   );

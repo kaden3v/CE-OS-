@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Plus, X, Loader2, Check } from "lucide-react";
+import { Paperclip, Plus, X, Loader2, Check, Sparkles } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -8,6 +8,7 @@ import { useApp } from "@/contexts/AppContext";
 import { mapToScheduleC } from "@/lib/scheduleC";
 import { todayISO } from "@/lib/dates";
 import { RECEIPT_ACCEPT, isAcceptedReceipt, receiptTooLarge } from "@/lib/receipts";
+import type { ReceiptDraft } from "@/lib/receiptScan";
 import { CategorySelect } from "./CategorySelect";
 import { PAYMENT_METHODS, type Expense, type ExpenseFormData, type Vendor } from "./types";
 
@@ -18,6 +19,10 @@ interface ExpenseModalProps {
   editing: Expense | null;
   onSubmit: (data: ExpenseFormData, receipt: { file: File | null; remove: boolean }) => Promise<boolean>;
   onCreateVendor: (name: string) => Promise<Vendor | null>;
+  /** Pre-fill a new expense from a scanned receipt (create mode only). */
+  draft?: ReceiptDraft | null;
+  /** Receipt file to attach to the new expense (e.g. the scanned image). */
+  initialReceiptFile?: File | null;
 }
 
 const emptyForm = () => ({
@@ -34,7 +39,7 @@ const labelCls = "block text-xs uppercase tracking-wide text-text-secondary mb-2
 const selectCls =
   "w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong";
 
-export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCreateVendor }: ExpenseModalProps) {
+export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCreateVendor, draft, initialReceiptFile }: ExpenseModalProps) {
   const { addToast } = useApp();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -58,13 +63,20 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
             deductible: editing.deductible ?? true,
             description: editing.description ?? "",
           }
-        : emptyForm(),
+        : draft
+          ? {
+              ...emptyForm(),
+              amount: draft.amount != null ? String(draft.amount) : "",
+              occurred_on: draft.occurred_on ?? todayISO(),
+              description: draft.vendor_name ?? "",
+            }
+          : emptyForm(),
     );
-    setReceiptFile(null);
+    setReceiptFile(editing ? null : initialReceiptFile ?? null);
     setRemoveReceipt(false);
     setCreatingVendor(false);
     setNewVendor("");
-  }, [open, editing]);
+  }, [open, editing, draft, initialReceiptFile]);
 
   const pickFile = (file: File) => {
     if (!isAcceptedReceipt(file)) {
@@ -97,6 +109,10 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
       addToast({ title: "Amount required", description: "Enter a positive number.", status: "warn" });
       return;
     }
+    if (!form.occurred_on) {
+      addToast({ title: "Date required", description: "Pick a date for this expense.", status: "warn" });
+      return;
+    }
     const category = form.category.trim() || null;
     const data: ExpenseFormData = {
       amount,
@@ -119,6 +135,15 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
   return (
     <Modal open={open} onClose={onClose} title={editing ? "Edit Expense" : "Log Expense"} size="lg">
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        {!editing && draft && (
+          <div className="flex items-start gap-2 rounded-lg border border-accent-brand/30 bg-accent-brand/10 px-3 py-2 text-xs text-text-secondary">
+            <Sparkles className="w-3.5 h-3.5 text-accent-brand shrink-0 mt-0.5" />
+            {draft.source === "none"
+              ? "Receipt attached — add the amount and details."
+              : "Pre-filled from the receipt — double-check the amount and date."}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Amount *</label>

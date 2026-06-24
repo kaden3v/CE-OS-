@@ -36,7 +36,9 @@ export function useEntity<T extends WithId, Row = T>(
   setData: Dispatch<SetStateAction<T[]>>;
   add: (item: T) => Promise<{ ok: true; row: T } | { ok: false; code?: string }>;
   update: (id: T["id"], patch: Partial<T>) => Promise<{ ok: boolean; code?: string }>;
+  updateMany: (ids: T["id"][], patch: Partial<T>) => Promise<{ ok: boolean; code?: string }>;
   remove: (id: T["id"]) => Promise<{ ok: boolean; code?: string }>;
+  removeMany: (ids: T["id"][]) => Promise<{ ok: boolean; code?: string }>;
   isLoading: boolean;
   refresh: () => Promise<void>;
 } {
@@ -173,6 +175,28 @@ export function useEntity<T extends WithId, Row = T>(
     return { ok: true };
   };
 
+  // Batched update: one query for the whole id set + a single setData, so the
+  // caller's expenses-keyed memos and the table recompute once instead of N times.
+  const updateMany = async (ids: T["id"][], patch: Partial<T>): Promise<{ ok: boolean; code?: string }> => {
+    if (!ready) return { ok: false, code: "NOT_READY" };
+    if (ids.length === 0) return { ok: true };
+    const mapped = options?.toRow
+      ? options.toRow({ ...({} as any), ...patch } as T, user!.id)
+      : (patch as Record<string, unknown>);
+    const { user_id: _u, id: _i, org_id: _o, ...safe } = mapped;
+    const { error } = await db.from(table).update(safe).in("id", ids).eq("org_id", activeOrgId!);
+    if (error) {
+      logDbError(`updateMany ${table}`, error);
+      return { ok: false, code: error.code };
+    }
+    const idSet = new Set(ids);
+    setData((prev) => prev.map((r) => (idSet.has(r.id) ? { ...r, ...patch } : r)));
+    if (table !== "activity_log") {
+      logActivity({ orgId: activeOrgId!, actorId: user!.id, action: "updated", entity: table, entityId: null, summary: `${ids.length} rows` });
+    }
+    return { ok: true };
+  };
+
   const remove = async (id: T["id"]): Promise<{ ok: boolean; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
     const { error } = await db.from(table).delete().eq("id", id).eq("org_id", activeOrgId!);
@@ -195,5 +219,22 @@ export function useEntity<T extends WithId, Row = T>(
     return { ok: true };
   };
 
-  return { data, setData, add, update, remove, isLoading, refresh: fetchAll };
+  // Batched delete: one query + a single setData (see updateMany rationale).
+  const removeMany = async (ids: T["id"][]): Promise<{ ok: boolean; code?: string }> => {
+    if (!ready) return { ok: false, code: "NOT_READY" };
+    if (ids.length === 0) return { ok: true };
+    const { error } = await db.from(table).delete().in("id", ids).eq("org_id", activeOrgId!);
+    if (error) {
+      logDbError(`removeMany ${table}`, error);
+      return { ok: false, code: error.code };
+    }
+    const idSet = new Set(ids);
+    setData((prev) => prev.filter((r) => !idSet.has(r.id)));
+    if (table !== "activity_log") {
+      logActivity({ orgId: activeOrgId!, actorId: user!.id, action: "deleted", entity: table, entityId: null, summary: `${ids.length} rows` });
+    }
+    return { ok: true };
+  };
+
+  return { data, setData, add, update, updateMany, remove, removeMany, isLoading, refresh: fetchAll };
 }

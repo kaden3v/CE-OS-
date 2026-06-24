@@ -80,6 +80,27 @@ export const EXPENSE_CATEGORIES: readonly string[] = [
   "Other",
 ];
 
+/** Canonical (display-cased) category keyed by its lowercased form, for lookups. */
+const CANONICAL_BY_LOWER: ReadonlyMap<string, string> = new Map(
+  EXPENSE_CATEGORIES.map((c) => [c.toLowerCase(), c]),
+);
+
+/**
+ * Normalize a free-form category (e.g. from a CSV import) against the app's
+ * controlled vocabulary. A recognized name returns the canonical-cased category;
+ * anything else returns `category: null` and preserves the original in `legacy`
+ * so the row surfaces as "Needs review" instead of silently misclassifying on
+ * Schedule C. Mirrors the `category_legacy` intent of the finance migration.
+ */
+export function normalizeExpenseCategory(
+  raw: string | null | undefined,
+): { category: string | null; legacy: string | null } {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return { category: null, legacy: null };
+  const canonical = CANONICAL_BY_LOWER.get(trimmed.toLowerCase());
+  return canonical ? { category: canonical, legacy: null } : { category: null, legacy: trimmed };
+}
+
 /**
  * Expense categories grouped under their Schedule C line, in Schedule C order —
  * for an <optgroup>-style picker that shows the tax bucket each category rolls

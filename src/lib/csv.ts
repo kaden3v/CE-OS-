@@ -81,22 +81,28 @@ export function parseCsvDate(raw: string): string | null {
   const s = (raw ?? "").trim();
   if (!s) return null;
 
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  let year: number;
+  let month: number;
+  let day: number;
 
-  const parts = s.split(/[/.\-]/).map((p) => p.trim());
-  if (parts.length === 3) {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) {
+    [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+  } else {
+    const parts = s.split(/[/.\-]/).map((p) => p.trim());
+    if (parts.length !== 3) return null;
     let [a, b, c] = parts;
     if (c.length === 2) c = `20${c}`;
-    const month = Number(a);
-    const day = Number(b);
-    const year = Number(c);
-    if (
-      Number.isInteger(month) && Number.isInteger(day) && Number.isInteger(year) &&
-      month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900
-    ) {
-      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    }
+    [month, day, year] = [Number(a), Number(b), Number(c)]; // assumes US M/D/Y order
   }
-  return null;
+
+  if (!(Number.isInteger(month) && Number.isInteger(day) && Number.isInteger(year))) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) return null;
+
+  // Reject impossible calendar dates (02/30, 04/31, …) so a single bad row can't
+  // fail the whole batch insert against a Postgres `date` column.
+  const dt = new Date(year, month - 1, day);
+  if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) return null;
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
