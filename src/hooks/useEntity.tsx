@@ -8,10 +8,13 @@ import { logActivity, rowSummary } from "@/lib/activity";
 type WithId = { id: string | number };
 type TableName = keyof Database["public"]["Tables"];
 
-// PostgREST caps an unbounded `select` at 1000 rows. Ordered by date DESC, that
-// silently hides the oldest rows once a table grows past 1k (e.g. expenses no
-// longer reaching back past ~3 months). Raise the ceiling well above any
-// realistic single-org row count so the full history loads.
+// Supabase's PostgREST enforces a server-side `max-rows` ceiling (~1000) that a
+// client `.limit()` CANNOT exceed — it gets clamped silently. Ordered by date
+// DESC, that hides the oldest rows once a table passes ~1k (e.g. expenses no
+// longer reaching back past ~3 months). The only way past it is to page through
+// with `.range()`. We fetch in PAGE_SIZE chunks and loop until a short page
+// signals the end, with a hard safety ceiling so a runaway can't loop forever.
+const PAGE_SIZE = 1000;
 const DEFAULT_FETCH_LIMIT = 50000;
 
 /**
@@ -62,18 +65,26 @@ export function useEntity<T extends WithId, Row = T>(
   const fetchAll = useCallback(async () => {
     if (!ready) return;
     setIsLoading(true);
-    const { data: rows, error } = await db
-      .from(table)
-      .select("*")
-      .eq("org_id", activeOrgId!)
-      .order(options?.orderBy ?? "updated_at", { ascending: options?.ascending ?? false })
-      .limit(options?.limit ?? DEFAULT_FETCH_LIMIT);
-    if (error) {
-      logDbError(`fetch ${table}`, error);
-      setIsLoading(false);
-      return;
+    const ceiling = options?.limit ?? DEFAULT_FETCH_LIMIT;
+    const list: Row[] = [];
+    // Page past PostgREST's max-rows cap until a short page ends the run.
+    for (let from = 0; from < ceiling; from += PAGE_SIZE) {
+      const to = Math.min(from + PAGE_SIZE, ceiling) - 1;
+      const { data: rows, error } = await db
+        .from(table)
+        .select("*")
+        .eq("org_id", activeOrgId!)
+        .order(options?.orderBy ?? "updated_at", { ascending: options?.ascending ?? false })
+        .range(from, to);
+      if (error) {
+        logDbError(`fetch ${table}`, error);
+        setIsLoading(false);
+        return;
+      }
+      const batch = (rows ?? []) as Row[];
+      list.push(...batch);
+      if (batch.length < to - from + 1) break;
     }
-    const list = (rows ?? []) as Row[];
     const mapped = options?.fromRow ? list.map(options.fromRow) : (list as unknown as T[]);
     if (mapped.length === 0 && initial.length > 0) {
       await seedInitial(initial);
