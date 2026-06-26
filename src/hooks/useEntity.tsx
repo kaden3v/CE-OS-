@@ -8,6 +8,12 @@ import { logActivity, rowSummary } from "@/lib/activity";
 type WithId = { id: string | number };
 type TableName = keyof Database["public"]["Tables"];
 
+// PostgREST caps an unbounded `select` at 1000 rows. Ordered by date DESC, that
+// silently hides the oldest rows once a table grows past 1k (e.g. expenses no
+// longer reaching back past ~3 months). Raise the ceiling well above any
+// realistic single-org row count so the full history loads.
+const DEFAULT_FETCH_LIMIT = 50000;
+
 /**
  * Backend-aware list state.
  *
@@ -30,6 +36,7 @@ export function useEntity<T extends WithId, Row = T>(
     fromRow?: (row: Row) => T;
     orderBy?: string;
     ascending?: boolean;
+    limit?: number;
   },
 ): {
   data: T[];
@@ -59,7 +66,8 @@ export function useEntity<T extends WithId, Row = T>(
       .from(table)
       .select("*")
       .eq("org_id", activeOrgId!)
-      .order(options?.orderBy ?? "updated_at", { ascending: options?.ascending ?? false });
+      .order(options?.orderBy ?? "updated_at", { ascending: options?.ascending ?? false })
+      .limit(options?.limit ?? DEFAULT_FETCH_LIMIT);
     if (error) {
       logDbError(`fetch ${table}`, error);
       setIsLoading(false);
