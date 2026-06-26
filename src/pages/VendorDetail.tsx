@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router";
-import { ArrowLeft, Pencil, Check, X, ChevronRight, Store } from "lucide-react";
+import { ArrowLeft, Pencil, Check, X, ChevronRight, Store, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
@@ -32,7 +32,7 @@ export default function VendorDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useApp();
-  const { data: vendors, update, isLoading: vendorsLoading } = useEntity<Vendor>("vendors", []);
+  const { data: vendors, update, remove, isLoading: vendorsLoading } = useEntity<Vendor>("vendors", []);
   const { data: expenses, isLoading: expensesLoading } = useEntity<Expense>("expenses", [], { orderBy: "occurred_on" });
 
   const vendor = vendors.find((v) => v.id === id) ?? null;
@@ -97,6 +97,23 @@ export default function VendorDetail() {
     addToast({ title: "Vendor updated", status: "ok" });
   };
 
+  const handleDelete = async () => {
+    if (!vendor) return;
+    const linked = activity.length;
+    const message =
+      linked > 0
+        ? `Delete ${vendor.name}? Its ${linked} linked transaction${linked === 1 ? "" : "s"} will be kept but no longer tied to this vendor.`
+        : `Delete ${vendor.name}? This can't be undone.`;
+    if (!confirm(message)) return;
+    const r = await remove(vendor.id);
+    if (!r.ok) {
+      addToast({ title: "Couldn't delete", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+      return;
+    }
+    addToast({ title: "Vendor deleted", description: `${vendor.name} was removed from your directory.`, status: "info" });
+    navigate("/finances/vendors");
+  };
+
   if (vendorsLoading && !vendor) {
     return <div className="p-4 md:p-8 max-w-5xl mx-auto"><LoadingTable cols={4} rows={6} /></div>;
   }
@@ -125,6 +142,13 @@ export default function VendorDetail() {
         <h1 className="text-2xl font-semibold">{vendor.name}</h1>
         {vendor.category && <Badge variant="outline">{vendor.category}</Badge>}
         {vendor.is_1099 && <Badge variant="outline" className="text-status-info border-status-info/40">1099</Badge>}
+        <Button
+          variant="ghost"
+          onClick={handleDelete}
+          className="ml-auto shrink-0 text-text-tertiary hover:text-status-alert"
+        >
+          <Trash2 className="w-4 h-4" /> Delete
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6 mb-6">
