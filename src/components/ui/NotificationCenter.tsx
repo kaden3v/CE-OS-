@@ -1,10 +1,10 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCheck } from "lucide-react";
+import { CheckCheck, Trash2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { StatusDot } from "./StatusDot";
 
 export function NotificationCenter({ open, onClose }: { open: boolean, onClose: () => void }) {
-  const { notifications, markAllNotificationsRead, markNotificationRead } = useApp();
+  const { notifications, markAllNotificationsRead, markNotificationRead, clearNotifications } = useApp();
 
   return (
     <AnimatePresence>
@@ -20,13 +20,24 @@ export function NotificationCenter({ open, onClose }: { open: boolean, onClose: 
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-border-subtle shrink-0 bg-bg-base/50">
               <h3 className="font-medium text-text-primary">Notifications</h3>
-              <button
-                onClick={markAllNotificationsRead}
-                className="text-xs flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors"
-              >
-                <CheckCheck className="w-3.5 h-3.5" />
-                Mark all as read
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={markAllNotificationsRead}
+                  disabled={notifications.length === 0}
+                  className="text-xs flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  Mark all as read
+                </button>
+                <button
+                  onClick={clearNotifications}
+                  disabled={notifications.length === 0}
+                  className="text-xs flex items-center gap-1.5 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Clear
+                </button>
+              </div>
             </div>
 
             <div className="overflow-y-auto w-full flex-1 min-h-[200px]">

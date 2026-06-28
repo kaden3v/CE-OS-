@@ -64,6 +64,7 @@ interface AppContextType {
   notifications: Notification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+  clearNotifications: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'time'>) => void;
   // Tasks (persisted to Supabase, shared across the org; assignable to teammates)
   tasks: Task[];
@@ -145,6 +146,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   }, [setNotifications]);
 
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+  }, [setNotifications]);
+
   // Real notification sources: teammates' changes (via the activity log) and
   // tasks assigned to the current user. RLS already limits events to the org;
   // we additionally drop our own actions.
@@ -155,7 +160,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .channel(`notifs-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_log' }, (payload) => {
         const row = payload.new as Tables<'activity_log'>;
-        if (!row || row.org_id !== activeOrgId || row.actor_id === user.id) return;
+        // Only real teammate actions become notifications. Skip our own actions
+        // and system/automated writes (e.g. Etsy sync inserts with actor_id null),
+        // which otherwise flood the panel as "A teammate added orders" during a backfill.
+        if (!row || row.org_id !== activeOrgId || !row.actor_id || row.actor_id === user.id) return;
         const entityLabel = row.entity.replace(/_/g, ' ');
         setNotifications(prev => [{
           id: `act-${row.id}`,
@@ -221,6 +229,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addNotification,
     markNotificationRead,
     markAllNotificationsRead,
+    clearNotifications,
     tasks,
     addTask,
     toggleTask,
@@ -231,7 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGlobalOrderViewId,
   }), [
     settings, updateSettings, toasts, addToast, removeToast,
-    notifications, addNotification, markNotificationRead, markAllNotificationsRead,
+    notifications, addNotification, markNotificationRead, markAllNotificationsRead, clearNotifications,
     tasks, addTask, toggleTask, deleteTask, isCommandPaletteOpen, globalOrderViewId,
   ]);
 
