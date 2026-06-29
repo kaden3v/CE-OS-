@@ -41,6 +41,8 @@ export const ENTITY_LABELS: Record<string, string> = {
   supplies: "a supply",
   tasks: "a task",
   vendors: "a vendor",
+  recurring_expenses: "a recurring expense",
+  mileage_log: "a mileage entry",
 };
 
 export function entityLabel(entity: string): string {
@@ -67,6 +69,8 @@ export const SNAPSHOT_FIELDS: Record<string, string[]> = {
   supplies: ["name", "on_hand", "unit", "cost"],
   shipments: ["status", "carrier", "tracking_number"],
   tasks: ["title", "completed", "due"],
+  recurring_expenses: ["name", "amount", "billing_cycle", "status"],
+  mileage_log: ["trip_date", "miles", "purpose"],
 };
 
 const GENERIC_FALLBACK = ["name", "title", "status", "amount", "total", "quantity", "price", "email", "common"];
@@ -80,7 +84,10 @@ export function snapshotFields(entity: string, row: Record<string, unknown>): Ar
 }
 
 const MONEY_FIELDS = new Set(["total", "subtotal", "amount", "price", "cost", "shipping", "tax"]);
-const DATE_FIELDS = new Set(["occurred_on", "due", "placed_at", "shipped_at", "delivered_at", "created_at", "updated_at"]);
+const DATE_FIELDS = new Set([
+  "occurred_on", "due", "placed_at", "shipped_at", "delivered_at", "created_at", "updated_at",
+  "trip_date", "next_renewal", "started_on", "cancelled_at",
+]);
 
 /** Present a single snapshot value the same way the rest of the app would. */
 export function formatSnapshotValue(key: string, value: unknown): string {

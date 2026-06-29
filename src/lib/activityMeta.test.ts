@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actorLabel, snapshotFields, formatSnapshotValue, humanizeField } from "./activityMeta";
+import { actorLabel, snapshotFields, formatSnapshotValue, humanizeField, ACTIVITY_ENTITIES } from "./activityMeta";
 
 describe("actorLabel", () => {
   const names = new Map([["u-1", "You"], ["u-2", "Dana"]]);
@@ -38,6 +38,26 @@ describe("snapshotFields", () => {
       ["name", "Widget"],
       ["quantity", 3],
     ]);
+  });
+
+  it("snapshots recurring_expenses with its configured fields", () => {
+    const row = { name: "Adobe CC", amount: 52.99, billing_cycle: "monthly", status: "active", id: "x" };
+    expect(snapshotFields("recurring_expenses", row)).toEqual([
+      ["name", "Adobe CC"],
+      ["amount", 52.99],
+      ["billing_cycle", "monthly"],
+      ["status", "active"],
+    ]);
+  });
+});
+
+describe("ACTIVITY_ENTITIES", () => {
+  it("covers every entity type that appears in the live activity log", () => {
+    // Entities observed in production activity_log — must be supported so their
+    // detail modal queries a real table instead of falsely showing "deleted".
+    for (const entity of ["orders", "expenses", "shipments", "vendors", "inventory", "recurring_expenses", "mileage_log"]) {
+      expect(ACTIVITY_ENTITIES.has(entity)).toBe(true);
+    }
   });
 });
 

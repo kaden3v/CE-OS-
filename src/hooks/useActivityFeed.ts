@@ -67,7 +67,9 @@ export function useActivityFeed() {
   const ready = !!supabase && !!activeOrgId;
 
   const [events, setEvents] = useState<ActivityRow[]>([]);
-  const [isLoading, setIsLoading] = useState(ready);
+  // Start in the loading state so we never flash "No activity yet" before the
+  // org resolves and the first page lands.
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState<ActivityFilters>(EMPTY_ACTIVITY_FILTERS);
@@ -98,19 +100,23 @@ export function useActivityFeed() {
     [activeOrgId],
   );
 
-  // (Re)load the first page whenever filters or the org change.
+  // (Re)load the first page whenever filters or the org change. Debounced so
+  // typing in the search box fires one query after a pause, not per keystroke.
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
     setIsLoading(true);
-    runQuery(filters).then((page) => {
-      if (cancelled) return;
-      setEvents(page);
-      setHasMore(page.length === PAGE_SIZE);
-      setIsLoading(false);
-    });
+    const timer = setTimeout(() => {
+      runQuery(filters).then((page) => {
+        if (cancelled) return;
+        setEvents(page);
+        setHasMore(page.length === PAGE_SIZE);
+        setIsLoading(false);
+      });
+    }, 200);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [ready, runQuery, filters]);
 

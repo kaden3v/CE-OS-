@@ -19,6 +19,11 @@ describe("activityRecordTarget", () => {
     expect(activityRecordTarget("shipments", "s-1")).toEqual({ kind: "path", path: "/shipping" });
   });
 
+  it("routes recurring_expenses and mileage_log to their finance pages", () => {
+    expect(activityRecordTarget("recurring_expenses", "r-1")).toEqual({ kind: "path", path: "/finances/subscriptions" });
+    expect(activityRecordTarget("mileage_log", "m-1")).toEqual({ kind: "path", path: "/finances/mileage" });
+  });
+
   it("returns null when there is no entity id (e.g. a deleted bulk action)", () => {
     expect(activityRecordTarget("orders", null)).toBeNull();
   });

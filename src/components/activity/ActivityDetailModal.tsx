@@ -65,8 +65,11 @@ export function ActivityDetailModal({ event, onClose, nameById }: ActivityDetail
   const meta = actionMeta(event.action);
   const Icon = meta.icon;
   const actor = actorLabel(event.actor_id, nameById);
+  const supported = ACTIVITY_ENTITIES.has(event.entity);
   const fields = snapshot ? snapshotFields(event.entity, snapshot) : [];
-  const canOpen = canNavigateToRecord(event.entity, event.entity_id) && snapshot !== null;
+  // Don't show "View record" for a deleted record (supported + snapshot gone),
+  // but do allow it for a navigable type we just don't snapshot.
+  const canOpen = canNavigateToRecord(event.entity, event.entity_id) && (!supported || snapshot !== null);
 
   return (
     <Modal
@@ -116,8 +119,8 @@ export function ActivityDetailModal({ event, onClose, nameById }: ActivityDetail
           )}
         </dl>
 
-        {/* Live record snapshot */}
-        {event.entity_id && (
+        {/* Live record snapshot (only for entity types we can safely query) */}
+        {event.entity_id && supported && (
           <div className="border-t border-border-subtle pt-4">
             <h4 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Current state</h4>
             {snapshot === undefined ? (

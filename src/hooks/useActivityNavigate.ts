@@ -23,6 +23,8 @@ const LIST_ROUTE: Record<string, string> = {
   expenses: "/finances/expenses",
   supplies: "/finances/supplies",
   subscriptions: "/finances/subscriptions",
+  recurring_expenses: "/finances/subscriptions",
+  mileage_log: "/finances/mileage",
   licenses: "/licenses",
   propagation_batches: "/propagation",
   print_jobs: "/shipping/print-queue",
