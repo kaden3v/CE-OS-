@@ -171,12 +171,17 @@ interface EtsyReceipt {
  * Map Etsy's receipt state to a CEOS order status. Etsy statuses: paid,
  * completed, open, payment processing, canceled, fully refunded, partially
  * refunded — plus the is_shipped flag for in-transit orders.
+ *
+ * Etsy never reports carrier delivery. "completed" means the seller fulfilled
+ * (shipped) the order, NOT that it arrived — so the truthful maximum we can
+ * infer here is "shipped" (in transit). Real delivery is confirmed separately
+ * by the track-shipments function via the carrier (USPS) tracking API.
  */
 function mapReceiptStatus(receipt: EtsyReceipt): "pending" | "shipped" | "delivered" | "cancelled" | "refunded" {
   const s = (receipt.status ?? "").toLowerCase();
   if (s === "canceled" || s === "cancelled") return "cancelled";
   if (s === "fully refunded") return "refunded";
-  if (s === "completed") return "delivered";
+  if (s === "completed") return "shipped";
   if (receipt.is_shipped) return "shipped";
   return "pending";
 }

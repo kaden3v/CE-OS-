@@ -15,7 +15,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
-import { orderStatusTone, shipmentStatusTone } from "@/lib/status";
+import { orderStatusTone, shipmentStatusTone, orderStatusLabel } from "@/lib/status";
 import type { Tables } from "@/lib/database.types";
 
 type Customer = Tables<"customers">;
@@ -207,9 +207,9 @@ export default function Orders() {
         accessorKey: "status",
         header: "Status",
         cell: (info: any) => (
-          <div className="flex items-center gap-2 capitalize">
+          <div className="flex items-center gap-2">
             <StatusDot status={statusColor(info.getValue())} />
-            {info.getValue()}
+            {orderStatusLabel(info.getValue())}
           </div>
         ),
       },
@@ -243,8 +243,8 @@ export default function Orders() {
 
         <div className="flex gap-2 mb-4 overflow-x-auto">
           {(["all", ...STATUSES] as const).map((s) => (
-            <Button key={s} size="sm" variant={statusFilter === s ? "brand" : "outline"} onClick={() => setStatusFilter(s as typeof statusFilter)} className="capitalize">
-              {s}
+            <Button key={s} size="sm" variant={statusFilter === s ? "brand" : "outline"} onClick={() => setStatusFilter(s as typeof statusFilter)}>
+              {s === "all" ? "All" : orderStatusLabel(s)}
             </Button>
           ))}
         </div>
@@ -279,9 +279,9 @@ export default function Orders() {
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-xl font-semibold font-mono">{selected.id.slice(0, 8)}</h2>
                   <Badge variant={selected.channel === "shopify" ? "brand" : "default"} className="capitalize">{selected.channel}</Badge>
-                  <div className="flex items-center gap-2 text-sm capitalize">
+                  <div className="flex items-center gap-2 text-sm">
                     <StatusDot status={statusColor(selected.status)} />
-                    {selected.status}
+                    {orderStatusLabel(selected.status)}
                   </div>
                 </div>
                 <div className="text-sm text-text-secondary">{new Date(selected.placed_at).toLocaleString()}</div>
@@ -452,8 +452,8 @@ export default function Orders() {
                 <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Status</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {STATUSES.map((s) => (
-                    <Button key={s} size="sm" variant={selected.status === s ? "brand" : "outline"} onClick={() => handleStatusChange(selected.id, s)} className="capitalize">
-                      {s}
+                    <Button key={s} size="sm" variant={selected.status === s ? "brand" : "outline"} onClick={() => handleStatusChange(selected.id, s)}>
+                      {orderStatusLabel(s)}
                     </Button>
                   ))}
                 </div>
