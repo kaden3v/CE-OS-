@@ -29,8 +29,9 @@ const USPS_TOKEN_URL = "https://apis.usps.com/oauth2/v3/token";
 const USPS_TRACKING_URL = "https://apis.usps.com/tracking/v3/tracking";
 
 // Shipments processed per run, and spacing between USPS calls (~4 req/s) to stay
-// well under rate limits. A backlog drains over consecutive cron runs.
-const BATCH_LIMIT = 150;
+// well under rate limits. Sized so a full batch (incl. USPS latency) stays under
+// the cron's 120s timeout; a backlog drains over consecutive runs.
+const BATCH_LIMIT = 100;
 const REQUEST_SPACING_MS = 250;
 
 const CONFIG_KEYS = {
@@ -210,7 +211,10 @@ Deno.serve(async (req: Request) => {
     .from("shipments")
     .select("id, order_id, status, tracking_number, shipped_at, delivered_at")
     .not("tracking_number", "is", null)
-    .order("created_at", { ascending: true })
+    // Reconcile newest-first: recent shipments are the ones most likely
+    // falsely-delivered, and old numbers USPS has aged out 404 anyway. Default
+    // (in-transit) drains oldest-first.
+    .order("created_at", { ascending: !reconcile })
     .limit(BATCH_LIMIT);
   query = reconcile
     ? query.not("status", "in", "(cancelled,refunded)")

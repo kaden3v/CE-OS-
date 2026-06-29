@@ -510,9 +510,9 @@ export default function Orders() {
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Status</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong capitalize" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
+                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
                     {STATUSES.map((s) => (
-                      <option key={s} value={s} className="capitalize">{s}</option>
+                      <option key={s} value={s}>{orderStatusLabel(s)}</option>
                     ))}
                   </select>
                 </div>
