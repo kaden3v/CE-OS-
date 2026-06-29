@@ -8,6 +8,7 @@ import { Search, Image as ImageIcon, Plus, X, ArrowLeft, QrCode, Pencil, Trash2,
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router";
 import { useDataState } from "@/hooks/useDataState";
+import { useFocusParam } from "@/hooks/useFocusParam";
 import { ErrorState, EmptyState, ZeroResultState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
@@ -97,6 +98,7 @@ export default function Inventory() {
   const [activeTab, setActiveTab] = useState("Stock");
 
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
+  useFocusParam(data, setSelectedId);
 
   const filteredData = useMemo(() => {
     const q = search.trim().toLowerCase();

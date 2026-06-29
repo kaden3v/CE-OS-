@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import { useEntity } from "@/hooks/useEntity";
+import { useFocusParam } from "@/hooks/useFocusParam";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -34,6 +35,7 @@ export default function Customers() {
   const { user, activeOrgId } = useAuth();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  useFocusParam(customers, setSelectedId);
   const selected = useMemo(() => customers.find((c) => c.id === selectedId) ?? null, [customers, selectedId]);
 
   const [isAddOpen, setIsAddOpen] = useState(false);

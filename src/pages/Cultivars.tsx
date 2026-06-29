@@ -12,6 +12,7 @@ import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
+import { useFocusParam } from "@/hooks/useFocusParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 
@@ -31,6 +32,7 @@ export default function Cultivars() {
   const { addToast } = useApp();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  useFocusParam(cultivars, setSelectedId);
   const selected = useMemo(() => cultivars.find((c) => c.id === selectedId) ?? null, [cultivars, selectedId]);
 
   const [isOpen, setIsOpen] = useState(false);

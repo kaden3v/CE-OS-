@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { trackingUrl, carrierLabel } from "@/lib/tracking";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { RecordActivity } from "@/components/activity/RecordActivity";
 import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
@@ -457,6 +458,11 @@ export default function Orders() {
                     </Button>
                   ))}
                 </div>
+              </section>
+
+              <section>
+                <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">History</h3>
+                <RecordActivity entity="orders" entityId={selected.id} />
               </section>
             </div>
 

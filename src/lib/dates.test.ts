@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { isoYear, formatBusinessDate, businessMonthShort, toBusinessISODate, todayISO } from "./dates";
+import {
+  isoYear,
+  formatBusinessDate,
+  businessMonthShort,
+  toBusinessISODate,
+  todayISO,
+  relativeDayLabel,
+  formatBusinessDateTime,
+} from "./dates";
 
 describe("Phoenix timezone date handling", () => {
   it("reads a date-only year literally (no UTC shift)", () => {
@@ -32,5 +40,41 @@ describe("Phoenix timezone date handling", () => {
 
   it("todayISO returns a well-formed Phoenix calendar date", () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("relativeDayLabel", () => {
+  function yesterdayISO(): string {
+    const [y, m, d] = todayISO().split("-").map(Number);
+    const dt = new Date(y, m - 1, d - 1);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  }
+
+  it("labels today's business date as Today", () => {
+    expect(relativeDayLabel(todayISO())).toBe("Today");
+  });
+
+  it("labels yesterday's business date as Yesterday", () => {
+    expect(relativeDayLabel(yesterdayISO())).toBe("Yesterday");
+  });
+
+  it("labels an older date with the formatted calendar date", () => {
+    expect(relativeDayLabel("2020-01-15")).toBe(formatBusinessDate("2020-01-15"));
+  });
+
+  it("returns an em dash for missing input", () => {
+    expect(relativeDayLabel("")).toBe("—");
+    expect(relativeDayLabel(null)).toBe("—");
+  });
+});
+
+describe("formatBusinessDateTime", () => {
+  it("returns an em dash for missing or invalid input", () => {
+    expect(formatBusinessDateTime(null)).toBe("—");
+    expect(formatBusinessDateTime("not-a-date")).toBe("—");
+  });
+
+  it("renders a real timestamp (not the em-dash fallback)", () => {
+    expect(formatBusinessDateTime("2026-06-28T12:00:00Z")).not.toBe("—");
   });
 });

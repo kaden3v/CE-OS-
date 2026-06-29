@@ -127,3 +127,35 @@ export function quarterRange(): { from: string; to: string } {
 export function ytdRange(): { from: string; to: string } {
   return { from: yearStartISO(), to: todayISO() };
 }
+
+// ---------------------------------------------------------------------------
+// Timestamp display (instants → business timezone). Use for created_at etc.,
+// NOT for date-only calendar values (those have no meaningful time component).
+// ---------------------------------------------------------------------------
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  timeZone: BUSINESS_TZ,
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+/** Exact date + time in the business timezone (e.g. "Jun 28, 2026, 9:14 PM").
+ *  Date-only strings render as their literal date (no fabricated time). */
+export function formatBusinessDateTime(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  if (typeof value === "string" && DATE_ONLY.test(value)) return formatBusinessDate(value);
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return dateTimeFormatter.format(d);
+}
+
+/** "Today" / "Yesterday" / formatted date — for activity-feed group headers,
+ *  computed on Phoenix calendar dates so the boundary is the business day. */
+export function relativeDayLabel(value: string | Date | null | undefined): string {
+  const iso = toBusinessISODate(value);
+  if (!iso) return "—";
+  const today = todayISO();
+  if (iso === today) return "Today";
+  const [y, m, d] = today.split("-").map(Number);
+  if (iso === isoOf(new Date(y, m - 1, d - 1))) return "Yesterday";
+  return formatBusinessDate(value);
+}
