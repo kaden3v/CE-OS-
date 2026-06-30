@@ -13,9 +13,10 @@ import { SupabaseClient } from "npm:@supabase/supabase-js@2";
  * are respected — only pending/processing/packed (or shipped → delivered) are
  * upgraded, never downgraded.
  *
- * Inventory safety: consume_inventory_for_order skips items whose inventory_id
- * and cultivar_id are both null (all channel-imported items), so status
- * transitions here never double-decrement stock.
+ * Inventory linkage: each item is matched to a plant by name (buildInventoryMatcher)
+ * so the sale decrements stock; unmatched items stay null and are flagged at ship
+ * time. Consumption is idempotent per order (orders.inventory_consumed_at), so
+ * status transitions here never double-decrement.
  */
 
 export type Channel = "shopify" | "etsy";
@@ -204,6 +205,50 @@ async function updateExistingOrder(admin: Admin, orderId: string, order: Normali
   return { ok: true, duplicate: true, updated, orderId };
 }
 
+/** Normalize a plant name for fuzzy matching: lowercase, alnum-only, single-spaced. */
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+interface InvMatchRow {
+  id: string;
+  cultivarId: string | null;
+  norm: string;
+}
+
+type InventoryMatcher = (name: string) => { inventoryId: string; cultivarId: string | null } | null;
+
+/**
+ * Build a name→inventory matcher for an org so imported sales link to a plant
+ * (and therefore decrement stock). Channel item titles are messy
+ * ("Pinguicula agnata 'El Lobo' — Live Carnivorous Plant"), so we match by exact
+ * normalized name first, then by an inventory name appearing within the title.
+ * Best-effort by design: anything that doesn't match stays unlinked and is
+ * flagged loudly by consume_inventory_for_order (owner reviews and links).
+ */
+async function buildInventoryMatcher(admin: Admin, orgId: string): Promise<InventoryMatcher> {
+  const { data } = await admin.from("inventory").select("id, name, common, cultivar_id").eq("org_id", orgId);
+  const rows: InvMatchRow[] = [];
+  for (const r of data ?? []) {
+    for (const label of [r.name, r.common]) {
+      const norm = normalizeName(String(label ?? ""));
+      if (norm.length >= 4) rows.push({ id: r.id as string, cultivarId: (r.cultivar_id as string | null) ?? null, norm });
+    }
+  }
+  // Longest names first so a specific cultivar wins over a bare genus.
+  rows.sort((a, b) => b.norm.length - a.norm.length);
+  return (name) => {
+    const target = normalizeName(name);
+    if (!target) return null;
+    const exact = rows.find((r) => r.norm === target);
+    if (exact) return { inventoryId: exact.id, cultivarId: exact.cultivarId };
+    // Require >=6 chars before substring-matching to avoid a short genus
+    // matching every unrelated title.
+    const contained = rows.find((r) => r.norm.length >= 6 && target.includes(r.norm));
+    return contained ? { inventoryId: contained.id, cultivarId: contained.cultivarId } : null;
+  };
+}
+
 /**
  * Import a single normalized order. Idempotent by externalId — re-running
  * reconciles status/customer instead of duplicating.
@@ -241,16 +286,22 @@ export async function importNormalizedOrder(admin: Admin, order: NormalizedOrder
     return { ok: false, error: "Order insert failed" };
   }
 
-  const items = order.items.map((li) => ({
-    org_id: oo.orgId,
-    user_id: oo.userId,
-    order_id: row.id,
-    cultivar_id: null,
-    inventory_id: null,
-    name_snapshot: li.name,
-    qty: li.qty,
-    price: li.price,
-  }));
+  // Link each item to a plant by name so the sale decrements stock. Unmatched
+  // items stay null and are flagged at ship time for the owner to review/link.
+  const matchInventory = await buildInventoryMatcher(admin, oo.orgId);
+  const items = order.items.map((li) => {
+    const m = matchInventory(li.name);
+    return {
+      org_id: oo.orgId,
+      user_id: oo.userId,
+      order_id: row.id,
+      cultivar_id: m?.cultivarId ?? null,
+      inventory_id: m?.inventoryId ?? null,
+      name_snapshot: li.name,
+      qty: li.qty,
+      price: li.price,
+    };
+  });
   const { error: itemsErr } = await admin.from("order_items").insert(items);
   if (itemsErr) console.error("items insert failed", itemsErr);
 
