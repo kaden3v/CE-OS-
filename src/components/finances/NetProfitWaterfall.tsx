@@ -17,7 +17,7 @@ interface Props {
  * net line (what buyers paid minus postage); operating expenses expand into
  * their categories. Every line is the exact figure the server returned, so K can
  * always answer "where did this number come from?" without leaving the screen.
- * Cash basis: production COGS is a managerial note, not a deduction.
+ * Cash basis: cost of goods sold drives a gross-margin note, not a cash deduction.
  */
 export function NetProfitWaterfall({ win, breakdown, loading }: Props) {
   const [expExpanded, setExpExpanded] = useState(false);
@@ -29,7 +29,11 @@ export function NetProfitWaterfall({ win, breakdown, loading }: Props) {
   const fees = n(win.channel_fees);
   const shippingCollected = n(win.shipping_collected);
   const mileage = n(win.mileage);
-  const cogs = n(win.cogs);
+  const cogsSold = n(win.cogs_sold);
+  const grossMargin = n(win.gross_margin);
+  const netRevenue = n(win.net_revenue);
+  const marginPct = netRevenue > 0 ? (grossMargin / netRevenue) * 100 : 0;
+  const hasSales = n(win.gross_sales) > 0;
 
   const postage = breakdown.filter((b) => isPostage(b.category)).reduce((s, b) => s + n(b.total), 0);
   const otherExpenses = breakdown.filter((b) => !isPostage(b.category));
@@ -70,12 +74,28 @@ export function NetProfitWaterfall({ win, breakdown, loading }: Props) {
       {mileage > 0 && <BreakdownRow label="Mileage deduction" amount={mileage} outflow to="/finances/mileage" />}
       <BreakdownRow label="Net profit" amount={n(win.net_profit)} result />
 
-      {cogs > 0 && (
+      {cogsSold > 0 ? (
+        <div className="mt-3 pt-3 border-t border-border-subtle/40 px-1 space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-secondary">Cost of goods sold</span>
+            <span className="tabular-nums text-text-secondary">−{formatMoney(cogsSold)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm font-medium">
+            <span>Gross margin</span>
+            <span className="tabular-nums">
+              {formatMoney(grossMargin)} <span className="text-text-tertiary font-normal">({marginPct.toFixed(0)}%)</span>
+            </span>
+          </div>
+          <p className="text-[11px] text-text-tertiary leading-relaxed">
+            Per-plant profitability (net revenue − cost of plants sold). Not subtracted from cash net profit above —
+            supplies are expensed when purchased.
+          </p>
+        </div>
+      ) : hasSales ? (
         <p className="text-[11px] text-text-tertiary mt-3 px-1 leading-relaxed">
-          Production COGS {formatMoney(cogs)} is tracked for per-unit costing and is not a cash-basis net-profit
-          deduction here — supplies are expensed when purchased. See Production for per-unit cost.
+          Set a per-unit cost on your plants (Inventory → a plant → Cost / unit) to see gross margin per sale.
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

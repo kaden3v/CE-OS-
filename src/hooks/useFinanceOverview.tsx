@@ -20,6 +20,10 @@ export interface FinanceKpiWindow {
   cogs_materials: number;
   cogs_labor: number;
   cogs: number;
+  /** Cost basis of plants sold in the window (from order_items.cogs). */
+  cogs_sold: number;
+  /** net_revenue − cogs_sold — per-plant profitability. */
+  gross_margin: number;
   mileage: number;
   net_profit: number;
 }

@@ -22,6 +22,8 @@ const WIN: FinanceKpiWindow = {
   cogs_materials: 0,
   cogs_labor: 0,
   cogs: 0,
+  cogs_sold: 0,
+  gross_margin: 6434.43,
   mileage: 0,
   net_profit: 3850.7,
 };
@@ -73,11 +75,14 @@ describe("NetProfitWaterfall (Part 2: show your work)", () => {
     expect(screen.queryByText("Net profit")).toBeNull();
   });
 
-  it("notes managerial COGS only when present (cash basis)", () => {
-    renderWaterfall();
-    expect(screen.queryByText(/Production COGS/)).toBeNull();
+  it("shows gross margin only once a per-unit cost is set", () => {
+    renderWaterfall(); // cogs_sold = 0
+    expect(screen.queryByText("Gross margin")).toBeNull();
+    expect(screen.getByText(/Set a per-unit cost/)).toBeTruthy();
     cleanup();
-    renderWaterfall({ ...WIN, cogs: 50, cogs_materials: 50 });
-    expect(screen.getByText(/Production COGS/)).toBeTruthy();
+    renderWaterfall({ ...WIN, cogs_sold: 2000, gross_margin: 4434.43 });
+    expect(screen.getByText("Cost of goods sold")).toBeTruthy();
+    expect(screen.getByText("Gross margin")).toBeTruthy();
+    expect(screen.getByText(/\$4,434\.43/)).toBeTruthy();
   });
 });

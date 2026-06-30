@@ -13,7 +13,7 @@ function makeWindow(p: Partial<FinanceKpiWindow>): FinanceKpiWindow {
   return {
     gross_sales: 0, gross_receipts: 0, refunds: 0, shipping_collected: 0,
     order_count: 0, sales_tax_owed: 0, channel_fees: 0, net_revenue: 0,
-    expenses: 0, cogs_materials: 0, cogs_labor: 0, cogs: 0, mileage: 0, net_profit: 0,
+    expenses: 0, cogs_materials: 0, cogs_labor: 0, cogs: 0, cogs_sold: 0, gross_margin: 0, mileage: 0, net_profit: 0,
     ...p,
   };
 }
