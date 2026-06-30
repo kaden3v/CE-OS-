@@ -55,9 +55,9 @@ export default function Dashboard() {
   const alerts = useMemo<AlertItem[]>(() => {
     const list: AlertItem[] = [];
     inventory.forEach((i) => {
-      // Low stock = low SELLABLE stock (sale-ready + specimen); grow-out plants
-      // can't cover orders, so they don't count toward availability.
-      const saleable = i.stock_juv + i.stock_mat;
+      // Low stock = low SELLABLE stock (Sale-Ready); grow-out plants can't cover
+      // orders, so they don't count toward availability.
+      const saleable = i.stock_juv;
       if (saleable < LOW_STOCK_THRESHOLD) {
         const growing = i.stock_growout > 0 ? ` (${i.stock_growout} growing on)` : "";
         list.push({ id: `inv-${i.id}`, href: "/inventory", label: i.name, detail: `${saleable} sellable left${growing}`, tone: "warn" });
@@ -83,7 +83,7 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const activeOrders = orders.filter((o) => ["pending", "processing", "packed"].includes(o.status)).length;
-    const plantsInStock = inventory.reduce((s, p) => s + (p.stock_growout ?? 0) + (p.stock_juv ?? 0) + (p.stock_mat ?? 0), 0);
+    const plantsInStock = inventory.reduce((s, p) => s + (p.stock_growout ?? 0) + (p.stock_juv ?? 0), 0);
     const pendingShipments = shipments.filter((s) => s.status === "pending" || s.status === "ready").length;
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const revenueMtd = orders

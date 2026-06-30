@@ -84,7 +84,7 @@ export default function Listings() {
     inventoryRows.forEach((r) => {
       if (!r.cultivar_id) return;
       // Listings can only be backed by sellable stock — grow-out plants don't count.
-      map.set(r.cultivar_id, (map.get(r.cultivar_id) ?? 0) + r.stock_juv + r.stock_mat);
+      map.set(r.cultivar_id, (map.get(r.cultivar_id) ?? 0) + r.stock_juv);
     });
     return map;
   }, [inventoryRows]);

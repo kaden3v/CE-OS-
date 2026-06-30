@@ -60,7 +60,7 @@ export const ACTIVITY_ENTITIES = new Set(Object.keys(ENTITY_LABELS));
  */
 export const SNAPSHOT_FIELDS: Record<string, string[]> = {
   orders: ["status", "channel", "total"],
-  inventory: ["name", "common", "stock_mat", "stock_juv"],
+  inventory: ["name", "common", "stock_juv", "stock_growout", "cost_basis"],
   customers: ["name", "email", "phone"],
   cultivars: ["name", "common", "genus"],
   listings: ["title", "status", "price", "stock", "channel"],

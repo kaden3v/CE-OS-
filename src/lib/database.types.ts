@@ -513,12 +513,12 @@ export type Database = {
           common: string | null
           cultivar_id: string | null
           genus: string | null
+          cost_basis: number
           id: string
           name: string
           org_id: string | null
           stock_growout: number
           stock_juv: number
-          stock_mat: number
           updated_at: string
           user_id: string
         }
@@ -527,11 +527,11 @@ export type Database = {
           cultivar_id?: string | null
           genus?: string | null
           id?: string
+          cost_basis?: number
           name: string
           org_id?: string | null
           stock_growout?: number
           stock_juv?: number
-          stock_mat?: number
           updated_at?: string
           user_id: string
         }
@@ -540,11 +540,11 @@ export type Database = {
           cultivar_id?: string | null
           genus?: string | null
           id?: string
+          cost_basis?: number
           name?: string
           org_id?: string | null
           stock_growout?: number
           stock_juv?: number
-          stock_mat?: number
           updated_at?: string
           user_id?: string
         }

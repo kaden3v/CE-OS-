@@ -26,16 +26,14 @@ type InventoryRow = Tables<"inventory">;
 type CultivarRow = Tables<"cultivars">;
 type MortalityRow = Tables<"mortality_events">;
 
-// Stock tiers by sale-readiness:
+// Stock tiers by sale-readiness (two tiers):
 //   growout — "Grow-Out": too small/young to sell (not for sale)
-//   juv     — "Sale-Ready": juvenile size, established, sellable
-//   mat     — "Specimen": mature/premium, sellable
-type StockTier = "growout" | "juv" | "mat";
+//   juv     — "Sale-Ready": the one sellable tier
+type StockTier = "growout" | "juv";
 
 const TIER_LABELS: Record<StockTier, string> = {
   growout: "GROW-OUT",
   juv: "SALE-READY",
-  mat: "SPECIMEN",
 };
 
 type InventoryItem = {
@@ -44,11 +42,13 @@ type InventoryItem = {
   common: string;
   genus: string;
   cultivar_id: string | null;
-  stock: { growout: number; juv: number; mat: number };
+  stock: { growout: number; juv: number };
+  /** Cost per unit — drives sale-time COGS. */
+  costBasis: number;
   lastUpdated: string;
 };
 
-const sellable = (s: InventoryItem["stock"]) => s.juv + s.mat;
+const sellable = (s: InventoryItem["stock"]) => s.juv;
 
 const INVENTORY: InventoryItem[] = [];
 
@@ -58,7 +58,8 @@ const fromRow = (r: InventoryRow): InventoryItem => ({
   common: r.common ?? "Unknown",
   genus: r.genus ?? "Unknown",
   cultivar_id: r.cultivar_id,
-  stock: { growout: r.stock_growout, juv: r.stock_juv, mat: r.stock_mat },
+  stock: { growout: r.stock_growout, juv: r.stock_juv },
+  costBasis: r.cost_basis ?? 0,
   lastUpdated: r.updated_at,
 });
 
@@ -72,10 +73,10 @@ const toRow = (it: Partial<InventoryItem>): Record<string, unknown> => {
   if ("common" in it) row.common = it.common;
   if ("genus" in it) row.genus = it.genus;
   if ("cultivar_id" in it) row.cultivar_id = it.cultivar_id;
+  if ("costBasis" in it) row.cost_basis = it.costBasis;
   if (it.stock) {
     row.stock_growout = it.stock.growout;
     row.stock_juv = it.stock.juv;
-    row.stock_mat = it.stock.mat;
   }
   return row;
 };
@@ -118,7 +119,7 @@ export default function Inventory() {
 
   // Modal logic
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, mat: 0 });
+  const [newPlant, setNewPlant] = useState({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, cost: 0 });
   const { addToast } = useApp();
 
   // Edit Details modal
@@ -153,13 +154,13 @@ export default function Inventory() {
     addToast({ title: "Plant details updated", status: "ok" });
   };
 
-  // Inline stock editor
-  const [stockDraft, setStockDraft] = useState<{ growout: number; juv: number; mat: number } | null>(null);
+  // Inline stock editor (two tiers + per-unit cost)
+  const [stockDraft, setStockDraft] = useState<{ growout: number; juv: number; cost: number } | null>(null);
   const [savingStock, setSavingStock] = useState(false);
 
   const startEditingStock = () => {
     if (!selectedItem) return;
-    setStockDraft({ ...selectedItem.stock });
+    setStockDraft({ growout: selectedItem.stock.growout, juv: selectedItem.stock.juv, cost: selectedItem.costBasis });
   };
 
   const cancelStockEdit = () => setStockDraft(null);
@@ -167,11 +168,29 @@ export default function Inventory() {
   const saveStock = async () => {
     if (!selectedItem || !stockDraft) return;
     setSavingStock(true);
-    const result = await updateInventoryItem(selectedItem.id, { stock: stockDraft });
+    const before = selectedItem.stock;
+    const beforeCost = selectedItem.costBasis;
+    const after = { growout: stockDraft.growout, juv: stockDraft.juv };
+    const result = await updateInventoryItem(selectedItem.id, { stock: after, costBasis: stockDraft.cost });
     setSavingStock(false);
     if (result.ok === false) {
       addToast({ title: "Couldn't save stock", description: friendlyDbError({ code: result.code } as any), status: "alert" });
       return;
+    }
+    // Audit the real deltas, not just the plant name (so counts are reviewable).
+    const parts: string[] = [];
+    if (after.growout !== before.growout) parts.push(`Grow-Out ${before.growout}→${after.growout}`);
+    if (after.juv !== before.juv) parts.push(`Sale-Ready ${before.juv}→${after.juv}`);
+    if (stockDraft.cost !== beforeCost) parts.push(`cost $${beforeCost.toFixed(2)}→$${stockDraft.cost.toFixed(2)}`);
+    if (parts.length > 0 && activeOrgId && user) {
+      logActivity({
+        orgId: activeOrgId,
+        actorId: user.id,
+        action: "updated",
+        entity: "inventory",
+        entityId: String(selectedItem.id),
+        summary: `${selectedItem.name}: ${parts.join(", ")}`,
+      });
     }
     setStockDraft(null);
     addToast({ title: "Stock updated", description: selectedItem.name, status: "ok" });
@@ -181,11 +200,11 @@ export default function Inventory() {
   const { user, activeOrgId, orgRole } = useAuth();
   const canManage = orgRole === "owner" || orgRole === "manager";
 
-  // Wholesale availability list — sellable (sale-ready/specimen) stock, printable.
+  // Wholesale availability list — sellable (Sale-Ready) stock, printable.
   const handleAvailabilityList = () => {
     const saleable = inventory.filter((i) => sellable(i.stock) > 0);
     if (saleable.length === 0) {
-      addToast({ title: "Nothing sellable in stock", description: "No sale-ready or specimen plants right now.", status: "info" });
+      addToast({ title: "Nothing sellable in stock", description: "No Sale-Ready plants right now.", status: "info" });
       return;
     }
     const win = window.open("", "_blank", "width=720,height=900");
@@ -195,7 +214,7 @@ export default function Inventory() {
     }
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const rows = saleable
-      .map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.common)}</td><td class="n">${i.stock.juv}</td><td class="n">${i.stock.mat}</td><td class="p"></td></tr>`)
+      .map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.common)}</td><td class="n">${i.stock.juv}</td><td class="p"></td></tr>`)
       .join("");
     win.document.write(`<!doctype html><html><head><title>Availability — ${new Date().toLocaleDateString()}</title>
       <style>
@@ -205,9 +224,9 @@ export default function Inventory() {
         th,td{text-align:left;padding:8px;border-bottom:1px solid #ddd} .n{text-align:right} .p{width:90px;border-bottom:1px solid #ddd}
       </style></head><body>
       <h1>Canyon Exotics — Availability</h1>
-      <div class="muted">${new Date().toLocaleDateString()} · sale-ready &amp; specimen stock</div>
+      <div class="muted">${new Date().toLocaleDateString()} · Sale-Ready stock</div>
       <table>
-        <thead><tr><th>Cultivar</th><th>Common</th><th class="n">Sale-Ready</th><th class="n">Specimen</th><th>Price</th></tr></thead>
+        <thead><tr><th>Cultivar</th><th>Common</th><th class="n">Sale-Ready</th><th>Price</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <script>window.onload = () => { window.print(); }<\/script>
@@ -276,7 +295,8 @@ export default function Inventory() {
       common: newPlant.common || linkedCultivar?.common || "Unknown",
       genus: linkedCultivar?.genus ?? newPlant.genus ?? "Unknown",
       cultivar_id: newPlant.cultivar_id || null,
-      stock: { growout: newPlant.growout, juv: newPlant.juv, mat: newPlant.mat },
+      stock: { growout: newPlant.growout, juv: newPlant.juv },
+      costBasis: newPlant.cost,
       lastUpdated: "Just now",
     };
     const result = await addInventoryItem(plant);
@@ -285,7 +305,7 @@ export default function Inventory() {
       return;
     }
     setIsAddModalOpen(false);
-    setNewPlant({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, mat: 0 });
+    setNewPlant({ name: "", common: "", genus: "", cultivar_id: "", growout: 0, juv: 0, cost: 0 });
     addToast({ title: "Plant added to inventory", status: "ok" });
   };
 
@@ -358,7 +378,7 @@ export default function Inventory() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2 p-2 bg-bg-base/50 rounded-lg border border-border-subtle mb-4">
+                    <div className="grid grid-cols-2 gap-2 p-2 bg-bg-base/50 rounded-lg border border-border-subtle mb-4">
                       <div className="flex flex-col items-center" title="Too small/young to sell">
                         <span className="text-xs text-text-tertiary mb-2">{TIER_LABELS.growout}</span>
                         <div className="flex items-center gap-2 font-medium tabular-nums text-text-secondary">
@@ -366,18 +386,11 @@ export default function Inventory() {
                           {item.stock.growout}
                         </div>
                       </div>
-                      <div className="flex flex-col items-center border-l border-r border-border-subtle" title="Juvenile size, sellable">
+                      <div className="flex flex-col items-center border-l border-border-subtle" title="Sale-Ready — sellable">
                         <span className="text-xs text-text-secondary mb-2">{TIER_LABELS.juv}</span>
                         <div className="flex items-center gap-2 font-medium tabular-nums">
                           <StatusDot status={item.stock.juv < 5 ? "warn" : "ok"} />
                           {item.stock.juv}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center" title="Mature/premium, sellable">
-                        <span className="text-xs text-text-secondary mb-2">{TIER_LABELS.mat}</span>
-                        <div className="flex items-center gap-2 font-medium tabular-nums">
-                          <StatusDot status={item.stock.mat < 2 ? "warn" : "ok"} />
-                          {item.stock.mat}
                         </div>
                       </div>
                     </div>
@@ -472,15 +485,11 @@ export default function Inventory() {
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(["growout", "juv", "mat"] as const).map((stage) => {
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["growout", "juv"] as const).map((stage) => {
                         const labels = TIER_LABELS;
                         const v = stockDraft ? stockDraft[stage] : selectedItem.stock[stage];
-                        const dotStatus = stage === "growout"
-                          ? "info"
-                          : stage === "juv"
-                            ? (v < 5 ? "warn" : "ok")
-                            : (v < 2 ? "warn" : "ok");
+                        const dotStatus = stage === "growout" ? "info" : (v < 5 ? "warn" : "ok");
                         return (
                           <div key={stage} className="p-4 rounded-lg bg-bg-active border border-border-subtle text-center">
                             {stockDraft ? (
@@ -520,6 +529,25 @@ export default function Inventory() {
                           </div>
                         );
                       })}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between p-3 rounded-lg bg-bg-active border border-border-subtle">
+                      <span className="text-xs uppercase tracking-wide text-text-secondary" title="Cost per unit — used to compute profit (COGS) when a plant sells">Cost / unit</span>
+                      {stockDraft ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-text-secondary">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={stockDraft.cost}
+                            onChange={(e) => setStockDraft((prev) => (prev ? { ...prev, cost: Math.max(0, parseFloat(e.target.value) || 0) } : prev))}
+                            className="w-20 text-right tabular-nums bg-bg-elevated border border-border-subtle rounded-md px-2 py-1 focus:outline-none focus:border-accent-brand"
+                            aria-label="Cost per unit"
+                          />
+                        </div>
+                      ) : (
+                        <span className="font-medium tabular-nums">${selectedItem.costBasis.toFixed(2)}</span>
+                      )}
                     </div>
                     <div className="mt-4 text-xs text-text-tertiary">
                       Last updated {new Date(selectedItem.lastUpdated).toLocaleString()}
@@ -614,7 +642,6 @@ export default function Inventory() {
                   >
                     <option value="growout">Grow-Out ({selectedItem.stock.growout})</option>
                     <option value="juv">Sale-Ready ({selectedItem.stock.juv})</option>
-                    <option value="mat">Specimen ({selectedItem.stock.mat})</option>
                   </select>
                 </div>
                 <div>
@@ -689,12 +716,12 @@ export default function Inventory() {
                      <Input type="number" min="0" required value={newPlant.growout} onChange={(e) => setNewPlant({...newPlant, growout: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Juvenile size, sellable">Sale-Ready</label>
+                     <label className="text-xs text-text-secondary uppercase" title="Sellable stock">Sale-Ready</label>
                      <Input type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Mature/premium, sellable">Specimen</label>
-                     <Input type="number" min="0" required value={newPlant.mat} onChange={(e) => setNewPlant({...newPlant, mat: parseInt(e.target.value) || 0})} className="w-full" />
+                     <label className="text-xs text-text-secondary uppercase" title="Cost per unit — drives profit on sale">Cost $/unit</label>
+                     <Input type="number" min="0" step="0.01" value={newPlant.cost} onChange={(e) => setNewPlant({...newPlant, cost: parseFloat(e.target.value) || 0})} className="w-full" />
                    </div>
                 </div>
               </form>

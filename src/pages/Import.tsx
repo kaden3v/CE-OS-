@@ -38,10 +38,10 @@ const ENTITIES: Record<EntityKey, EntitySpec> = {
   inventory: {
     label: "Inventory",
     required: ["name"],
-    // stock_growout = grow-out (not for sale), stock_juv = sale-ready, stock_mat = specimen
-    optional: ["common", "genus", "stock_growout", "stock_juv", "stock_mat"],
-    numeric: ["stock_growout", "stock_juv", "stock_mat"],
-    template: "name,common,genus,stock_growout,stock_juv,stock_mat\nP. agnata,Butterwort,Pinguicula,20,12,5",
+    // stock_growout = grow-out (not for sale), stock_juv = sale-ready
+    optional: ["common", "genus", "stock_growout", "stock_juv", "cost_basis"],
+    numeric: ["stock_growout", "stock_juv", "cost_basis"],
+    template: "name,common,genus,stock_growout,stock_juv,cost_basis\nP. agnata,Butterwort,Pinguicula,20,12,3.50",
   },
 };
 

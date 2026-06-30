@@ -50,7 +50,6 @@ export default function Propagation() {
       cultivar_id: r.cultivar_id,
       stock_growout: r.stock_growout,
       stock_juv: r.stock_juv,
-      stock_mat: r.stock_mat,
     }),
   });
   const { addToast } = useApp();
@@ -81,7 +80,6 @@ export default function Propagation() {
         cultivar_id: null,
         stock_growout: b.count,
         stock_juv: 0,
-        stock_mat: 0,
         updated_at: new Date().toISOString(),
         user_id: "",
         org_id: null,
