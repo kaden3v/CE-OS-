@@ -313,6 +313,13 @@ export default function FinancesOverview() {
   // Shipping margin: what the buyer paid for shipping minus what postage cost.
   const postage = breakdown.find((b) => /shipping/i.test(b.category))?.total ?? 0;
   const shippingMargin = cur ? n(cur.shipping_collected) - n(postage) : 0;
+  // Ad efficiency: Etsy ad spend (Marketing category, imported from the ledger)
+  // vs revenue. Blended — all revenue ÷ all ad spend, NOT ad-attributed (Etsy's
+  // API exposes ad charges but no per-listing/keyword performance).
+  const adSpend = breakdown.filter((b) => /marketing|advertis/i.test(b.category)).reduce((s, b) => s + n(b.total), 0);
+  const grossSales = cur ? n(cur.gross_sales) : 0;
+  const adPct = grossSales > 0 ? (adSpend / grossSales) * 100 : 0;
+  const adRoas = adSpend > 0 ? grossSales / adSpend : 0;
   // Income tax to set aside on the period's profit (SE + income, conservative).
   const setAside = cur ? quarterlyEstimate(n(cur.net_profit), DEFAULT_INCOME_RATE).total : 0;
 
@@ -379,7 +386,7 @@ export default function FinancesOverview() {
       </div>
 
       {/* Secondary unit economics + tax accrual */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6 mb-3">
         <MetricChip label="Orders" value={loadingKpis || !cur ? "—" : String(n(cur.order_count))} onClick={() => setOpenStat("orders")} />
         <MetricChip
           label="Shipping margin"
@@ -394,6 +401,17 @@ export default function FinancesOverview() {
           value={loadingKpis || !cur ? "—" : formatMoney(n(cur.sales_tax_owed))}
           hint="Direct sales (AZ TPT); Etsy remits its own"
           onClick={() => setOpenStat("sales_tax")}
+        />
+        <MetricChip
+          label="Ad spend"
+          value={loadingKpis || !cur ? "—" : formatMoney(adSpend)}
+          hint={
+            loadingKpis || !cur
+              ? undefined
+              : adSpend > 0
+                ? `${adPct.toFixed(0)}% of revenue · ${adRoas.toFixed(1)}× blended`
+                : "No ad spend this period"
+          }
         />
       </div>
 
