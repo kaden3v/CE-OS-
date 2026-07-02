@@ -7,7 +7,10 @@
 export function formatMoney(value: number | string | null | undefined): string {
   const n = Number(value ?? 0);
   if (Number.isNaN(n)) return "$0.00";
-  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Normalize negative zero / sub-cent negatives so a value that rounds to zero
+  // never renders as "$-0.00" (a float artifact that looks like a real number).
+  const safe = Object.is(n, -0) || (n < 0 && n > -0.005) ? 0 : n;
+  return `$${safe.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(value: string | Date | null | undefined): string {

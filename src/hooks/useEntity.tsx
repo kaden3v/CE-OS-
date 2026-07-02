@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { useAuth } from "@/contexts/AuthContext";
 import { logDbError } from "@/lib/dbErrors";
 import { logActivity, rowSummary } from "@/lib/activity";
+import { pageRanges } from "@/hooks/pageRanges";
 
 type WithId = { id: string | number };
 type TableName = keyof Database["public"]["Tables"];
@@ -68,8 +69,7 @@ export function useEntity<T extends WithId, Row = T>(
     const ceiling = options?.limit ?? DEFAULT_FETCH_LIMIT;
     const list: Row[] = [];
     // Page past PostgREST's max-rows cap until a short page ends the run.
-    for (let from = 0; from < ceiling; from += PAGE_SIZE) {
-      const to = Math.min(from + PAGE_SIZE, ceiling) - 1;
+    for (const [from, to] of pageRanges(ceiling, PAGE_SIZE)) {
       const { data: rows, error } = await db
         .from(table)
         .select("*")

@@ -133,7 +133,10 @@ export default function Listings() {
         accessorKey: "title",
         header: "Title",
         cell: (info: any) => {
-          const url = info.row.original.url as string | null;
+          const rawUrl = info.row.original.url as string | null;
+          // Only render http(s) links; DB-sourced URLs (synced from Etsy) must
+          // not be allowed to carry a javascript:/data: scheme into href.
+          const url = rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : null;
           if (!url) return <span className="font-medium">{info.getValue()}</span>;
           return (
             <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-medium inline-flex items-center gap-1 hover:underline" title="Open live listing">
