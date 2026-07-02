@@ -45,7 +45,7 @@ export function ActivityList({ events, nameById, onSelect, grouped = false }: Ac
             {group.items.map((e) => {
               const meta = actionMeta(e.action);
               const Icon = meta.icon;
-              const actor = actorLabel(e.actor_id, nameById);
+              const actor = actorLabel(e.actor_id, nameById, e.actor_name);
               return (
                 <li key={e.id}>
                   <button

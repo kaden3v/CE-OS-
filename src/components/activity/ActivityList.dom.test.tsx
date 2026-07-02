@@ -10,6 +10,7 @@ afterEach(cleanup);
 const ev = (over: Partial<ActivityRow>): ActivityRow => ({
   action: "created",
   actor_id: null,
+  actor_name: null,
   created_at: "2024-03-10T12:00:00Z",
   entity: "orders",
   entity_id: "o1",
@@ -31,6 +32,18 @@ describe("ActivityList", () => {
   it("resolves a known actor to their name", () => {
     render(<ActivityList events={[ev({ id: "a2", actor_id: "u2", action: "updated" })]} nameById={names} onSelect={() => {}} />);
     expect(screen.getByText("Dana")).toBeTruthy();
+  });
+
+  it("shows the tombstoned name for a deleted member's rows, not System", () => {
+    render(
+      <ActivityList
+        events={[ev({ id: "a3", actor_id: null, actor_name: "Atisa", action: "updated" })]}
+        nameById={names}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByText("Atisa")).toBeTruthy();
+    expect(screen.queryByText("System")).toBeNull();
   });
 
   it("renders a date-group header when grouped", () => {

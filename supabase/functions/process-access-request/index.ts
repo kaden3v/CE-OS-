@@ -133,8 +133,24 @@ Deno.serve(async (req: Request) => {
   }
 
   if (action === "deny" || action === "revoke") {
-    // Delete the auth user (cascades to profile + any owned data).
+    // Delete the auth user. Business-table user_id FKs are ON DELETE SET NULL
+    // (20260701 contract migration), so org data survives; only the profile and
+    // org membership rows cascade away with the account.
     if (reqRow.user_id) {
+      // Tombstone the member's name onto their activity rows BEFORE the delete
+      // nulls actor_id, so the feed keeps saying who did what (owner decision:
+      // keep name attribution for departed members).
+      const { data: prof } = await admin
+        .from("profiles").select("display_name").eq("id", reqRow.user_id).maybeSingle();
+      const actorName = prof?.display_name?.trim() || reqRow.name?.trim() || reqRow.email;
+      if (actorName) {
+        const { error: stampErr } = await admin
+          .from("activity_log")
+          .update({ actor_name: actorName })
+          .eq("actor_id", reqRow.user_id)
+          .is("actor_name", null);
+        if (stampErr) console.error("actor_name tombstone failed (continuing)", stampErr);
+      }
       const { error: delErr } = await admin.auth.admin.deleteUser(reqRow.user_id);
       if (delErr && !/not found/i.test(delErr.message ?? "")) {
         console.error("delete user failed", delErr);

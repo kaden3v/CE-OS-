@@ -64,7 +64,7 @@ export function ActivityDetailModal({ event, onClose, nameById }: ActivityDetail
 
   const meta = actionMeta(event.action);
   const Icon = meta.icon;
-  const actor = actorLabel(event.actor_id, nameById);
+  const actor = actorLabel(event.actor_id, nameById, event.actor_name);
   const supported = ACTIVITY_ENTITIES.has(event.entity);
   const fields = snapshot ? snapshotFields(event.entity, snapshot) : [];
   // Don't show "View record" for a deleted record (supported + snapshot gone),

@@ -63,6 +63,7 @@ export type Database = {
         Row: {
           action: string
           actor_id: string | null
+          actor_name: string | null
           created_at: string
           entity: string
           entity_id: string | null
@@ -73,6 +74,7 @@ export type Database = {
         Insert: {
           action: string
           actor_id?: string | null
+          actor_name?: string | null
           created_at?: string
           entity: string
           entity_id?: string | null
@@ -83,6 +85,7 @@ export type Database = {
         Update: {
           action?: string
           actor_id?: string | null
+          actor_name?: string | null
           created_at?: string
           entity?: string
           entity_id?: string | null
@@ -337,6 +340,7 @@ export type Database = {
           payment_method: string | null
           receipt_url: string | null
           schedule_c_category: string | null
+          schedule_f_category: string | null
           source: string
           updated_at: string
           user_id: string
@@ -358,6 +362,7 @@ export type Database = {
           payment_method?: string | null
           receipt_url?: string | null
           schedule_c_category?: string | null
+          schedule_f_category?: string | null
           source?: string
           updated_at?: string
           user_id: string
@@ -379,6 +384,7 @@ export type Database = {
           payment_method?: string | null
           receipt_url?: string | null
           schedule_c_category?: string | null
+          schedule_f_category?: string | null
           source?: string
           updated_at?: string
           user_id?: string
@@ -411,6 +417,7 @@ export type Database = {
           id: string
           mileage_rate_cents: number
           org_id: string
+          tax_schedule: string
           timezone: string
           updated_at: string
           user_id: string
@@ -423,6 +430,7 @@ export type Database = {
           id?: string
           mileage_rate_cents?: number
           org_id: string
+          tax_schedule?: string
           timezone?: string
           updated_at?: string
           user_id: string
@@ -435,6 +443,7 @@ export type Database = {
           id?: string
           mileage_rate_cents?: number
           org_id?: string
+          tax_schedule?: string
           timezone?: string
           updated_at?: string
           user_id?: string

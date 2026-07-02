@@ -104,12 +104,18 @@ export function humanizeField(key: string): string {
 }
 
 /**
- * Who performed an action. A null actor_id means an automated/system write
- * (Etsy sync, Shopify webhook, DB trigger) — label it "System", never
- * "A teammate" (the bug we fixed in notifications). A known member resolves to
- * their name; an unknown non-null id is an org teammate we can't name yet.
+ * Who performed an action. A null actor_id means either an automated/system
+ * write (Etsy sync, Shopify webhook, DB trigger) — labeled "System" — or a
+ * member whose account was since deleted; the revoke flow tombstones their
+ * display name into actor_name first, so those rows keep saying who acted.
+ * A known member resolves to their live name; an unknown non-null id is an org
+ * teammate we can't name yet ("A teammate", never "System").
  */
-export function actorLabel(actorId: string | null, nameById: Map<string, string>): string {
-  if (!actorId) return "System";
-  return nameById.get(actorId) ?? "A teammate";
+export function actorLabel(
+  actorId: string | null,
+  nameById: Map<string, string>,
+  actorName?: string | null,
+): string {
+  if (actorId) return nameById.get(actorId) ?? actorName?.trim() ?? "A teammate";
+  return actorName?.trim() || "System";
 }
