@@ -34,7 +34,7 @@ function makeOrder(p: Partial<OrderWithRelations> & { id: string }): OrderWithRe
 function makeExpense(p: Partial<Expense> & { id: string; amount: number }): Expense {
   return {
     id: p.id, org_id: "org", user_id: "u", amount: p.amount,
-    category: p.category ?? null, category_legacy: null, schedule_c_category: null,
+    category: p.category ?? null, category_legacy: null, schedule_c_category: null, schedule_f_category: null,
     occurred_on: p.occurred_on ?? "2026-06-10", source: "manual",
     vendor_id: null, vendor_name: p.vendor_name ?? null, description: p.description ?? null,
     payment_method: null, deductible: true, receipt_url: null, notes: null, external_id: null,

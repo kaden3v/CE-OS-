@@ -23,7 +23,8 @@ export interface FinanceWindow {
   month?: string;
 }
 
-export interface ScheduleCRow {
+/** One tax-line row of the yearly breakdown (Schedule F or C — same shape). */
+export interface TaxScheduleRow {
   category: string;
   months: number[]; // 12
   total: number;
@@ -33,7 +34,10 @@ export interface Pnl {
   year: number;
   months: FinanceWindow[]; // 12, each with `month` label
   total: FinanceWindow;
-  schedule_c: ScheduleCRow[];
+  /** Expenses grouped by Schedule C line (always returned). */
+  schedule_c: TaxScheduleRow[];
+  /** Expenses grouped by Schedule F line. Absent until the schedule_f migration is applied. */
+  schedule_f?: TaxScheduleRow[];
 }
 
 export interface RevenueChannel {

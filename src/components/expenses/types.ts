@@ -12,6 +12,7 @@ export interface ExpenseFormData {
   occurred_on: string;
   category: string | null;
   schedule_c_category: string | null;
+  schedule_f_category: string | null;
   payment_method: string | null;
   vendor_id: string | null;
   deductible: boolean;

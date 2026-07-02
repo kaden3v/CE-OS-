@@ -68,6 +68,7 @@ export default function Expenses() {
       amount: e.amount,
       category: e.category,
       schedule_c_category: e.schedule_c_category,
+      schedule_f_category: e.schedule_f_category,
       payment_method: e.payment_method,
       deductible: e.deductible,
       source: e.source,
@@ -219,7 +220,8 @@ export default function Expenses() {
     setPendingSuggestionIds((p) => { const n = new Set(p); n.add(id); return n; });
     try {
       const schedule_c_category = book.scheduleCFor(category);
-      const r = await update(id, { category, schedule_c_category } as Partial<Expense>);
+      const schedule_f_category = book.scheduleFFor(category);
+      const r = await update(id, { category, schedule_c_category, schedule_f_category } as Partial<Expense>);
       if (!r.ok) {
         addToast({ title: "Couldn't categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
         return;
@@ -243,7 +245,8 @@ export default function Expenses() {
     let failed = 0;
     for (const [category, ids] of byCategory) {
       const schedule_c_category = book.scheduleCFor(category);
-      const r = await updateMany(ids, { category, schedule_c_category } as Partial<Expense>);
+      const schedule_f_category = book.scheduleFFor(category);
+      const r = await updateMany(ids, { category, schedule_c_category, schedule_f_category } as Partial<Expense>);
       if (r.ok) ok += ids.length;
       else failed += ids.length;
     }
@@ -377,7 +380,8 @@ export default function Expenses() {
     const targets = expenses.filter((e) => selected.has(e.id) && !isManaged(e));
     if (targets.length === 0) return;
     const schedule_c_category = book.scheduleCFor(category);
-    const r = await updateMany(targets.map((e) => e.id), { category, schedule_c_category } as Partial<Expense>);
+    const schedule_f_category = book.scheduleFFor(category);
+    const r = await updateMany(targets.map((e) => e.id), { category, schedule_c_category, schedule_f_category } as Partial<Expense>);
     clearSelection();
     if (!r.ok) {
       addToast({ title: "Couldn't re-categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
@@ -421,6 +425,7 @@ export default function Expenses() {
       category: r.category,
       category_legacy: r.category_legacy,
       schedule_c_category: r.category ? book.scheduleCFor(r.category) : null,
+      schedule_f_category: r.category ? book.scheduleFFor(r.category) : null,
       source: "manual",
       deductible: true,
     }));

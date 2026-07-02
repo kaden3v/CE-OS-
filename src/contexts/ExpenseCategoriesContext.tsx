@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
-import type { Json } from "@/lib/database.types";
+import type { Json, TablesUpdate } from "@/lib/database.types";
 import { useAuth } from "@/contexts/AuthContext";
 import type { ScheduleCCategory } from "@/lib/scheduleC";
+import type { ScheduleFCategory, TaxSchedule } from "@/lib/scheduleF";
 import {
   makeCategoryBook,
   parseStoredCategories,
@@ -17,6 +18,13 @@ export interface CategoryResult {
   error?: string;
 }
 
+/** Both tax lines a category rolls into; the active schedule picks which one reports use. */
+export interface CategoryLines {
+  name: string;
+  scheduleC: ScheduleCCategory;
+  scheduleF: ScheduleFCategory;
+}
+
 interface ExpenseCategoriesValue {
   book: CategoryBook;
   list: ExpenseCategory[];
@@ -25,10 +33,14 @@ interface ExpenseCategoriesValue {
   isCustom: boolean;
   /** False when the storage column isn't there yet (migration not applied). */
   available: boolean;
+  /** The org's active tax schedule — F (farm, the default) or C. */
+  taxSchedule: TaxSchedule;
+  /** Persist a schedule swap (finance_settings.tax_schedule). */
+  setTaxSchedule: (next: TaxSchedule) => Promise<CategoryResult>;
   refresh: () => Promise<void>;
   countUsage: (name: string) => Promise<number>;
-  addCategory: (name: string, scheduleC: ScheduleCCategory) => Promise<CategoryResult>;
-  updateCategory: (original: string, next: { name: string; scheduleC: ScheduleCCategory }) => Promise<CategoryResult>;
+  addCategory: (input: CategoryLines) => Promise<CategoryResult>;
+  updateCategory: (original: string, next: CategoryLines) => Promise<CategoryResult>;
   removeCategory: (name: string, reassignTo: string | null) => Promise<CategoryResult>;
 }
 
@@ -40,6 +52,8 @@ const DEFAULT_VALUE: ExpenseCategoriesValue = {
   isLoading: false,
   isCustom: false,
   available: false,
+  taxSchedule: "F",
+  setTaxSchedule: noop,
   refresh: async () => {},
   countUsage: async () => 0,
   addCategory: noop,
@@ -51,23 +65,29 @@ const Ctx = createContext<ExpenseCategoriesValue>(DEFAULT_VALUE);
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
+const isTaxSchedule = (v: unknown): v is TaxSchedule => v === "F" || v === "C";
+
 export function ExpenseCategoriesProvider({ children }: { children: ReactNode }) {
   const { user, activeOrgId } = useAuth();
   const [list, setList] = useState<ExpenseCategory[]>(DEFAULT_CATEGORIES);
   const [isCustom, setIsCustom] = useState(false);
   const [available, setAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [taxSchedule, setTaxScheduleState] = useState<TaxSchedule>("F");
 
   const refresh = useCallback(async () => {
     if (!supabase || !activeOrgId) return;
     setIsLoading(true);
+    // select("*") on purpose: naming columns would 42703 on a DB that hasn't
+    // received a newer migration yet (e.g. tax_schedule), knocking out the
+    // whole category book instead of degrading gracefully.
     const { data, error } = await supabase
       .from("finance_settings")
-      .select("expense_categories")
+      .select("*")
       .eq("org_id", activeOrgId)
       .maybeSingle();
     if (error) {
-      // Undefined column / table => migration not applied yet: defaults, read-only.
+      // Undefined table => migration not applied yet: defaults, read-only.
       setAvailable(false);
       setIsCustom(false);
       setList(DEFAULT_CATEGORIES);
@@ -75,9 +95,11 @@ export function ExpenseCategoriesProvider({ children }: { children: ReactNode })
       return;
     }
     setAvailable(true);
-    const parsed = parseStoredCategories(data?.expense_categories ?? null);
+    const row = (data ?? null) as (Record<string, unknown> & { expense_categories?: unknown }) | null;
+    const parsed = parseStoredCategories(row?.expense_categories ?? null);
     setIsCustom(parsed.length > 0);
     setList(parsed.length > 0 ? parsed : DEFAULT_CATEGORIES);
+    setTaxScheduleState(isTaxSchedule(row?.tax_schedule) ? row.tax_schedule : "F");
     setIsLoading(false);
   }, [activeOrgId]);
 
@@ -85,31 +107,49 @@ export function ExpenseCategoriesProvider({ children }: { children: ReactNode })
     void refresh();
   }, [refresh]);
 
-  // Persist a full list (update existing settings row, else insert one).
-  const save = useCallback(
-    async (next: ExpenseCategory[]): Promise<CategoryResult> => {
+  // Persist a partial finance_settings payload (update existing row, else insert one).
+  const persistSettings = useCallback(
+    async (payload: TablesUpdate<"finance_settings">): Promise<CategoryResult> => {
       if (!supabase || !activeOrgId || !user) return { ok: false, error: "Not signed in." };
       const { data: existing } = await supabase.from("finance_settings").select("id").eq("org_id", activeOrgId).maybeSingle();
-      const payload = { expense_categories: next as unknown as Json };
       const { error } = existing
         ? await supabase.from("finance_settings").update(payload).eq("org_id", activeOrgId)
         : await supabase.from("finance_settings").insert({ org_id: activeOrgId, user_id: user.id, ...payload });
       if (error) return { ok: false, error: error.message };
-      setList(next);
-      setIsCustom(true);
-      setAvailable(true);
       return { ok: true };
     },
     [activeOrgId, user],
   );
 
-  // Re-tag every expense that uses `oldName`. `to`/`sc` null => uncategorized.
+  const save = useCallback(
+    async (next: ExpenseCategory[]): Promise<CategoryResult> => {
+      const r = await persistSettings({ expense_categories: next as unknown as Json });
+      if (!r.ok) return r;
+      setList(next);
+      setIsCustom(true);
+      setAvailable(true);
+      return { ok: true };
+    },
+    [persistSettings],
+  );
+
+  const setTaxSchedule = useCallback(
+    async (next: TaxSchedule): Promise<CategoryResult> => {
+      const r = await persistSettings({ tax_schedule: next });
+      if (!r.ok) return r;
+      setTaxScheduleState(next);
+      return { ok: true };
+    },
+    [persistSettings],
+  );
+
+  // Re-tag every expense that uses `oldName`. Null target => uncategorized.
   const reassign = useCallback(
-    async (oldName: string, to: string | null, sc: string | null): Promise<CategoryResult> => {
+    async (oldName: string, to: string | null, sc: string | null, sf: string | null): Promise<CategoryResult> => {
       if (!supabase || !activeOrgId) return { ok: false, error: "Not signed in." };
       const { error } = await supabase
         .from("expenses")
-        .update({ category: to, schedule_c_category: sc })
+        .update({ category: to, schedule_c_category: sc, schedule_f_category: sf })
         .eq("org_id", activeOrgId)
         .eq("category", oldName);
       return error ? { ok: false, error: error.message } : { ok: true };
@@ -131,17 +171,17 @@ export function ExpenseCategoriesProvider({ children }: { children: ReactNode })
   );
 
   const addCategory = useCallback(
-    async (name: string, scheduleC: ScheduleCCategory): Promise<CategoryResult> => {
-      const clean = name.trim();
+    async (input: CategoryLines): Promise<CategoryResult> => {
+      const clean = input.name.trim();
       if (!clean) return { ok: false, error: "Name is required." };
       if (list.some((c) => sameName(c.name, clean))) return { ok: false, error: `"${clean}" already exists.` };
-      return save([...list, { name: clean, scheduleC }]);
+      return save([...list, { name: clean, scheduleC: input.scheduleC, scheduleF: input.scheduleF }]);
     },
     [list, save],
   );
 
   const updateCategory = useCallback(
-    async (original: string, next: { name: string; scheduleC: ScheduleCCategory }): Promise<CategoryResult> => {
+    async (original: string, next: CategoryLines): Promise<CategoryResult> => {
       const clean = next.name.trim();
       if (!clean) return { ok: false, error: "Name is required." };
       const current = list.find((c) => sameName(c.name, original));
@@ -149,12 +189,14 @@ export function ExpenseCategoriesProvider({ children }: { children: ReactNode })
       if (!sameName(clean, original) && list.some((c) => sameName(c.name, clean))) {
         return { ok: false, error: `"${clean}" already exists.` };
       }
-      const nextList = list.map((c) => (sameName(c.name, original) ? { name: clean, scheduleC: next.scheduleC } : c));
+      const nextList = list.map((c) =>
+        sameName(c.name, original) ? { name: clean, scheduleC: next.scheduleC, scheduleF: next.scheduleF } : c,
+      );
       const saved = await save(nextList);
       if (!saved.ok) return saved;
-      // Re-tag existing rows if the label or its Schedule C line changed.
-      if (!sameName(clean, original) || current.scheduleC !== next.scheduleC) {
-        await reassign(original, clean, next.scheduleC);
+      // Re-tag existing rows if the label or either tax line changed.
+      if (!sameName(clean, original) || current.scheduleC !== next.scheduleC || current.scheduleF !== next.scheduleF) {
+        await reassign(original, clean, next.scheduleC, next.scheduleF);
       }
       return { ok: true };
     },
@@ -167,7 +209,12 @@ export function ExpenseCategoriesProvider({ children }: { children: ReactNode })
       if (!current) return { ok: false, error: "Category not found." };
       const target = reassignTo ? list.find((c) => sameName(c.name, reassignTo)) : null;
       // Move affected rows first so none are orphaned, then drop the category.
-      const moved = await reassign(name, target ? target.name : null, target ? target.scheduleC : null);
+      const moved = await reassign(
+        name,
+        target ? target.name : null,
+        target ? target.scheduleC : null,
+        target ? target.scheduleF : null,
+      );
       if (!moved.ok) return moved;
       return save(list.filter((c) => !sameName(c.name, name)));
     },
@@ -182,6 +229,8 @@ export function ExpenseCategoriesProvider({ children }: { children: ReactNode })
     isLoading,
     isCustom,
     available,
+    taxSchedule,
+    setTaxSchedule,
     refresh,
     countUsage,
     addCategory,
@@ -197,7 +246,13 @@ export function useExpenseCategories(): ExpenseCategoriesValue {
   return useContext(Ctx);
 }
 
-/** Just the resolved book — for pickers and Schedule C resolution. */
+/** Just the resolved book — for pickers and tax-line resolution. */
 export function useCategoryBook(): CategoryBook {
   return useContext(Ctx).book;
+}
+
+/** The active tax schedule + swap — for reports and pickers. */
+export function useTaxSchedule(): { taxSchedule: TaxSchedule; setTaxSchedule: (next: TaxSchedule) => Promise<CategoryResult> } {
+  const { taxSchedule, setTaxSchedule } = useContext(Ctx);
+  return { taxSchedule, setTaxSchedule };
 }

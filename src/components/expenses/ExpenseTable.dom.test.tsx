@@ -21,6 +21,7 @@ const baseExpense = (over: Partial<Expense>): Expense => ({
   payment_method: "Card",
   receipt_url: null,
   schedule_c_category: "Supplies",
+  schedule_f_category: "Supplies",
   source: "manual",
   updated_at: "2026-06-10T00:00:00Z",
   user_id: "user-1",

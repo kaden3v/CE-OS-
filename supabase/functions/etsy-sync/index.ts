@@ -424,6 +424,7 @@ async function importLedgerExpenses(
       occurredOn: phoenixDate(created || now),
       category: cls.category,
       scheduleC: cls.scheduleC,
+      scheduleF: cls.scheduleF,
       description: decodeEntities((e.description ?? "Etsy charge").trim()).slice(0, 200),
       vendorName: "Etsy",
       source: "etsy",

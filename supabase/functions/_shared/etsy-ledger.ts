@@ -15,17 +15,24 @@
  * credits non-negative. The description picks the category bucket for a charge.
  */
 
-/** App expense category + the Schedule C line it rolls up to. */
+/**
+ * App expense category + the tax lines it rolls up to. scheduleF mirrors
+ * src/lib/scheduleF.ts EXPENSE_CATEGORY_TO_SCHEDULE_F and scheduleC mirrors
+ * src/lib/scheduleC.ts — keep the three in sync (Schedule F has no
+ * advertising/commissions line, so fees and ads land on "Other expenses";
+ * postage belongs on "Freight and trucking").
+ */
 export interface LedgerClassification {
   category: string;
   scheduleC: string;
+  scheduleF: string;
 }
 
-const SHIPPING: LedgerClassification = { category: "Shipping", scheduleC: "Other expenses" };
-const FEES: LedgerClassification = { category: "Marketplace fees", scheduleC: "Commissions and fees" };
-const ADS: LedgerClassification = { category: "Marketing", scheduleC: "Advertising" };
+const SHIPPING: LedgerClassification = { category: "Shipping", scheduleC: "Other expenses", scheduleF: "Freight and trucking" };
+const FEES: LedgerClassification = { category: "Marketplace fees", scheduleC: "Commissions and fees", scheduleF: "Other expenses" };
+const ADS: LedgerClassification = { category: "Marketing", scheduleC: "Advertising", scheduleF: "Other expenses" };
 /** Unrecognized seller charge — surfaced for review, never dropped. */
-const UNCATEGORIZED: LedgerClassification = { category: "Etsy fees (uncategorized)", scheduleC: "Commissions and fees" };
+const UNCATEGORIZED: LedgerClassification = { category: "Etsy fees (uncategorized)", scheduleC: "Commissions and fees", scheduleF: "Other expenses" };
 
 /**
  * Etsy ledger amounts are integers in the currency's minor unit (cents) —

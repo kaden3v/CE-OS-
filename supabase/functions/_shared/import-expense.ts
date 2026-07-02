@@ -24,6 +24,7 @@ export interface NormalizedExpense {
   occurredOn: string;
   category: string;
   scheduleC: string;
+  scheduleF: string;
   description: string;
   /** Free-text vendor label kept on the row (no vendor_id link). */
   vendorName: string;
@@ -61,6 +62,7 @@ export async function importNormalizedExpense(
     occurred_on: expense.occurredOn,
     category: expense.category,
     schedule_c_category: expense.scheduleC,
+    schedule_f_category: expense.scheduleF,
     vendor_name: expense.vendorName,
     source: expense.source,
     deductible: true,

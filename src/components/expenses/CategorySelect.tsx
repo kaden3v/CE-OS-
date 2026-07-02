@@ -1,4 +1,4 @@
-import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
+import { useCategoryBook, useTaxSchedule } from "@/contexts/ExpenseCategoriesContext";
 import { cn } from "@/lib/utils";
 
 interface CategorySelectProps {
@@ -12,9 +12,10 @@ interface CategorySelectProps {
 }
 
 /**
- * Expense category picker, grouped under its Schedule C line via the shared
- * mapping. Emits the chosen category string (""/blank = uncategorized); callers
- * derive schedule_c_category with mapToScheduleC.
+ * Expense category picker, grouped under the org's active tax schedule line
+ * (Schedule F by default, C when swapped) via the shared mapping. Emits the
+ * chosen category string (""/blank = uncategorized); callers derive the
+ * schedule_*_category snapshots from the CategoryBook.
  */
 export function CategorySelect({
   value,
@@ -25,7 +26,9 @@ export function CategorySelect({
   id,
   ...rest
 }: CategorySelectProps) {
-  const groups = useCategoryBook().groups;
+  const book = useCategoryBook();
+  const { taxSchedule } = useTaxSchedule();
+  const groups = book.groupsFor(taxSchedule);
   return (
     <select
       id={id}
@@ -39,7 +42,7 @@ export function CategorySelect({
     >
       {includeBlank && <option value="">{blankLabel}</option>}
       {groups.map((g) => (
-        <optgroup key={g.scheduleC} label={g.scheduleC}>
+        <optgroup key={g.line} label={g.line}>
           {g.categories.map((c) => (
             <option key={c} value={c}>
               {c}

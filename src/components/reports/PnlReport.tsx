@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { LoadingTable } from "@/components/ui/StateRenderer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
+import { useTaxSchedule } from "@/contexts/ExpenseCategoriesContext";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
 import { currentYear } from "@/lib/dates";
@@ -17,6 +18,7 @@ interface Row { label: string; months: number[]; total: number; bold?: boolean; 
 export function PnlReport() {
   const { activeOrgId } = useAuth();
   const { addToast } = useApp();
+  const { taxSchedule } = useTaxSchedule();
   const [year, setYear] = useState(currentYear());
   const [pnl, setPnl] = useState<Pnl | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,11 +47,14 @@ export function PnlReport() {
       { label: "Shipping collected", months: mv((w) => n(w.shipping_collected)), total: n(t.shipping_collected) },
       { label: "Operating Expenses", months: mv((w) => n(w.expenses)), total: n(t.expenses) },
     ];
-    for (const sc of pnl.schedule_c) out.push({ label: sc.category, months: sc.months.map(n), total: n(sc.total), indent: true });
+    // Expense detail follows the org's active tax schedule (F is the default;
+    // schedule_f is absent until its migration lands, so fall back to C).
+    const breakdown = (taxSchedule === "F" ? pnl.schedule_f : pnl.schedule_c) ?? pnl.schedule_c;
+    for (const sc of breakdown) out.push({ label: sc.category, months: sc.months.map(n), total: n(sc.total), indent: true });
     out.push({ label: "Mileage deduction", months: mv((w) => n(w.mileage)), total: n(t.mileage), indent: true });
     out.push({ label: "Net Profit", months: mv((w) => n(w.net_profit)), total: n(t.net_profit), bold: true });
     return out;
-  }, [pnl]);
+  }, [pnl, taxSchedule]);
 
   const exportCsv = () => {
     if (!pnl) return;

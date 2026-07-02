@@ -120,6 +120,7 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
       occurred_on: form.occurred_on,
       category,
       schedule_c_category: category ? book.scheduleCFor(category) : null,
+      schedule_f_category: category ? book.scheduleFFor(category) : null,
       payment_method: form.payment_method || null,
       vendor_id: form.vendor_id || null,
       deductible: form.deductible,
