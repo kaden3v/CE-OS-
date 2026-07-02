@@ -25,7 +25,7 @@ function makeOrder(p: Partial<OrderWithRelations> & { id: string }): OrderWithRe
     status: p.status ?? "active",
     placed_at: p.placed_at ?? "2026-06-10T12:00:00Z",
     subtotal: p.subtotal ?? 0, shipping: p.shipping ?? 0, tax: p.tax ?? 0, total: p.total ?? 0,
-    customer_id: p.customer_id ?? null, external_id: null, notes: null,
+    customer_id: p.customer_id ?? null, external_id: null, notes: null, inventory_consumed_at: null,
     created_at: "2026-06-10T12:00:00Z", updated_at: "2026-06-10T12:00:00Z",
     customer: p.customer ?? null, items: p.items ?? [],
   };
