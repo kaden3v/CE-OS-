@@ -164,6 +164,10 @@ Deno.serve(async (req: Request) => {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return json(501, { error: "not_configured" });
 
+  // Reject oversized uploads before buffering the body.
+  const declaredLength = Number(req.headers.get("content-length") ?? "0");
+  if (declaredLength > MAX_BASE64_CHARS * 1.1) return json(413, { error: "file too large to scan" });
+
   let body: ScanRequest;
   try {
     body = await req.json();

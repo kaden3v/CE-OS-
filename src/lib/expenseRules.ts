@@ -5,9 +5,10 @@
  * model learns from what you've already categorized, while a rule captures
  * intent up front ("anything with AMZN in the memo is Supplies") — including for
  * vendors the ledger has never seen. Matching is pure and runs client-side at
- * the three write paths that need it (CSV import, receipt scan, manual entry),
- * so there is no server-side engine to keep in sync. Synced Etsy rows arrive
- * already classified and are not run through rules.
+ * the write paths that need it (CSV import, receipt-scan drafts, and on-save
+ * sweeps of rows needing review), so there is no server-side engine to keep in
+ * sync. Synced Etsy rows arrive already classified and are not run through
+ * rules; manual entry picks a category directly in the form.
  *
  * Matching semantics: case-insensitive substring on memo and/or vendor, plus an
  * optional inclusive amount range. Rules are tried in priority order (lower

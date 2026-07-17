@@ -18,6 +18,17 @@ type TableName = keyof Database["public"]["Tables"];
 const PAGE_SIZE = 1000;
 const DEFAULT_FETCH_LIMIT = 50000;
 
+// Bulk update/delete send their id set as a PostgREST `id=in.(…)` query-string
+// filter, and a few hundred UUIDs blows past common gateway URL limits. Chunk
+// the ids; each chunk is one request.
+const ID_CHUNK_SIZE = 150;
+
+const idChunks = <Id,>(ids: readonly Id[]): Id[][] => {
+  const out: Id[][] = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK_SIZE) out.push(ids.slice(i, i + ID_CHUNK_SIZE) as Id[]);
+  return out;
+};
+
 /**
  * Backend-aware list state.
  *
@@ -203,10 +214,14 @@ export function useEntity<T extends WithId, Row = T>(
       ? options.toRow({ ...({} as any), ...patch } as T, user!.id)
       : (patch as Record<string, unknown>);
     const { user_id: _u, id: _i, org_id: _o, ...safe } = mapped;
-    const { error } = await db.from(table).update(safe).in("id", ids).eq("org_id", activeOrgId!);
-    if (error) {
-      logDbError(`updateMany ${table}`, error);
-      return { ok: false, code: error.code };
+    for (const chunk of idChunks(ids)) {
+      const { error } = await db.from(table).update(safe).in("id", chunk).eq("org_id", activeOrgId!);
+      if (error) {
+        // Earlier chunks may have applied; realtime/refetch reconciles state.
+        logDbError(`updateMany ${table}`, error);
+        void fetchAll();
+        return { ok: false, code: error.code };
+      }
     }
     const idSet = new Set(ids);
     setData((prev) => prev.map((r) => (idSet.has(r.id) ? { ...r, ...patch } : r)));
@@ -242,10 +257,14 @@ export function useEntity<T extends WithId, Row = T>(
   const removeMany = async (ids: T["id"][]): Promise<{ ok: boolean; code?: string }> => {
     if (!ready) return { ok: false, code: "NOT_READY" };
     if (ids.length === 0) return { ok: true };
-    const { error } = await db.from(table).delete().in("id", ids).eq("org_id", activeOrgId!);
-    if (error) {
-      logDbError(`removeMany ${table}`, error);
-      return { ok: false, code: error.code };
+    for (const chunk of idChunks(ids)) {
+      const { error } = await db.from(table).delete().in("id", chunk).eq("org_id", activeOrgId!);
+      if (error) {
+        // Earlier chunks may have applied; realtime/refetch reconciles state.
+        logDbError(`removeMany ${table}`, error);
+        void fetchAll();
+        return { ok: false, code: error.code };
+      }
     }
     const idSet = new Set(ids);
     setData((prev) => prev.filter((r) => !idSet.has(r.id)));

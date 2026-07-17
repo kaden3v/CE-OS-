@@ -24,7 +24,7 @@ import { CategorySelect } from "@/components/expenses/CategorySelect";
 import { SmartCategorizeModal, type SuggestionItem } from "@/components/expenses/SmartCategorizeModal";
 import { RuleModal, type ExpenseRule, type RuleFormData } from "@/components/expenses/RuleModal";
 import { suggestForRows } from "@/lib/expenseCategorization";
-import { matchesRule } from "@/lib/expenseRules";
+import { applyRules, matchesRule } from "@/lib/expenseRules";
 import { scanReceipt, type ReceiptDraft } from "@/lib/receiptScan";
 import { summarizeWrites } from "@/lib/writeSummary";
 import { isManaged, isUncategorized, needsReview, type Expense, type ExpenseFormData, type Vendor } from "@/components/expenses/types";
@@ -169,8 +169,21 @@ export default function Expenses() {
       return;
     }
     setScanning(true);
-    const draft = await scanReceipt(file, { categories: book.names });
+    let draft = await scanReceipt(file, { categories: book.names });
     setScanning(false);
+    // The user's rules outrank the scanner's category guess. Amount-bounded
+    // rules only apply when the scan actually read an amount.
+    const applicable = draft.amount != null
+      ? rules
+      : rules.filter((r) => r.amount_min == null && r.amount_max == null);
+    const matched = applyRules(applicable, {
+      description: draft.memo ?? draft.vendor_name,
+      vendor_name: draft.vendor_name,
+      amount: draft.amount ?? 0,
+    });
+    if (matched) {
+      draft = { ...draft, category: book.canonical(matched.set_category) ?? matched.set_category };
+    }
     setScanFile(file);
     setScanDraft(draft);
     setEditing(null);
@@ -455,17 +468,36 @@ export default function Expenses() {
       return false;
     }
     addToast({ title: "Rule created", description: `${data.match_value} → ${data.set_category}`, status: "ok" });
-    if (applyExisting) {
-      const targets = matchingReviewables(data);
-      if (targets.length > 0) {
-        const category = book.canonical(data.set_category) ?? data.set_category;
-        const patch: Partial<Expense> = { ...categoryPatch(category) };
-        if (data.set_vendor_id) patch.vendor_id = data.set_vendor_id;
-        const res = await updateMany(targets.map((e) => e.id), patch);
-        if (res.ok) addToast({ ...summarizeWrites(targets.length, 0, { verbPast: "categorized" }), description: category });
+    if (applyExisting) await sweepRule(data);
+    return true;
+  };
+
+  // Apply a just-saved rule to the rows needing review that it matches. Vendor
+  // linkage only touches hand-entered/CSV rows — synced rows take the category
+  // (sync-safe) but keep their own vendor identity.
+  const sweepRule = async (data: RuleFormData): Promise<void> => {
+    const targets = matchingReviewables(data);
+    if (targets.length === 0) return;
+    const category = book.canonical(data.set_category) ?? data.set_category;
+    const basePatch = categoryPatch(category);
+    const editable = targets.filter((e) => !isManaged(e));
+    const managed = targets.filter((e) => isManaged(e));
+    const writes: { ids: string[]; patch: Partial<Expense> }[] = [];
+    if (editable.length > 0) {
+      writes.push({
+        ids: editable.map((e) => e.id),
+        patch: data.set_vendor_id ? { ...basePatch, vendor_id: data.set_vendor_id } : basePatch,
+      });
+    }
+    if (managed.length > 0) writes.push({ ids: managed.map((e) => e.id), patch: basePatch });
+    for (const w of writes) {
+      const res = await updateMany(w.ids, w.patch);
+      if (!res.ok) {
+        addToast({ title: "Rule saved, but applying it failed", description: friendlyDbError({ code: res.code } as any), status: "alert" });
+        return;
       }
     }
-    return true;
+    addToast({ ...summarizeWrites(targets.length, 0, { verbPast: "categorized" }), description: category });
   };
 
   // ---- Delete (single + bulk) ----------------------------------------------
@@ -603,6 +635,11 @@ export default function Expenses() {
 
   const undoBatch = async (batch: ImportBatch): Promise<void> => {
     if (!supabase || !activeOrgId) return;
+    // Receipts attached to the batch's rows would be orphaned by the row
+    // delete — collect their paths first, clean up after the delete succeeds.
+    const receiptPaths = expenses
+      .filter((e) => e.import_batch_id === batch.id && e.receipt_url)
+      .map((e) => e.receipt_url!);
     const { error } = await supabase
       .from("expenses")
       .delete()
@@ -613,6 +650,7 @@ export default function Expenses() {
       addToast({ title: "Couldn't undo import", description: friendlyDbError(error), status: "alert" });
       return;
     }
+    for (const path of receiptPaths) await removeReceipt(path);
     await removeBatch(batch.id);
     addToast({ title: "Import undone", description: `${batch.row_count} expenses removed`, status: "info" });
     await refresh();

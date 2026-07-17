@@ -13,7 +13,7 @@ import { formatMoney } from "@/lib/format";
 import { matchesRule, sortRules } from "@/lib/expenseRules";
 import { summarizeWrites } from "@/lib/writeSummary";
 import { RuleModal, type ExpenseRule, type RuleFormData } from "@/components/expenses/RuleModal";
-import { needsReview, type Expense, type Vendor } from "@/components/expenses/types";
+import { isManaged, needsReview, type Expense, type Vendor } from "@/components/expenses/types";
 
 /**
  * Manage auto-categorization rules. The ledger itself is also loaded (read-only
@@ -60,21 +60,34 @@ export default function ExpenseRules() {
       ),
     );
 
+  // Vendor linkage only touches hand-entered/CSV rows — synced rows take the
+  // category (sync-safe) but keep their own vendor identity.
   const applyToExisting = async (data: RuleFormData): Promise<void> => {
     const targets = matchingReviewables(data);
     if (targets.length === 0) return;
     const category = book.canonical(data.set_category) ?? data.set_category;
-    const patch: Partial<Expense> = {
+    const basePatch: Partial<Expense> = {
       category,
       schedule_c_category: book.scheduleCFor(category),
       schedule_f_category: book.scheduleFFor(category),
       needs_review: false,
     };
-    if (data.set_vendor_id) patch.vendor_id = data.set_vendor_id;
-    const r = await updateManyExpenses(targets.map((e) => e.id), patch);
-    if (!r.ok) {
-      addToast({ title: "Rule saved, but applying it failed", description: friendlyDbError({ code: r.code } as any), status: "alert" });
-      return;
+    const editable = targets.filter((e) => !isManaged(e));
+    const managed = targets.filter((e) => isManaged(e));
+    const writes: { ids: string[]; patch: Partial<Expense> }[] = [];
+    if (editable.length > 0) {
+      writes.push({
+        ids: editable.map((e) => e.id),
+        patch: data.set_vendor_id ? { ...basePatch, vendor_id: data.set_vendor_id } : basePatch,
+      });
+    }
+    if (managed.length > 0) writes.push({ ids: managed.map((e) => e.id), patch: basePatch });
+    for (const w of writes) {
+      const r = await updateManyExpenses(w.ids, w.patch);
+      if (!r.ok) {
+        addToast({ title: "Rule saved, but applying it failed", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+        return;
+      }
     }
     addToast({ ...summarizeWrites(targets.length, 0, { verbPast: "categorized" }), description: category });
   };

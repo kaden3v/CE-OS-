@@ -125,6 +125,7 @@ set search_path = public
 as $$
 declare
   s public.recurring_expenses%rowtype;
+  v_today date;
   v_base date;
   v_new  date;
   v_step interval;
@@ -137,7 +138,8 @@ begin
   select * into s from public.recurring_expenses where id = p_id;
   if s.id is null then raise exception 'subscription not found'; end if;
 
-  v_base := coalesce(s.next_renewal, (now() at time zone 'America/Phoenix')::date);
+  v_today := (now() at time zone 'America/Phoenix')::date;
+  v_base := coalesce(s.next_renewal, v_today);
   v_step := case s.billing_cycle
               when 'yearly' then interval '1 year'
               when 'quarterly' then interval '3 months'
@@ -179,15 +181,19 @@ begin
                  when 'seeds and plants'      then 'Seeds and plants'
                  else 'Other expenses' end);
 
+  -- A charge posted well after its renewal date is a catch-up (the cron was
+  -- off, or the sub sat stale) — flag it for a human glance instead of letting
+  -- backfilled history land silently. The normal daily post (0-3 days) doesn't.
   insert into public.expenses
     (org_id, user_id, amount, occurred_on, category,
      schedule_c_category, schedule_f_category,
-     vendor_id, vendor_name, source, deductible, description)
+     vendor_id, vendor_name, source, deductible, description, needs_review)
   values
     (s.org_id, s.user_id, s.amount, v_base, coalesce(s.category, 'Subscription'),
      v_sched_c, v_sched_f,
      s.vendor_id, case when s.vendor_id is null then s.name end,
-     'subscription', true, s.name || ' (' || s.billing_cycle || ')');
+     'subscription', true, s.name || ' (' || s.billing_cycle || ')',
+     v_base < v_today - 3);
 
   update public.recurring_expenses set next_renewal = v_new, updated_at = now() where id = p_id;
   return v_new;
@@ -200,8 +206,14 @@ grant execute on function public.log_subscription_charge(uuid) to authenticated;
 -- ones are flipped ON so the daily worker picks them up. The worker's catch-up
 -- loop posts any renewals that came due while nothing was scheduled.
 alter table public.recurring_expenses alter column auto_log set default true;
+-- Flip existing active subscriptions on — but not deeply stale ones (> 60 days
+-- overdue): those would trigger a long backdated backfill the owner never saw
+-- coming. They keep showing in the Overview's "overdue" alert instead, and one
+-- click on their auto-log toggle opts them in deliberately.
 update public.recurring_expenses set auto_log = true, updated_at = now()
- where status = 'active' and auto_log = false;
+ where status = 'active' and auto_log = false
+   and (next_renewal is null
+        or next_renewal >= (now() at time zone 'America/Phoenix')::date - 60);
 
 -- The missing schedule: nothing ever called process_due_subscriptions(). Run
 -- it daily at 13:30 UTC (06:30 America/Phoenix, no DST) straight in Postgres —
@@ -277,9 +289,12 @@ as $$
           or (e.vendor_id is null and e.source not in ('etsy', 'subscription', 'supply_purchase', 'csv'))
         )
     ), '[]'::jsonb),
+    -- Only categorized rows: uncategorized ones already appear in the
+    -- 'uncategorized' list above, and this line's copy promises "confirm the
+    -- auto-applied categories" — no double-counting one row across two alerts.
     'needs_review', coalesce((
       select count(*) from public.expenses e
-      where e.org_id = p_org_id and e.needs_review
+      where e.org_id = p_org_id and e.needs_review and e.category is not null
     ), 0)
   );
 $$;

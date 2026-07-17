@@ -122,7 +122,7 @@ export function RuleModal({ open, onClose, vendors, editing, initial, onSubmit, 
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
         <div className="flex items-start gap-2 rounded-lg border border-accent-brand/30 bg-accent-brand/10 px-3 py-2 text-xs text-text-secondary">
           <Wand2 className="w-3.5 h-3.5 text-accent-brand shrink-0 mt-0.5" />
-          Rules auto-categorize expenses as they arrive — CSV imports, receipt scans, and manual entry.
+          Rules auto-categorize expenses as they arrive — CSV imports and receipt scans.
         </div>
 
         <div className="grid grid-cols-[minmax(0,10rem)_1fr] gap-4">
