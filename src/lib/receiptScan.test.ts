@@ -46,13 +46,31 @@ describe("draftFromFilename", () => {
 });
 
 describe("scanReceipt", () => {
+  // No usable mime type + no Supabase in the test env → the scanner path is
+  // skipped and the filename fallback drives the draft.
   it("labels a recognizable filename as a mocked 'filename' draft", async () => {
     const d = await scanReceipt(new File([""], "receipt_2026-06-21_42.18.pdf"));
-    expect(d).toEqual({ amount: 42.18, occurred_on: "2026-06-21", vendor_name: null, source: "filename", mocked: true });
+    expect(d).toEqual({
+      amount: 42.18,
+      occurred_on: "2026-06-21",
+      vendor_name: null,
+      memo: null,
+      category: null,
+      source: "filename",
+      mocked: true,
+    });
   });
 
   it("labels an unrecognizable filename as 'none' (drives the modal's 'add details' copy)", async () => {
     const d = await scanReceipt(new File([""], "scan.pdf"));
-    expect(d).toEqual({ amount: null, occurred_on: null, vendor_name: null, source: "none", mocked: true });
+    expect(d).toEqual({
+      amount: null,
+      occurred_on: null,
+      vendor_name: null,
+      memo: null,
+      category: null,
+      source: "none",
+      mocked: true,
+    });
   });
 });

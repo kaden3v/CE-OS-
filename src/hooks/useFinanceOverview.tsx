@@ -82,6 +82,8 @@ export interface FinanceAlerts {
   overdue: SubscriptionAlert[];
   low_stock: SupplyAlert[];
   uncategorized: ExpenseAlert[];
+  /** Imported expenses awaiting a human glance (absent on older RPC versions). */
+  needs_review?: number;
 }
 
 /**

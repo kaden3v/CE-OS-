@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { UploadCloud, Loader2, AlertTriangle, Copy, ArrowLeft } from "lucide-react";
+import { UploadCloud, Loader2, AlertTriangle, Copy, ArrowLeft, Wand2, Sparkles, Undo2, History } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -7,27 +7,53 @@ import { Toggle } from "@/components/ui/Toggle";
 import { useApp } from "@/contexts/AppContext";
 import { parseCsv, parseCsvAmount, parseCsvDate } from "@/lib/csv";
 import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
-import { isInflow, passesPolarity, type Polarity } from "@/lib/expenseImport";
+import {
+  assignCsvExternalIds,
+  categorizeImportRow,
+  isInflow,
+  passesPolarity,
+  type ImportCategorySource,
+  type Polarity,
+} from "@/lib/expenseImport";
+import { buildCategoryModel } from "@/lib/expenseCategorization";
+import type { ExpenseRuleFields } from "@/lib/expenseRules";
 import { formatMoney } from "@/lib/format";
-import { formatBusinessDate } from "@/lib/dates";
+import { formatBusinessDate, formatBusinessDateTime } from "@/lib/dates";
+import type { Tables } from "@/lib/database.types";
 import type { Expense } from "./types";
+
+export type ImportBatch = Tables<"expense_import_batches">;
 
 export interface ImportRow {
   occurred_on: string;
   amount: number;
   description: string | null;
+  vendor_name: string | null;
   category: string | null;
   category_legacy: string | null;
+  external_id: string;
+  needs_review: boolean;
+  /** Which stage categorized the row (rule/file/history) — for the summary toast. */
+  category_source: ImportCategorySource | null;
+  /** Vendor link applied by a rule, if any. */
+  vendor_id: string | null;
 }
 
 interface CsvImportWizardProps {
   open: boolean;
   onClose: () => void;
   existing: Expense[];
-  onImport: (rows: ImportRow[]) => Promise<number>;
+  /** Active org — used to build deterministic external ids. */
+  orgId: string | null;
+  /** The org's rules, applied to each row before file/history categories. */
+  rules: readonly ExpenseRuleFields[];
+  /** Recent imports, newest first (drives the undo list on the upload step). */
+  batches: ImportBatch[];
+  onUndoBatch: (batch: ImportBatch) => Promise<void>;
+  onImport: (rows: ImportRow[], fileName: string) => Promise<number>;
 }
 
-type Mapping = { date: number; amount: number; description: number; category: number };
+type Mapping = { date: number; amount: number; description: number; vendor: number; category: number };
 
 const NONE = -1;
 const selectCls =
@@ -37,7 +63,9 @@ const selectClsSmall =
 
 const guess = (headers: string[], re: RegExp): number => headers.findIndex((h) => re.test(h));
 
-export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImportWizardProps) {
+export function CsvImportWizard({
+  open, onClose, existing, orgId, rules, batches, onUndoBatch, onImport,
+}: CsvImportWizardProps) {
   const { addToast } = useApp();
   const book = useCategoryBook();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -46,17 +74,18 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
   const [dataRows, setDataRows] = useState<string[][]>([]);
-  const [mapping, setMapping] = useState<Mapping>({ date: NONE, amount: NONE, description: NONE, category: NONE });
+  const [mapping, setMapping] = useState<Mapping>({ date: NONE, amount: NONE, description: NONE, vendor: NONE, category: NONE });
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [polarity, setPolarity] = useState<Polarity>("all");
   const [importing, setImporting] = useState(false);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
 
   const reset = () => {
     setStep("upload");
     setFileName("");
     setHeaders([]);
     setDataRows([]);
-    setMapping({ date: NONE, amount: NONE, description: NONE, category: NONE });
+    setMapping({ date: NONE, amount: NONE, description: NONE, vendor: NONE, category: NONE });
     setSkipDuplicates(true);
     setPolarity("all");
   };
@@ -80,67 +109,139 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
     setMapping({
       date: guess(head, /date/i),
       amount: guess(head, /amount|total|debit|charge|price/i),
-      description: guess(head, /desc|memo|note|detail|name/i),
+      description: guess(head, /desc|memo|note|detail/i),
+      vendor: guess(head, /vendor|merchant|payee|paid to|supplier/i),
       category: guess(head, /categ|type/i),
     });
     setStep("map");
   };
 
+  // The history model learns from the loaded ledger once per open file.
+  const model = useMemo(() => buildCategoryModel(existing, book.canonical), [existing, book]);
+  const existingExternalIds = useMemo(
+    () => new Set(existing.map((e) => e.external_id).filter((id): id is string => !!id)),
+    [existing],
+  );
+
   const parsed = useMemo(() => {
     if (mapping.date === NONE || mapping.amount === NONE) return [];
-    return dataRows.map((r) => {
+    const base = dataRows.map((r) => {
       const occurred_on = parseCsvDate(r[mapping.date] ?? "");
       const raw = parseCsvAmount(r[mapping.amount] ?? "");
       const amount = raw == null ? null : Math.abs(raw);
       const inflow = isInflow(raw); // positive = money in (deposit/refund), not an expense
       const description = mapping.description >= 0 ? (r[mapping.description] ?? "").trim() || null : null;
-      const rawCategory = mapping.category >= 0 ? (r[mapping.category] ?? "").trim() || null : null;
-      const { category, legacy } = book.normalize(rawCategory);
+      const vendor_name = mapping.vendor >= 0 ? (r[mapping.vendor] ?? "").trim() || null : null;
+      const fileCategoryRaw = mapping.category >= 0 ? (r[mapping.category] ?? "").trim() || null : null;
       const valid = !!occurred_on && amount != null && amount > 0;
-      const duplicate =
-        valid &&
-        existing.some((e) => e.occurred_on === occurred_on && Math.abs(Number(e.amount) - (amount as number)) < 0.005);
-      return { occurred_on, amount, inflow, description, category, category_legacy: legacy, valid, duplicate };
+      return { occurred_on, amount, inflow, description, vendor_name, fileCategoryRaw, valid };
     });
-  }, [dataRows, mapping, existing, book]);
+
+    // Deterministic idempotency keys over the valid rows, in file order — so the
+    // same file always produces the same keys regardless of skip toggles.
+    const validRows = base.filter((p) => p.valid);
+    const ids = orgId
+      ? assignCsvExternalIds(
+          orgId,
+          validRows.map((p) => ({ occurred_on: p.occurred_on as string, amount: p.amount as number, description: p.description })),
+        )
+      : validRows.map(() => "");
+    let vi = 0;
+
+    return base.map((p) => {
+      if (!p.valid) {
+        return { ...p, external_id: "", alreadyImported: false, duplicate: false,
+          category: null as string | null, category_legacy: null as string | null,
+          categorySource: null as ImportCategorySource | null, vendor_id: null as string | null, needs_review: true };
+      }
+      const external_id = ids[vi++];
+      const alreadyImported = !!external_id && existingExternalIds.has(external_id);
+      const duplicate = existing.some(
+        (e) => e.occurred_on === p.occurred_on && Math.abs(Number(e.amount) - (p.amount as number)) < 0.005,
+      );
+      const cat = categorizeImportRow(
+        { amount: p.amount as number, description: p.description, vendor_name: p.vendor_name, fileCategoryRaw: p.fileCategoryRaw },
+        { book, rules, model },
+      );
+      return {
+        ...p, external_id, alreadyImported, duplicate,
+        category: cat.category, category_legacy: cat.category_legacy,
+        categorySource: cat.categorySource, vendor_id: cat.vendor_id, needs_review: cat.needs_review,
+      };
+    });
+  }, [dataRows, mapping, existing, existingExternalIds, orgId, book, rules, model]);
 
   const stats = useMemo(() => {
     const valid = parsed.filter((p) => p.valid);
     const inflows = valid.filter((p) => p.inflow);
-    const eligible = valid.filter((p) => passesPolarity(polarity, p.inflow));
+    const eligible = valid.filter((p) => passesPolarity(polarity, p.inflow) && !p.alreadyImported);
+    const already = valid.filter((p) => passesPolarity(polarity, p.inflow) && p.alreadyImported);
     const dupes = eligible.filter((p) => p.duplicate);
     const toImport = eligible.filter((p) => !skipDuplicates || !p.duplicate);
-    return { total: parsed.length, valid: valid.length, inflows: inflows.length, dupes: dupes.length, toImport: toImport.length };
+    const autoCategorized = toImport.filter((p) => p.categorySource != null);
+    const skipReview = toImport.filter((p) => !p.needs_review);
+    return {
+      total: parsed.length,
+      valid: valid.length,
+      inflows: inflows.length,
+      already: already.length,
+      dupes: dupes.length,
+      toImport: toImport.length,
+      autoCategorized: autoCategorized.length,
+      skipReview: skipReview.length,
+    };
   }, [parsed, skipDuplicates, polarity]);
 
   const runImport = async () => {
     const rows: ImportRow[] = parsed
-      .filter((p) => p.valid && passesPolarity(polarity, p.inflow) && (!skipDuplicates || !p.duplicate))
+      .filter((p) => p.valid && passesPolarity(polarity, p.inflow) && !p.alreadyImported && (!skipDuplicates || !p.duplicate))
       .map((p) => ({
         occurred_on: p.occurred_on as string,
         amount: p.amount as number,
         description: p.description,
+        vendor_name: p.vendor_name,
         category: p.category,
         category_legacy: p.category_legacy,
+        external_id: p.external_id,
+        needs_review: p.needs_review,
+        category_source: p.categorySource,
+        vendor_id: p.vendor_id,
       }));
     if (rows.length === 0) {
       addToast({ title: "Nothing to import", description: "No valid rows after filtering.", status: "warn" });
       return;
     }
     setImporting(true);
-    const count = await onImport(rows);
+    const count = await onImport(rows, fileName);
     setImporting(false);
-    if (count > 0) {
-      addToast({ title: "Import complete", description: `${count} expense${count === 1 ? "" : "s"} added · review categories.`, status: "ok" });
-      close();
+    if (count > 0) close();
+  };
+
+  const undoBatch = async (batch: ImportBatch) => {
+    if (!confirm(`Undo “${batch.file_name || "import"}”? Its ${batch.row_count} imported expense${batch.row_count === 1 ? "" : "s"} will be deleted.`)) return;
+    setUndoingId(batch.id);
+    try {
+      await onUndoBatch(batch);
+    } finally {
+      setUndoingId(null);
     }
+  };
+
+  const sourceBadge = (src: ImportCategorySource | null) => {
+    if (src === "rule") {
+      return <span className="inline-flex items-center gap-1 text-accent-brand" title="Categorized by one of your rules"><Wand2 className="w-3 h-3" /></span>;
+    }
+    if (src === "history") {
+      return <span className="inline-flex items-center gap-1 text-accent-brand" title="Suggested from how you've categorized similar expenses"><Sparkles className="w-3 h-3" /></span>;
+    }
+    return null;
   };
 
   return (
     <Modal open={open} onClose={close} title="Import Expenses from CSV" size="xl">
       <div className="p-4">
         {step === "upload" && (
-          <div>
+          <div className="space-y-4">
             <input
               ref={fileRef}
               type="file"
@@ -158,8 +259,38 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
             >
               <UploadCloud className="w-8 h-8 opacity-70" />
               <span className="text-sm font-medium">Choose a CSV file</span>
-              <span className="text-xs text-text-tertiary">Bank, Etsy, Shopify, or spreadsheet export</span>
+              <span className="text-xs text-text-tertiary">Bank or card statement, Etsy, Shopify, or spreadsheet export</span>
             </button>
+            <p className="text-xs text-text-tertiary">
+              Re-importing an overlapping statement is safe — rows you've already imported are recognized and skipped.
+            </p>
+
+            {batches.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2 text-xs uppercase tracking-wide text-text-secondary">
+                  <History className="w-3.5 h-3.5" /> Recent imports
+                </div>
+                <ul className="divide-y divide-border-subtle/60 rounded-lg border border-border-subtle">
+                  {batches.slice(0, 5).map((b) => (
+                    <li key={b.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                      <span className="truncate flex-1">{b.file_name || "CSV import"}</span>
+                      <span className="text-xs text-text-tertiary whitespace-nowrap">
+                        {b.row_count} {b.row_count === 1 ? "row" : "rows"} · {formatBusinessDateTime(b.created_at)}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={undoingId === b.id || b.row_count === 0}
+                        onClick={() => void undoBatch(b)}
+                        title="Delete every expense this import created"
+                      >
+                        {undoingId === b.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />} Undo
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -173,6 +304,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                 ["date", "Date *"],
                 ["amount", "Amount *"],
                 ["description", "Description"],
+                ["vendor", "Vendor / Merchant"],
                 ["category", "Category"],
               ] as const).map(([key, label]) => (
                 <div key={key}>
@@ -207,6 +339,16 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
               <span className="text-text-secondary">{stats.valid} valid of {stats.total}</span>
+              {stats.autoCategorized > 0 && (
+                <span className="flex items-center gap-1.5 text-accent-brand" title="Categorized by your rules or from your history — the rest land uncategorized for review.">
+                  <Wand2 className="w-3.5 h-3.5" /> {stats.autoCategorized} auto-categorized
+                </span>
+              )}
+              {stats.already > 0 && (
+                <span className="flex items-center gap-1.5 text-text-tertiary" title="These exact rows were imported before and are skipped automatically.">
+                  <Copy className="w-3.5 h-3.5" /> {stats.already} already imported
+                </span>
+              )}
               {stats.inflows > 0 && polarity !== "out" && (
                 <span className="flex items-center gap-1.5 text-status-warn" title="Positive amounts look like deposits/refunds — set Import to “Money out only” to skip them.">
                   <AlertTriangle className="w-3.5 h-3.5" /> {stats.inflows} look like income
@@ -242,6 +384,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                   <tr>
                     <th className="px-3 py-2 font-medium">Date</th>
                     <th className="px-3 py-2 font-medium">Amount</th>
+                    <th className="px-3 py-2 font-medium">Vendor</th>
                     <th className="px-3 py-2 font-medium">Description</th>
                     <th className="px-3 py-2 font-medium">Category</th>
                     <th className="px-3 py-2 font-medium">Status</th>
@@ -252,15 +395,21 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                     <tr key={i} className="border-b border-border-subtle/50 last:border-0">
                       <td className="px-3 py-1.5 whitespace-nowrap">{p.occurred_on ? formatBusinessDate(p.occurred_on) : <span className="text-status-alert">—</span>}</td>
                       <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{p.amount != null ? formatMoney(p.amount) : <span className="text-status-alert">—</span>}</td>
-                      <td className="px-3 py-1.5 max-w-[14rem] truncate text-text-secondary">{p.description ?? "—"}</td>
+                      <td className="px-3 py-1.5 max-w-[9rem] truncate text-text-secondary">{p.vendor_name ?? "—"}</td>
+                      <td className="px-3 py-1.5 max-w-[12rem] truncate text-text-secondary">{p.description ?? "—"}</td>
                       <td className="px-3 py-1.5 text-text-secondary">
-                        {p.category ?? (p.category_legacy
-                          ? <span className="text-status-warn" title={`“${p.category_legacy}” isn't a known category — imports as Needs review`}>Needs review</span>
-                          : "—")}
+                        <span className="inline-flex items-center gap-1.5">
+                          {p.category ?? (p.category_legacy
+                            ? <span className="text-status-warn" title={`“${p.category_legacy}” isn't a known category — imports as Needs review`}>Needs review</span>
+                            : <span className="text-text-tertiary">Needs review</span>)}
+                          {sourceBadge(p.categorySource)}
+                        </span>
                       </td>
                       <td className="px-3 py-1.5">
                         {!p.valid ? (
                           <span className="inline-flex items-center gap-1 text-status-alert text-xs"><AlertTriangle className="w-3.5 h-3.5" /> Invalid</span>
+                        ) : p.alreadyImported ? (
+                          <span className="text-text-tertiary text-xs">Already imported</span>
                         ) : !passesPolarity(polarity, p.inflow) ? (
                           <span className="text-text-tertiary text-xs">Skipped</span>
                         ) : p.inflow ? (
@@ -277,6 +426,9 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
               </table>
             </div>
             {parsed.length > 200 && <p className="text-xs text-text-tertiary">Showing first 200 of {parsed.length} rows; all valid rows import.</p>}
+            <p className="text-xs text-text-tertiary">
+              Imported rows land in the review queue unless a rule filed them — a quick glance later keeps the books trustworthy.
+            </p>
 
             <div className="flex justify-between pt-2 border-t border-border-subtle">
               <Button variant="ghost" onClick={() => setStep("map")}><ArrowLeft className="w-4 h-4" /> Back</Button>

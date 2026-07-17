@@ -1,9 +1,9 @@
-import { ArrowUp, ArrowDown, Paperclip, Pencil, Trash2, Lock, Sparkles } from "lucide-react";
+import { ArrowUp, ArrowDown, Paperclip, Pencil, Trash2, Lock, Sparkles, CheckCircle2, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate } from "@/lib/dates";
-import { isManaged, needsReview, type Expense, type Vendor } from "./types";
+import { isManaged, isUncategorized, type Expense, type Vendor } from "./types";
 
 export type SortKey = "occurred_on" | "category" | "vendor" | "amount";
 export interface SortState {
@@ -29,6 +29,10 @@ interface ExpenseTableProps {
   onApplySuggestion?: (id: string, category: string) => void;
   /** Row ids whose suggestion is currently being written (disables the chip). */
   pendingSuggestionIds?: Set<string>;
+  /** Confirm an imported row (clears its needs_review flag). */
+  onMarkReviewed?: (e: Expense) => void;
+  /** Open the rule modal pre-filled from this row. */
+  onCreateRule?: (e: Expense) => void;
   total: number;
 }
 
@@ -38,6 +42,7 @@ const SOURCE_BADGE: Record<string, string> = {
   subscription: "Auto",
   supply_purchase: "Supply",
   mileage: "Mileage",
+  csv: "Imported",
 };
 
 /**
@@ -74,7 +79,8 @@ function SortHeader({
 
 export function ExpenseTable({
   rows, vendors, selected, allSelected, onToggleRow, onToggleAll,
-  sort, onSort, onStartEdit, onDelete, onOpenReceipt, onAttachReceipt, suggestions, onApplySuggestion, pendingSuggestionIds, total,
+  sort, onSort, onStartEdit, onDelete, onOpenReceipt, onAttachReceipt, suggestions, onApplySuggestion, pendingSuggestionIds,
+  onMarkReviewed, onCreateRule, total,
 }: ExpenseTableProps) {
   // Prefer the live vendor; fall back to the denormalized name kept when a
   // vendor is deleted (vendor_id is then null but vendor_name survives).
@@ -136,7 +142,7 @@ export function ExpenseTable({
                   </td>
                   <td className={cn(cellCls, "text-text-secondary")}>{formatBusinessDate(e.occurred_on)}</td>
                   <td className={cellCls}>
-                    {needsReview(e) ? (
+                    {isUncategorized(e) ? (
                       <span className="inline-flex items-center gap-1.5">
                         <Badge variant="outline" className="text-status-warn border-status-warn/40">Needs review</Badge>
                         {suggestion && onApplySuggestion && (
@@ -152,7 +158,19 @@ export function ExpenseTable({
                         )}
                       </span>
                     ) : (
-                      <Badge>{e.category}</Badge>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge>{e.category}</Badge>
+                        {e.needs_review && onMarkReviewed && (
+                          <button
+                            onClick={() => onMarkReviewed(e)}
+                            aria-label="Mark reviewed"
+                            title="Imported — looks right? Click to mark reviewed."
+                            className="text-status-warn hover:text-status-ok transition-colors"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </span>
                     )}
                     {e.source && SOURCE_BADGE[e.source] && (
                       <Badge variant="outline" className="ml-2 text-text-tertiary border-border-subtle">{SOURCE_BADGE[e.source]}</Badge>
@@ -177,6 +195,9 @@ export function ExpenseTable({
                       </span>
                     ) : (
                       <div className="flex items-center gap-1 justify-end">
+                        {onCreateRule && (
+                          <button onClick={() => onCreateRule(e)} aria-label="Create rule" title="Create a rule from this expense" className="p-1.5 rounded text-text-secondary hover:text-accent-brand hover:bg-bg-active"><Wand2 className="w-4 h-4" /></button>
+                        )}
                         <button onClick={() => onStartEdit(e.id)} aria-label="Edit" className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-bg-active"><Pencil className="w-4 h-4" /></button>
                         <button onClick={() => onDelete(e)} aria-label="Delete" className="p-1.5 rounded text-text-secondary hover:text-status-alert hover:bg-bg-active"><Trash2 className="w-4 h-4" /></button>
                       </div>

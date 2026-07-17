@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
-import { Plus, UploadCloud, Search, FileText, Trash2, X, Sparkles, ScanLine } from "lucide-react";
+import { Plus, UploadCloud, Search, FileText, Trash2, X, Sparkles, ScanLine, CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
@@ -11,20 +11,23 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEntity } from "@/hooks/useEntity";
 import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { logActivity } from "@/lib/activity";
 import { useCategoryBook } from "@/contexts/ExpenseCategoriesContext";
 import { monthRange, quarterRange, ytdRange } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { uploadReceipt, removeReceipt, RECEIPT_ACCEPT, isAcceptedReceipt, receiptTooLarge } from "@/lib/receipts";
 import { ExpenseModal } from "@/components/expenses/ExpenseModal";
 import { ExpenseTable, type SortKey, type SortState } from "@/components/expenses/ExpenseTable";
-import { CsvImportWizard, type ImportRow } from "@/components/expenses/CsvImportWizard";
+import { CsvImportWizard, type ImportBatch, type ImportRow } from "@/components/expenses/CsvImportWizard";
 import { ReceiptDrawer } from "@/components/expenses/ReceiptDrawer";
 import { CategorySelect } from "@/components/expenses/CategorySelect";
 import { SmartCategorizeModal, type SuggestionItem } from "@/components/expenses/SmartCategorizeModal";
+import { RuleModal, type ExpenseRule, type RuleFormData } from "@/components/expenses/RuleModal";
 import { suggestForRows } from "@/lib/expenseCategorization";
+import { matchesRule } from "@/lib/expenseRules";
 import { scanReceipt, type ReceiptDraft } from "@/lib/receiptScan";
 import { summarizeWrites } from "@/lib/writeSummary";
-import { isManaged, type Expense, type ExpenseFormData, type Vendor } from "@/components/expenses/types";
+import { isManaged, isUncategorized, needsReview, type Expense, type ExpenseFormData, type Vendor } from "@/components/expenses/types";
 
 const SEED: Expense[] = [];
 
@@ -75,9 +78,28 @@ export default function Expenses() {
       description: e.description,
       occurred_on: e.occurred_on,
       receipt_url: e.receipt_url,
+      needs_review: e.needs_review,
     }),
   });
   const { data: vendors, add: addVendor } = useEntity<Vendor>("vendors", [], { toRow: (v) => ({ name: v.name }) });
+  const { data: rules, add: addRule } = useEntity<ExpenseRule>("expense_rules", [], {
+    orderBy: "priority",
+    ascending: true,
+    toRow: (r) => ({
+      active: r.active,
+      priority: r.priority,
+      match_field: r.match_field,
+      match_value: r.match_value,
+      amount_min: r.amount_min,
+      amount_max: r.amount_max,
+      set_category: r.set_category,
+      set_vendor_id: r.set_vendor_id,
+      mark_reviewed: r.mark_reviewed,
+    }),
+  });
+  const { data: batches, remove: removeBatch, refresh: refreshBatches } = useEntity<ImportBatch>("expense_import_batches", [], {
+    orderBy: "created_at",
+  });
 
   // UI state
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,6 +110,10 @@ export default function Expenses() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<SortState>({ key: "occurred_on", dir: "desc" });
 
+  // Rule creation from a ledger row
+  const [ruleOpen, setRuleOpen] = useState(false);
+  const [rulePrefill, setRulePrefill] = useState<Partial<RuleFormData> | null>(null);
+
   // Filters
   const [preset, setPreset] = useState<Preset>("all");
   const [customFrom, setCustomFrom] = useState("");
@@ -95,7 +121,7 @@ export default function Expenses() {
   const [catFilter, setCatFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
-  const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [search, setSearch] = useState("");
 
   // Receipt attach (from the row paperclip on a row that has none)
@@ -106,13 +132,19 @@ export default function Expenses() {
   const scanRef = useRef<HTMLInputElement>(null);
   const [scanDraft, setScanDraft] = useState<ReceiptDraft | null>(null);
   const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   // Rows whose inline suggestion is mid-write — guards against double-click dupes.
   const [pendingSuggestionIds, setPendingSuggestionIds] = useState<Set<string>>(new Set());
 
-  // Opened from a Finances Overview quick action.
+  // Opened from a Finances Overview quick action / alert.
   useEffect(() => {
-    if ((location.state as { openNew?: boolean } | null)?.openNew) openCreate();
+    const state = location.state as { openNew?: boolean; review?: boolean } | null;
+    if (state?.openNew) openCreate();
+    if (state?.review) {
+      setReviewOnly(true);
+      setPreset("all");
+    }
   }, [location.state]);
 
   const clearScan = () => {
@@ -136,7 +168,9 @@ export default function Expenses() {
       addToast({ title: "File too large", description: "Max 10 MB.", status: "warn" });
       return;
     }
-    const draft = await scanReceipt(file);
+    setScanning(true);
+    const draft = await scanReceipt(file, { categories: book.names });
+    setScanning(false);
     setScanFile(file);
     setScanDraft(draft);
     setEditing(null);
@@ -154,11 +188,11 @@ export default function Expenses() {
       if (catFilter && e.category !== catFilter) return false;
       if (vendorFilter && e.vendor_id !== vendorFilter) return false;
       if (sourceFilter && (e.source ?? "manual") !== sourceFilter) return false;
-      if (uncategorizedOnly && e.category) return false;
+      if (reviewOnly && !needsReview(e)) return false;
       if (q && !(e.description ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [expenses, range, catFilter, vendorFilter, sourceFilter, uncategorizedOnly, search]);
+  }, [expenses, range, catFilter, vendorFilter, sourceFilter, reviewOnly, search]);
 
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -188,12 +222,17 @@ export default function Expenses() {
   // Stat cards
   const sumMonth = useMemo(() => sumInRange(expenses, monthRange(0)), [expenses]);
   const sumYtd = useMemo(() => sumInRange(expenses, ytdRange()), [expenses]);
+  // Six-month spend shape under the This-month figure.
+  const monthSpark = useMemo(
+    () => [-5, -4, -3, -2, -1, 0].map((off) => sumInRange(expenses, monthRange(off))),
+    [expenses],
+  );
   const topCategory = useMemo(() => {
     const byCat: Record<string, number> = {};
     for (const e of expenses) if (e.category) byCat[e.category] = (byCat[e.category] ?? 0) + Number(e.amount);
     return Object.entries(byCat).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
   }, [expenses]);
-  const uncategorizedCount = useMemo(() => expenses.filter((e) => !e.category).length, [expenses]);
+  const reviewCount = useMemo(() => expenses.filter((e) => needsReview(e)).length, [expenses]);
 
   // ---- Auto-categorization (learned from the ledger's own history) ---------
   const suggestions = useMemo(() => suggestForRows(expenses, { canonical: book.canonical }), [expenses, book]);
@@ -212,16 +251,23 @@ export default function Expenses() {
       .filter((it): it is SuggestionItem => it !== null);
   }, [suggestions, expenses, smartOpen]);
 
-  // Write a category (and its Schedule C line) to one row — sync-safe even on
+  // Categorizing a row (inline, bulk, or via the modal) also clears its review
+  // flag — a human just made a decision about it.
+  const categoryPatch = (category: string): Partial<Expense> => ({
+    category,
+    schedule_c_category: book.scheduleCFor(category),
+    schedule_f_category: book.scheduleFFor(category),
+    needs_review: false,
+  });
+
+  // Write a category (and its tax lines) to one row — sync-safe even on
   // managed rows, so the inline accept works for Etsy/imported entries too.
   // Guarded so a double-click on the chip can't fire two writes.
   const applySuggestion = async (id: string, category: string) => {
     if (pendingSuggestionIds.has(id)) return;
     setPendingSuggestionIds((p) => { const n = new Set(p); n.add(id); return n; });
     try {
-      const schedule_c_category = book.scheduleCFor(category);
-      const schedule_f_category = book.scheduleFFor(category);
-      const r = await update(id, { category, schedule_c_category, schedule_f_category } as Partial<Expense>);
+      const r = await update(id, categoryPatch(category));
       if (!r.ok) {
         addToast({ title: "Couldn't categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
         return;
@@ -244,9 +290,7 @@ export default function Expenses() {
     let ok = 0;
     let failed = 0;
     for (const [category, ids] of byCategory) {
-      const schedule_c_category = book.scheduleCFor(category);
-      const schedule_f_category = book.scheduleFFor(category);
-      const r = await updateMany(ids, { category, schedule_c_category, schedule_f_category } as Partial<Expense>);
+      const r = await updateMany(ids, categoryPatch(category));
       if (r.ok) ok += ids.length;
       else failed += ids.length;
     }
@@ -254,10 +298,37 @@ export default function Expenses() {
     addToast(summarizeWrites(ok, failed, { verbPast: "categorized" }));
   };
 
+  // ---- Review queue --------------------------------------------------------
+  const markReviewed = async (e: Expense) => {
+    const r = await update(e.id, { needs_review: false } as Partial<Expense>);
+    if (!r.ok) {
+      addToast({ title: "Couldn't update", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+      return;
+    }
+    addToast({ title: "Marked reviewed", status: "ok" });
+  };
+
+  const bulkMarkReviewed = async () => {
+    const targets = expenses.filter((e) => selected.has(e.id) && e.needs_review);
+    if (targets.length === 0) return;
+    const r = await updateMany(targets.map((e) => e.id), { needs_review: false } as Partial<Expense>);
+    clearSelection();
+    if (!r.ok) {
+      addToast({ title: "Couldn't update", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+      return;
+    }
+    addToast(summarizeWrites(targets.length, 0, { verbPast: "marked reviewed" }));
+  };
+
+  const selectedNeedingReview = useMemo(
+    () => expenses.some((e) => selected.has(e.id) && e.needs_review),
+    [expenses, selected],
+  );
+
   // ---- Selection -----------------------------------------------------------
   // Managed rows (Etsy/recurring/supplies/mileage) are read-only here, so only
-  // hand-entered rows are selectable — bulk delete/recategorize can never touch
-  // a system-generated row.
+  // hand-entered and CSV-imported rows are selectable — bulk delete/recategorize
+  // can never touch a system-generated row.
   const selectableRows = useMemo(() => sorted.filter((e) => !isManaged(e)), [sorted]);
   const allSelected = selectableRows.length > 0 && selectableRows.every((e) => selected.has(e.id));
   const toggleRow = (id: string) =>
@@ -303,7 +374,8 @@ export default function Expenses() {
     if (!ok) return false;
 
     if (editing) {
-      const patch: Partial<Expense> = { ...data };
+      // A hand edit is a review: the flag clears alongside whatever changed.
+      const patch: Partial<Expense> = { ...data, needs_review: false };
       if (url !== undefined) patch.receipt_url = url;
       const r = await update(editing.id, patch);
       if (!r.ok) {
@@ -348,6 +420,54 @@ export default function Expenses() {
     return r.row;
   };
 
+  // ---- Rules ---------------------------------------------------------------
+  const openRuleFromExpense = (e: Expense) => {
+    const vendorLabel = e.vendor_id ? vendors.find((v) => v.id === e.vendor_id)?.name ?? e.vendor_name : e.vendor_name;
+    setRulePrefill({
+      match_field: vendorLabel ? "vendor" : "memo",
+      match_value: vendorLabel ?? e.description ?? "",
+      set_category: e.category ?? "",
+      set_vendor_id: e.vendor_id,
+    });
+    setRuleOpen(true);
+  };
+
+  const reviewables = useMemo(() => expenses.filter((e) => needsReview(e)), [expenses]);
+  const matchingReviewables = (data: RuleFormData): Expense[] =>
+    reviewables.filter((e) =>
+      matchesRule(
+        { id: "draft", ...data, priority: 0 },
+        { description: e.description, vendor_name: e.vendor_name, amount: Number(e.amount) },
+      ),
+    );
+
+  const handleRuleSubmit = async (data: RuleFormData, applyExisting: boolean): Promise<boolean> => {
+    const nextPriority = rules.length ? Math.max(...rules.map((r) => r.priority)) + 10 : 100;
+    const r = await addRule({
+      id: crypto.randomUUID(),
+      ...data,
+      priority: nextPriority,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as ExpenseRule);
+    if (r.ok === false) {
+      addToast({ title: "Couldn't create rule", description: friendlyDbError({ code: r.code } as any), status: "alert" });
+      return false;
+    }
+    addToast({ title: "Rule created", description: `${data.match_value} → ${data.set_category}`, status: "ok" });
+    if (applyExisting) {
+      const targets = matchingReviewables(data);
+      if (targets.length > 0) {
+        const category = book.canonical(data.set_category) ?? data.set_category;
+        const patch: Partial<Expense> = { ...categoryPatch(category) };
+        if (data.set_vendor_id) patch.vendor_id = data.set_vendor_id;
+        const res = await updateMany(targets.map((e) => e.id), patch);
+        if (res.ok) addToast({ ...summarizeWrites(targets.length, 0, { verbPast: "categorized" }), description: category });
+      }
+    }
+    return true;
+  };
+
   // ---- Delete (single + bulk) ----------------------------------------------
   const deleteExpense = async (e: Expense) => {
     if (!confirm("Delete this expense?")) return;
@@ -379,9 +499,7 @@ export default function Expenses() {
     if (!category) return;
     const targets = expenses.filter((e) => selected.has(e.id) && !isManaged(e));
     if (targets.length === 0) return;
-    const schedule_c_category = book.scheduleCFor(category);
-    const schedule_f_category = book.scheduleFFor(category);
-    const r = await updateMany(targets.map((e) => e.id), { category, schedule_c_category, schedule_f_category } as Partial<Expense>);
+    const r = await updateMany(targets.map((e) => e.id), categoryPatch(category));
     clearSelection();
     if (!r.ok) {
       addToast({ title: "Couldn't re-categorize", description: friendlyDbError({ code: r.code } as any), status: "alert" });
@@ -414,28 +532,90 @@ export default function Expenses() {
   };
 
   // ---- CSV import ----------------------------------------------------------
-  const importRows = async (rows: ImportRow[]): Promise<number> => {
+  const importRows = async (rows: ImportRow[], fileName: string): Promise<number> => {
     if (!supabase || !user || !activeOrgId) return 0;
+
+    // Batch first, so every inserted row carries its undo handle.
+    const { data: batch, error: batchError } = await supabase
+      .from("expense_import_batches")
+      .insert({ org_id: activeOrgId, user_id: user.id, file_name: fileName, row_count: rows.length })
+      .select()
+      .single();
+    if (batchError || !batch) {
+      addToast({ title: "Import failed", description: friendlyDbError(batchError as any), status: "alert" });
+      return 0;
+    }
+
     const payload = rows.map((r) => ({
       user_id: user.id,
       org_id: activeOrgId,
       amount: r.amount,
       occurred_on: r.occurred_on,
       description: r.description,
+      vendor_name: r.vendor_name,
+      vendor_id: r.vendor_id,
       category: r.category,
       category_legacy: r.category_legacy,
       schedule_c_category: r.category ? book.scheduleCFor(r.category) : null,
       schedule_f_category: r.category ? book.scheduleFFor(r.category) : null,
-      source: "manual",
+      source: "csv",
       deductible: true,
+      external_id: r.external_id || null,
+      needs_review: r.needs_review,
+      import_batch_id: batch.id,
     }));
     const { data: inserted, error } = await supabase.from("expenses").insert(payload).select();
     if (error) {
-      addToast({ title: "Import failed", description: friendlyDbError(error), status: "alert" });
+      await supabase.from("expense_import_batches").delete().eq("id", batch.id);
+      addToast({
+        title: "Import failed",
+        description: error.code === "23505"
+          ? "Some rows were already imported (another device?). Refresh and try again."
+          : friendlyDbError(error),
+        status: "alert",
+      });
+      await refreshBatches();
       return 0;
     }
+
+    const count = inserted?.length ?? rows.length;
+    if (count !== rows.length) {
+      await supabase.from("expense_import_batches").update({ row_count: count }).eq("id", batch.id);
+    }
+    logActivity({
+      orgId: activeOrgId,
+      actorId: user.id,
+      action: "created",
+      entity: "expenses",
+      entityId: null,
+      summary: `${count} rows (CSV import: ${fileName})`,
+    });
+    const autoCount = rows.filter((r) => r.category_source != null).length;
+    const reviewCt = rows.filter((r) => r.needs_review).length;
+    addToast({
+      title: "Import complete",
+      description: `${count} imported · ${autoCount} auto-categorized · ${reviewCt} to review`,
+      status: "ok",
+    });
+    await Promise.all([refresh(), refreshBatches()]);
+    return count;
+  };
+
+  const undoBatch = async (batch: ImportBatch): Promise<void> => {
+    if (!supabase || !activeOrgId) return;
+    const { error } = await supabase
+      .from("expenses")
+      .delete()
+      .eq("org_id", activeOrgId)
+      .eq("import_batch_id", batch.id)
+      .eq("source", "csv");
+    if (error) {
+      addToast({ title: "Couldn't undo import", description: friendlyDbError(error), status: "alert" });
+      return;
+    }
+    await removeBatch(batch.id);
+    addToast({ title: "Import undone", description: `${batch.row_count} expenses removed`, status: "info" });
     await refresh();
-    return inserted?.length ?? rows.length;
   };
 
   const isEmpty = !isLoading && expenses.length === 0;
@@ -473,11 +653,11 @@ export default function Expenses() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Expenses</h1>
-          <p className="text-sm text-text-secondary">A working ledger — categorize, attach receipts, import.</p>
+          <p className="text-sm text-text-secondary">Etsy fees and subscriptions log themselves — scan, import, or add the rest.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => scanRef.current?.click()}>
-            <ScanLine className="w-4 h-4" /> Scan receipt
+          <Button variant="outline" onClick={() => scanRef.current?.click()} disabled={scanning}>
+            <ScanLine className="w-4 h-4" /> {scanning ? "Scanning…" : "Scan receipt"}
           </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <UploadCloud className="w-4 h-4" /> Import CSV
@@ -490,19 +670,23 @@ export default function Expenses() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6">
-        <StatTile label="This month" value={formatMoney(sumMonth)} />
+        <StatTile
+          label="This month"
+          value={formatMoney(sumMonth)}
+          trend={monthSpark.some((v) => v > 0) ? { value: "6 mo", direction: "down", label: "spend shape", sparklineData: monthSpark } : undefined}
+        />
         <StatTile label="YTD total" value={formatMoney(sumYtd)} />
         <StatTile label="Top category" value={topCategory} />
         <button
           type="button"
-          onClick={() => { setUncategorizedOnly(true); setPreset("all"); setCatFilter(""); }}
-          aria-label={`Filter to ${uncategorizedCount} uncategorized expenses`}
+          onClick={() => { setReviewOnly(true); setPreset("all"); setCatFilter(""); }}
+          aria-label={`Filter to ${reviewCount} expenses needing review`}
           className="text-left transition-transform hover:-translate-y-0.5"
         >
           <StatTile
-            label="Uncategorized"
-            value={String(uncategorizedCount)}
-            trend={uncategorizedCount > 0 ? { value: "review", direction: "down", label: "tap to filter" } : undefined}
+            label="To review"
+            value={String(reviewCount)}
+            trend={reviewCount > 0 ? { value: "review", direction: "down", label: "tap to filter" } : undefined}
           />
         </button>
       </div>
@@ -520,7 +704,7 @@ export default function Expenses() {
           </>
         )}
         <div className="w-40">
-          <CategorySelect value={catFilter} onChange={(c) => { setCatFilter(c); setUncategorizedOnly(false); }} blankLabel="All categories" />
+          <CategorySelect value={catFilter} onChange={(c) => { setCatFilter(c); setReviewOnly(false); }} blankLabel="All categories" />
         </div>
         <select className={selectCls} value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
           <option value="">All vendors</option>
@@ -529,18 +713,28 @@ export default function Expenses() {
         <select className={selectCls} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
           <option value="">All sources</option>
           <option value="manual">Manual</option>
+          <option value="csv">Imported (CSV)</option>
           <option value="etsy">Etsy</option>
           <option value="subscription">Subscriptions</option>
           <option value="supply_purchase">Supplies</option>
           <option value="mileage">Mileage</option>
         </select>
+        <label className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={reviewOnly}
+            onChange={(e) => setReviewOnly(e.target.checked)}
+            className="w-4 h-4 accent-[var(--color-accent-brand)]"
+          />
+          To review
+        </label>
         <div className="relative flex-1 min-w-[10rem]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <Input className="pl-9" placeholder="Search memo…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        {(uncategorizedOnly || catFilter || vendorFilter || sourceFilter || search || preset !== "all") && (
+        {(reviewOnly || catFilter || vendorFilter || sourceFilter || search || preset !== "all") && (
           <button
-            onClick={() => { setPreset("all"); setCatFilter(""); setVendorFilter(""); setSourceFilter(""); setSearch(""); setUncategorizedOnly(false); setCustomFrom(""); setCustomTo(""); }}
+            onClick={() => { setPreset("all"); setCatFilter(""); setVendorFilter(""); setSourceFilter(""); setSearch(""); setReviewOnly(false); setCustomFrom(""); setCustomTo(""); }}
             className="text-xs text-text-secondary hover:text-text-primary inline-flex items-center gap-1"
           >
             <X className="w-3.5 h-3.5" /> Clear
@@ -553,6 +747,11 @@ export default function Expenses() {
         <div className="flex flex-wrap items-center gap-3 mb-3 px-3 py-2 rounded-lg bg-bg-active/60 border border-border-subtle">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <div className="flex items-center gap-2 ml-auto">
+            {selectedNeedingReview && (
+              <Button variant="outline" onClick={bulkMarkReviewed}>
+                <CheckCircle2 className="w-4 h-4" /> Mark reviewed
+              </Button>
+            )}
             <div className="w-44">
               <CategorySelect value="" onChange={(c) => void bulkRecategorize(c)} blankLabel="Re-categorize…" />
             </div>
@@ -605,6 +804,8 @@ export default function Expenses() {
             suggestions={suggestionCategoryById}
             onApplySuggestion={applySuggestion}
             pendingSuggestionIds={pendingSuggestionIds}
+            onMarkReviewed={markReviewed}
+            onCreateRule={openRuleFromExpense}
             total={filteredTotal}
           />
         )}
@@ -620,13 +821,31 @@ export default function Expenses() {
         onSubmit={handleModalSubmit}
         onCreateVendor={createVendor}
       />
-      <CsvImportWizard open={importOpen} onClose={() => setImportOpen(false)} existing={expenses} onImport={importRows} />
+      <CsvImportWizard
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        existing={expenses}
+        orgId={activeOrgId}
+        rules={rules}
+        batches={batches}
+        onUndoBatch={undoBatch}
+        onImport={importRows}
+      />
       <SmartCategorizeModal
         open={smartOpen}
         onClose={() => setSmartOpen(false)}
         items={suggestionItems}
         vendors={vendors}
         onApply={applySuggestions}
+      />
+      <RuleModal
+        open={ruleOpen}
+        onClose={() => { setRuleOpen(false); setRulePrefill(null); }}
+        vendors={vendors}
+        editing={null}
+        initial={rulePrefill}
+        onSubmit={handleRuleSubmit}
+        countMatches={(data) => matchingReviewables(data).length}
       />
       <ReceiptDrawer path={drawerPath} onClose={() => setDrawerPath(null)} />
     </div>

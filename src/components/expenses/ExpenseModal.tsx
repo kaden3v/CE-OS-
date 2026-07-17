@@ -69,7 +69,13 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
               ...emptyForm(),
               amount: draft.amount != null ? String(draft.amount) : "",
               occurred_on: draft.occurred_on ?? todayISO(),
-              description: draft.vendor_name ?? "",
+              category: draft.category ?? "",
+              // Link the scanned vendor when it matches one on file; otherwise
+              // the memo carries the name so nothing read is lost.
+              vendor_id: draft.vendor_name
+                ? vendors.find((v) => v.name.trim().toLowerCase() === draft.vendor_name!.trim().toLowerCase())?.id ?? ""
+                : "",
+              description: draft.memo ?? draft.vendor_name ?? "",
             }
           : emptyForm(),
     );
@@ -77,6 +83,9 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
     setRemoveReceipt(false);
     setCreatingVendor(false);
     setNewVendor("");
+    // `vendors` is intentionally omitted: it's only read to link a scanned
+    // vendor at open time, and re-running on its refresh would wipe edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, draft, initialReceiptFile]);
 
   const pickFile = (file: File) => {
@@ -142,7 +151,9 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
             <Sparkles className="w-3.5 h-3.5 text-accent-brand shrink-0 mt-0.5" />
             {draft.source === "none"
               ? "Receipt attached — add the amount and details."
-              : "Pre-filled from the receipt — double-check the amount and date."}
+              : draft.source === "scan"
+                ? "Read from the receipt — double-check the amount and date."
+                : "Pre-filled from the file name — double-check the amount and date."}
           </div>
         )}
 

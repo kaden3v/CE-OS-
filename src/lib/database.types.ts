@@ -324,6 +324,107 @@ export type Database = {
           },
         ]
       }
+      expense_import_batches: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          org_id: string
+          row_count: number
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          org_id: string
+          row_count?: number
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          org_id?: string
+          row_count?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_import_batches_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_rules: {
+        Row: {
+          active: boolean
+          amount_max: number | null
+          amount_min: number | null
+          created_at: string
+          id: string
+          mark_reviewed: boolean
+          match_field: string
+          match_value: string
+          org_id: string
+          priority: number
+          set_category: string
+          set_vendor_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          amount_max?: number | null
+          amount_min?: number | null
+          created_at?: string
+          id?: string
+          mark_reviewed?: boolean
+          match_field?: string
+          match_value: string
+          org_id: string
+          priority?: number
+          set_category: string
+          set_vendor_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          amount_max?: number | null
+          amount_min?: number | null
+          created_at?: string
+          id?: string
+          mark_reviewed?: boolean
+          match_field?: string
+          match_value?: string
+          org_id?: string
+          priority?: number
+          set_category?: string
+          set_vendor_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_rules_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_rules_set_vendor_id_fkey"
+            columns: ["set_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
@@ -334,6 +435,8 @@ export type Database = {
           description: string | null
           external_id: string | null
           id: string
+          import_batch_id: string | null
+          needs_review: boolean
           notes: string | null
           occurred_on: string
           org_id: string | null
@@ -356,6 +459,8 @@ export type Database = {
           description?: string | null
           external_id?: string | null
           id?: string
+          import_batch_id?: string | null
+          needs_review?: boolean
           notes?: string | null
           occurred_on?: string
           org_id?: string | null
@@ -378,6 +483,8 @@ export type Database = {
           description?: string | null
           external_id?: string | null
           id?: string
+          import_batch_id?: string | null
+          needs_review?: boolean
           notes?: string | null
           occurred_on?: string
           org_id?: string | null
@@ -392,6 +499,13 @@ export type Database = {
           vendor_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "expenses_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "expense_import_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "expenses_org_id_fkey"
             columns: ["org_id"]

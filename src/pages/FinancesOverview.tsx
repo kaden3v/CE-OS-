@@ -113,15 +113,16 @@ function CashflowChart({ data }: { data: { month: string; in: number; out: numbe
 // Alerts
 // ---------------------------------------------------------------------------
 function AlertRow({
-  to, icon: Icon, tone, title, detail, amount,
+  to, state, icon: Icon, tone, title, detail, amount,
 }: {
-  to: string; icon: typeof AlertTriangle; tone: "alert" | "warn" | "info";
+  to: string; state?: unknown; icon: typeof AlertTriangle; tone: "alert" | "warn" | "info";
   title: string; detail: string; amount?: string;
 }) {
   const toneColor = tone === "alert" ? "text-status-alert" : tone === "warn" ? "text-status-warn" : "text-status-info";
   return (
     <Link
       to={to}
+      state={state}
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover transition-colors group"
     >
       <Icon className={cn("w-4 h-4 shrink-0", toneColor)} strokeWidth={2} />
@@ -160,11 +161,13 @@ function AlertsPanel({
   paceAlert?: { tone: "warn" | "alert"; detail: string } | null;
 }) {
   const taxDue = useTaxDue();
+  const reviewCount = alerts?.needs_review ?? 0;
   const total =
     (alerts?.renewing.length ?? 0) +
     (alerts?.overdue.length ?? 0) +
     (alerts?.low_stock.length ?? 0) +
     (alerts?.uncategorized.length ?? 0) +
+    (reviewCount > 0 ? 1 : 0) +
     (taxDue ? 1 : 0) +
     (paceAlert ? 1 : 0);
 
@@ -234,6 +237,16 @@ function AlertsPanel({
           detail={`${n(su.on_hand)}${su.unit ? ` ${su.unit}` : ""} on hand · reorder at ${n(su.reorder_threshold)}`}
         />
       ))}
+      {reviewCount > 0 && (
+        <AlertRow
+          to="/finances/expenses"
+          state={{ review: true }}
+          icon={Clock}
+          tone="info"
+          title={`${reviewCount} imported expense${reviewCount === 1 ? "" : "s"} to review`}
+          detail="Quick glance — confirm the auto-applied categories"
+        />
+      )}
       {alerts?.uncategorized.map((e) => (
         <AlertRow
           key={`uc-${e.id}`}

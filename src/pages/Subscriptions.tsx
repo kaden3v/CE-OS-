@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, FormEvent } from "react";
-import { Repeat, Plus, X, Trash2, Pencil, Receipt, RotateCcw, TrendingUp, TrendingDown, CalendarClock } from "lucide-react";
+import { Repeat, Plus, X, Trash2, Pencil, Receipt, RotateCcw, TrendingUp, TrendingDown, CalendarClock, Zap } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +12,7 @@ import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { CategorySelect } from "@/components/expenses/CategorySelect";
 import { supabase, rpcCall } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { formatMoney } from "@/lib/format";
@@ -26,7 +27,7 @@ const CYCLES = ["monthly", "quarterly", "yearly"] as const;
 const CYCLE_DIVISOR: Record<string, number> = { monthly: 1, quarterly: 3, yearly: 12 };
 const cycleAbbr = (c: string) => (c === "monthly" ? "mo" : c === "yearly" ? "yr" : "qtr");
 
-const emptyForm = { name: "", website: "", vendor_id: "", category: "Software", amount: 0, billing_cycle: "monthly", next_renewal: "", notes: "" };
+const emptyForm = { name: "", website: "", vendor_id: "", category: "Software", amount: 0, billing_cycle: "monthly", next_renewal: "", notes: "", auto_log: true };
 
 const monthlyEquiv = (r: Recurring) => Number(r.amount) / (CYCLE_DIVISOR[r.billing_cycle] ?? 1);
 
@@ -39,7 +40,7 @@ const isoShift = (iso: string, days = 0, years = 0): string => {
 
 export default function Subscriptions() {
   const { user, activeOrgId } = useAuth();
-  const { data: subs, add, update, remove, isLoading, refresh } = useEntity<Recurring>("recurring_expenses", [], {
+  const { data: subs, add, update, updateMany, remove, isLoading, refresh } = useEntity<Recurring>("recurring_expenses", [], {
     orderBy: "created_at",
     toRow: (s) => ({
       name: s.name, website: s.website, vendor_id: s.vendor_id, category: s.category,
@@ -113,6 +114,7 @@ export default function Subscriptions() {
     setForm({
       name: s.name, website: s.website ?? "", vendor_id: s.vendor_id ?? "", category: s.category ?? "",
       amount: Number(s.amount), billing_cycle: s.billing_cycle, next_renewal: s.next_renewal ?? "", notes: s.notes ?? "",
+      auto_log: !!s.auto_log,
     });
     setIsOpen(true);
   };
@@ -130,6 +132,7 @@ export default function Subscriptions() {
       billing_cycle: form.billing_cycle,
       next_renewal: form.next_renewal || null,
       notes: form.notes.trim() || null,
+      auto_log: form.auto_log,
     };
 
     const old = editId ? subs.find((x) => x.id === editId) : null;
@@ -138,7 +141,7 @@ export default function Subscriptions() {
     const result = editId
       ? await update(editId, payload as Partial<Recurring>)
       : await add({
-          id: crypto.randomUUID(), status: "active", started_on: today, cancelled_at: null, auto_log: false,
+          id: crypto.randomUUID(), status: "active", started_on: today, cancelled_at: null,
           created_at: new Date().toISOString(), updated_at: new Date().toISOString(), user_id: "", org_id: null,
           ...payload,
         } as Recurring);
@@ -171,6 +174,18 @@ export default function Subscriptions() {
     const result = await update(s.id, { auto_log: !s.auto_log } as Partial<Recurring>);
     if (result.ok === false) { addToast({ title: "Couldn't update", description: friendlyDbError({ code: result.code } as any), status: "alert" }); return; }
     addToast({ title: !s.auto_log ? "Auto-log enabled" : "Auto-log disabled", description: s.name, status: "info" });
+  };
+
+  const manualSubs = useMemo(() => subs.filter((s) => s.status === "active" && !s.auto_log), [subs]);
+
+  const enableAutoLogAll = async () => {
+    if (manualSubs.length === 0) return;
+    const result = await updateMany(manualSubs.map((s) => s.id), { auto_log: true } as Partial<Recurring>);
+    if (result.ok === false) {
+      addToast({ title: "Couldn't update", description: friendlyDbError({ code: result.code } as any), status: "alert" });
+      return;
+    }
+    addToast({ title: "Auto-log enabled", description: `${manualSubs.length} subscription${manualSubs.length === 1 ? "" : "s"} now post on their renewal dates.`, status: "ok" });
   };
 
   const handleDelete = async (s: Recurring) => {
@@ -291,6 +306,21 @@ export default function Subscriptions() {
         <StatTile label="Next 30 days" value={formatMoney(totals.next30)} />
       </div>
 
+      {/* Auto-log nudge: renewals only post themselves when the toggle is on. */}
+      {manualSubs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-6 px-3 py-2.5 rounded-lg bg-accent-brand/10 border border-accent-brand/30">
+          <Zap className="w-4 h-4 text-accent-brand shrink-0" />
+          <span className="text-sm">
+            <span className="font-medium">{manualSubs.length}</span>{" "}
+            {manualSubs.length === 1 ? "subscription posts" : "subscriptions post"} only when you click Log.
+            Auto-log posts the expense on the renewal date.
+          </span>
+          <Button variant="brand" className="ml-auto" onClick={() => void enableAutoLogAll()}>
+            Enable for all
+          </Button>
+        </div>
+      )}
+
       {/* Upcoming strip */}
       {upcoming.length > 0 && (
         <div className="mb-6">
@@ -367,7 +397,7 @@ export default function Subscriptions() {
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
-                  <Input className="w-full" placeholder="Software" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+                  <CategorySelect value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="— Pick —" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -399,6 +429,13 @@ export default function Subscriptions() {
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Notes</label>
                 <Input className="w-full" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
+                <div>
+                  <div className="text-sm text-text-primary">Auto-log renewals</div>
+                  <div className="text-xs text-text-tertiary">Posts the expense on each renewal date — nothing to click.</div>
+                </div>
+                <Toggle checked={form.auto_log} onChange={(v) => setForm({ ...form, auto_log: v })} ariaLabel="Auto-log renewals" />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsOpen(false)}>Cancel</Button>

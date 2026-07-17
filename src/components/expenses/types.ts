@@ -19,9 +19,18 @@ export interface ExpenseFormData {
   description: string | null;
 }
 
-/** An expense still needs review until it has a category (and thus a Schedule C line). */
-export function needsReview(e: Pick<Expense, "category">): boolean {
+/** True when the row has no (usable) category. */
+export function isUncategorized(e: Pick<Expense, "category">): boolean {
   return !e.category || !e.category.trim();
+}
+
+/**
+ * An expense needs review while it's uncategorized OR while an import left it
+ * awaiting a human glance (needs_review flag). Categorizing or editing a row
+ * clears the flag; a rule with mark_reviewed never sets it.
+ */
+export function needsReview(e: Pick<Expense, "category" | "needs_review">): boolean {
+  return isUncategorized(e) || !!e.needs_review;
 }
 
 /**
@@ -29,9 +38,11 @@ export function needsReview(e: Pick<Expense, "category">): boolean {
  * recurring subscriptions, supply purchases, mileage) rather than entered by
  * hand. Managed rows are read-only in the ledger — edit them at their source —
  * so deleting one here can't orphan a linked record (e.g. supply_purchases ->
- * expense_id) or get silently re-created by the next sync. CSV imports are
- * `source = 'manual'` and so remain fully editable.
+ * expense_id) or get silently re-created by the next sync. CSV imports
+ * (`source = 'csv'`) are the user's own data and stay fully editable, like
+ * manual rows.
  */
 export function isManaged(e: Pick<Expense, "source">): boolean {
-  return (e.source ?? "manual") !== "manual";
+  const source = e.source ?? "manual";
+  return source !== "manual" && source !== "csv";
 }

@@ -15,6 +15,8 @@ const baseExpense = (over: Partial<Expense>): Expense => ({
   description: null,
   external_id: null,
   id: "row-1",
+  import_batch_id: null,
+  needs_review: false,
   notes: null,
   occurred_on: "2026-06-10",
   org_id: "org-1",
@@ -149,5 +151,37 @@ describe("ExpenseTable — managed vs manual rows", () => {
     expect(chip.disabled).toBe(true);
     fireEvent.click(chip);
     expect(onApplySuggestion).not.toHaveBeenCalled();
+  });
+});
+
+describe("ExpenseTable — review queue (imported rows)", () => {
+  it("keeps a CSV-imported row fully editable and labels its source", () => {
+    renderTable([baseExpense({ id: "csv-1", source: "csv" })]);
+    expect(screen.getByLabelText("Select row")).toBeTruthy();
+    expect(screen.getByLabelText("Edit")).toBeTruthy();
+    expect(screen.getByText("Imported")).toBeTruthy();
+  });
+
+  it("shows a mark-reviewed check on a categorized row still flagged for review", () => {
+    const onMarkReviewed = vi.fn();
+    const row = baseExpense({ id: "csv-1", source: "csv", needs_review: true });
+    renderTable([row], { onMarkReviewed });
+    fireEvent.click(screen.getByLabelText("Mark reviewed"));
+    expect(onMarkReviewed).toHaveBeenCalledWith(row);
+  });
+
+  it("hides the mark-reviewed check once the flag clears", () => {
+    renderTable([baseExpense({ id: "csv-1", source: "csv", needs_review: false })], { onMarkReviewed: vi.fn() });
+    expect(screen.queryByLabelText("Mark reviewed")).toBeNull();
+  });
+
+  it("offers create-rule on editable rows only", () => {
+    const onCreateRule = vi.fn();
+    const manual = baseExpense({ id: "m-1" });
+    renderTable([manual, baseExpense({ id: "etsy-1", source: "etsy" })], { onCreateRule });
+    const buttons = screen.getAllByLabelText("Create rule");
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(onCreateRule).toHaveBeenCalledWith(manual);
   });
 });

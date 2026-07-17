@@ -28,6 +28,7 @@ const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const Supplies = lazy(() => import("./pages/Supplies"));
 const Vendors = lazy(() => import("./pages/Vendors"));
 const ExpenseCategoriesPage = lazy(() => import("./pages/ExpenseCategories"));
+const ExpenseRules = lazy(() => import("./pages/ExpenseRules"));
 const VendorDetail = lazy(() => import("./pages/VendorDetail"));
 const Licenses = lazy(() => import("./pages/Licenses"));
 const Team = lazy(() => import("./pages/Team"));
@@ -83,6 +84,7 @@ export default function App() {
                   <Route path="vendors" element={<Vendors />} />
                   <Route path="vendors/:id" element={<VendorDetail />} />
                   <Route path="categories" element={<ExpenseCategoriesPage />} />
+                  <Route path="rules" element={<ExpenseRules />} />
                   <Route path="mileage" element={<Mileage />} />
                   <Route path="tax-report" element={<Navigate to="/finances/reports?tab=tax" replace />} />
                 </Route>

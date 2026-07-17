@@ -72,6 +72,7 @@ export const EXPENSE_CATEGORY_TO_SCHEDULE_F: Readonly<Record<string, ScheduleFCa
   fertilizer: "Fertilizers and lime",
   chemicals: "Chemicals",
   plants: "Seeds and plants",
+  seeds: "Seeds and plants",
   "seeds and plants": "Seeds and plants",
 };
 
