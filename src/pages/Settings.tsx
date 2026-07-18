@@ -1,7 +1,8 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
@@ -9,9 +10,37 @@ import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
-import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw, UserRound, Monitor, Bell, Receipt, Plug, type LucideIcon } from "lucide-react";
 import { Link } from "react-router";
 import { ChannelFeesSettings } from "@/components/settings/ChannelFeesSettings";
+
+/** Consistent section header: a muted leading icon, the title, and optional
+ *  right-aligned content (e.g. a status badge). Keeps every section on the page
+ *  visually aligned instead of some having icons and some not. */
+function SectionHeader({
+  icon: Icon,
+  title,
+  tone = "muted",
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  tone?: "muted" | "brand" | "info";
+  children?: ReactNode;
+}) {
+  const iconColor =
+    tone === "brand" ? "text-accent-brand" : tone === "info" ? "text-status-info" : "text-text-tertiary";
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h2 className={cn("text-lg font-medium flex items-center gap-2", tone === "info" && "text-status-info")}>
+        <Icon className={cn("w-5 h-5", iconColor)} strokeWidth={1.5} />
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
 
 type NotificationPrefs = {
   low_stock?: boolean;
@@ -66,6 +95,12 @@ export default function Settings() {
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [changingPw, setChangingPw] = useState(false);
+  const closePw = () => {
+    setPwOpen(false);
+    setCurrentPw("");
+    setNewPw("");
+    setConfirmPw("");
+  };
 
   // Notification prefs
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({});
@@ -163,10 +198,7 @@ export default function Settings() {
       addToast({ title: "Couldn't update password", description: updateErr.message, status: "alert" });
       return;
     }
-    setPwOpen(false);
-    setCurrentPw("");
-    setNewPw("");
-    setConfirmPw("");
+    closePw();
     addToast({ title: "Password updated", status: "ok" });
   };
 
@@ -236,7 +268,7 @@ export default function Settings() {
       <div className="space-y-8 pb-12">
         {/* Account */}
         <section>
-          <h2 className="text-lg font-medium mb-4">Account</h2>
+          <SectionHeader icon={UserRound} title="Account" />
           <Card className="p-6 flex items-start gap-6">
             <div className="w-20 h-20 rounded-full bg-bg-active border border-border-subtle flex items-center justify-center text-2xl font-medium shrink-0">
               {initials}
@@ -256,7 +288,7 @@ export default function Settings() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs uppercase tracking-wide text-text-secondary">Email</label>
-                  <Input value={user?.email ?? ""} disabled className="w-full opacity-50" />
+                  <Input value={user?.email ?? ""} disabled className="w-full" />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -303,12 +335,12 @@ export default function Settings() {
 
         {/* Display */}
         <section>
-          <h2 className="text-lg font-medium mb-4">Display</h2>
+          <SectionHeader icon={Monitor} title="Display" />
           <Card className="divide-y divide-border-subtle p-0">
             <div className="p-4 flex items-center justify-between">
               <div>
                 <div className="font-medium text-sm">Compact density</div>
-                <div className="text-xs text-text-secondary mt-2">
+                <div className="text-xs text-text-secondary mt-0.5">
                   Reduce padding and text size in data tables for higher data density.
                 </div>
               </div>
@@ -323,16 +355,15 @@ export default function Settings() {
 
         {/* Notifications */}
         <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-medium">Notifications</h2>
-            <Badge variant="outline" className="text-xs text-status-warn border-status-warn/20">Preview — wiring in progress</Badge>
-          </div>
+          <SectionHeader icon={Bell} title="Notifications">
+            <Badge variant="outline" className="text-xs text-status-warn border-status-warn/20 shrink-0">Preview — wiring in progress</Badge>
+          </SectionHeader>
           <Card className="divide-y divide-border-subtle p-0">
             {NOTIFICATION_KEYS.filter((n) => !n.adminOnly || isAdmin).map((n) => (
               <div key={n.key} className="p-4 flex items-center justify-between">
                 <div>
                   <div className="font-medium text-sm">{n.label}</div>
-                  <div className="text-xs text-text-secondary mt-2">{n.desc}</div>
+                  <div className="text-xs text-text-secondary mt-0.5">{n.desc}</div>
                 </div>
                 <Toggle
                   ariaLabel={n.label}
@@ -351,16 +382,13 @@ export default function Settings() {
         {/* Admin section */}
         {isAdmin && (
           <section>
-            <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-accent-brand" />
-              Admin
-            </h2>
+            <SectionHeader icon={ShieldCheck} title="Admin" tone="brand" />
 
             <Card className="p-4 mb-4">
               <Link to="/admin/access-requests" className="flex items-center justify-between hover:bg-bg-hover -m-4 p-4 rounded-md transition-colors group">
                 <div>
                   <div className="font-medium text-sm">Access Requests</div>
-                  <div className="text-xs text-text-secondary mt-2">Review and approve / deny access requests.</div>
+                  <div className="text-xs text-text-secondary mt-0.5">Review and approve / deny access requests.</div>
                 </div>
                 <ExternalLink className="w-4 h-4 text-text-tertiary group-hover:text-text-primary transition-colors" />
               </Link>
@@ -414,13 +442,13 @@ export default function Settings() {
 
         {/* Finances */}
         <section>
-          <h2 className="text-lg font-medium mb-4">Finances</h2>
+          <SectionHeader icon={Receipt} title="Finances" />
           <ChannelFeesSettings />
         </section>
 
         {/* Connectors */}
         <section>
-          <h2 className="text-lg font-medium mb-4">Connectors</h2>
+          <SectionHeader icon={Plug} title="Connectors" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {CONNECTORS.map((c) => {
               // Mark Supabase honestly based on current configuration
@@ -429,7 +457,7 @@ export default function Settings() {
                 <Card key={c.name} className="p-4 flex items-start justify-between gap-4">
                   <div>
                     <div className="font-medium">{c.name}</div>
-                    <div className="text-xs text-text-secondary mt-2">{c.note}</div>
+                    <div className="text-xs text-text-secondary mt-0.5">{c.note}</div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-xs ${configured ? "text-status-ok" : "text-text-secondary"}`}>
@@ -446,36 +474,33 @@ export default function Settings() {
         {/* Developer Tools */}
         {isDev && (
           <section className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <h2 className="text-lg font-medium mb-4 text-status-info flex items-center gap-2">
-              <TerminalSquare className="w-5 h-5" />
-              Developer Tools
-            </h2>
+            <SectionHeader icon={TerminalSquare} title="Developer Tools" tone="info" />
             <Card className="border-status-info/20 divide-y divide-border-subtle p-0">
               <div className="p-4 flex items-center justify-between">
                 <div>
                   <div className="font-medium text-sm">Force loading state</div>
-                  <div className="text-xs text-text-secondary mt-2">Forces skeleton UI to persist across all data views.</div>
+                  <div className="text-xs text-text-secondary mt-0.5">Forces skeleton UI to persist across all data views.</div>
                 </div>
                 <Toggle ariaLabel="Force loading" checked={settings.loadingMode} onChange={(c) => updateSettings({ loadingMode: c })} tone="warn" />
               </div>
               <div className="p-4 flex items-center justify-between">
                 <div>
                   <div className="font-medium text-sm">Force error state</div>
-                  <div className="text-xs text-text-secondary mt-2">Simulates fetch failures across all data views.</div>
+                  <div className="text-xs text-text-secondary mt-0.5">Simulates fetch failures across all data views.</div>
                 </div>
                 <Toggle ariaLabel="Force error" checked={settings.errorMode} onChange={(c) => updateSettings({ errorMode: c })} tone="alert" />
               </div>
               <div className="p-4 flex items-center justify-between">
                 <div>
                   <div className="font-medium text-sm">Force empty state</div>
-                  <div className="text-xs text-text-secondary mt-2">Simulates zero-result responses for all lists.</div>
+                  <div className="text-xs text-text-secondary mt-0.5">Simulates zero-result responses for all lists.</div>
                 </div>
                 <Toggle ariaLabel="Force empty" checked={settings.emptyMode} onChange={(c) => updateSettings({ emptyMode: c })} />
               </div>
               <div className="p-4 flex items-center justify-between">
                 <div>
                   <div className="font-medium text-sm">Reset local data</div>
-                  <div className="text-xs text-text-secondary mt-2">Clears localStorage caches. Server data is unaffected.</div>
+                  <div className="text-xs text-text-secondary mt-0.5">Clears localStorage caches. Server data is unaffected.</div>
                 </div>
                 <Button
                   variant="outline"
@@ -495,7 +520,7 @@ export default function Settings() {
                   <div className="font-medium text-sm flex items-center gap-2">
                     <Keyboard className="w-4 h-4" /> Command palette
                   </div>
-                  <div className="text-xs text-text-secondary mt-2">Global search and command execution.</div>
+                  <div className="text-xs text-text-secondary mt-0.5">Global search and command execution.</div>
                 </div>
                 <Button variant="outline" className="h-8 px-2 flex items-center gap-2" onClick={() => setCommandPaletteOpen(true)}>
                   <kbd className="font-sans text-[10px] bg-bg-active px-2 rounded">⌘</kbd>
@@ -508,51 +533,41 @@ export default function Settings() {
       </div>
 
       {/* Change-password modal */}
-      {pwOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Change password</h2>
-              <button onClick={() => { setPwOpen(false); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <Lock className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handlePasswordChange} className="p-4 space-y-4">
-              <div>
-                <label htmlFor="current-pw" className="text-xs uppercase tracking-wide text-text-secondary">Current password</label>
-                <Input id="current-pw" type="password" required autoComplete="current-password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} className="w-full mt-1" />
-              </div>
-              <div>
-                <label htmlFor="new-pw" className="text-xs uppercase tracking-wide text-text-secondary">New password</label>
-                <Input id="new-pw" type="password" required autoComplete="new-password" minLength={8} value={newPw} onChange={(e) => setNewPw(e.target.value)} className="w-full mt-1" />
-                {newPw.length > 0 && newPw.length < 8 && (
-                  <p className="text-xs text-status-warn mt-1">At least 8 characters ({8 - newPw.length} to go).</p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="confirm-pw" className="text-xs uppercase tracking-wide text-text-secondary">Confirm new password</label>
-                <Input id="confirm-pw" type="password" required autoComplete="new-password" minLength={8} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} className="w-full mt-1" />
-                {confirmPw.length > 0 && confirmPw !== newPw && (
-                  <p className="text-xs text-status-alert mt-1">Doesn't match.</p>
-                )}
-                {confirmPw.length > 0 && confirmPw === newPw && newPw.length >= 8 && (
-                  <p className="text-xs text-status-ok mt-1">Match.</p>
-                )}
-              </div>
-              <p className="text-xs text-text-tertiary">We re-verify your current password before changing it — defense against a stolen session locking you out.</p>
-              <div className="pt-2 flex justify-end gap-2 border-t border-border-subtle">
-                <Button variant="ghost" type="button" onClick={() => { setPwOpen(false); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}>Cancel</Button>
-                <Button
-                  type="submit"
-                  disabled={changingPw || !currentPw || newPw.length < 8 || newPw !== confirmPw}
-                >
-                  {changingPw ? "Updating…" : "Update password"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      <Modal open={pwOpen} onClose={closePw} title="Change password" size="sm">
+        <form onSubmit={handlePasswordChange} className="p-4 space-y-4">
+          <div>
+            <label htmlFor="current-pw" className="text-xs uppercase tracking-wide text-text-secondary">Current password</label>
+            <Input id="current-pw" type="password" required autoComplete="current-password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} className="w-full mt-1" />
+          </div>
+          <div>
+            <label htmlFor="new-pw" className="text-xs uppercase tracking-wide text-text-secondary">New password</label>
+            <Input id="new-pw" type="password" required autoComplete="new-password" minLength={8} value={newPw} onChange={(e) => setNewPw(e.target.value)} className="w-full mt-1" />
+            {newPw.length > 0 && newPw.length < 8 && (
+              <p className="text-xs text-status-warn mt-1">At least 8 characters ({8 - newPw.length} to go).</p>
+            )}
+          </div>
+          <div>
+            <label htmlFor="confirm-pw" className="text-xs uppercase tracking-wide text-text-secondary">Confirm new password</label>
+            <Input id="confirm-pw" type="password" required autoComplete="new-password" minLength={8} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} className="w-full mt-1" />
+            {confirmPw.length > 0 && confirmPw !== newPw && (
+              <p className="text-xs text-status-alert mt-1">Doesn't match.</p>
+            )}
+            {confirmPw.length > 0 && confirmPw === newPw && newPw.length >= 8 && (
+              <p className="text-xs text-status-ok mt-1">Match.</p>
+            )}
+          </div>
+          <p className="text-xs text-text-tertiary">We re-verify your current password before changing it — defense against a stolen session locking you out.</p>
+          <div className="pt-2 flex justify-end gap-2 border-t border-border-subtle">
+            <Button variant="ghost" type="button" onClick={closePw}>Cancel</Button>
+            <Button
+              type="submit"
+              disabled={changingPw || !currentPw || newPw.length < 8 || newPw !== confirmPw}
+            >
+              {changingPw ? "Updating…" : "Update password"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
