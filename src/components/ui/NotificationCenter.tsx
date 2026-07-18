@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCheck, Trash2 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { relativeTimeShort } from "@/lib/dates";
 import { StatusDot } from "./StatusDot";
 
 export function NotificationCenter({ open, onClose }: { open: boolean, onClose: () => void }) {
@@ -60,7 +61,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean, onClose: 
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2 mb-2">
                           <h4 className="text-sm font-medium text-text-primary truncate">{notif.title}</h4>
-                          <span className="text-[10px] text-text-tertiary whitespace-nowrap pt-2">{notif.time}</span>
+                          <span className="text-[10px] text-text-tertiary whitespace-nowrap pt-2">{relativeTimeShort(notif.createdAt)}</span>
                         </div>
                         <p className="text-xs text-text-secondary line-clamp-2">{notif.description}</p>
                       </div>

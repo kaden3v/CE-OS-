@@ -159,3 +159,24 @@ export function relativeDayLabel(value: string | Date | null | undefined): strin
   if (iso === isoOf(new Date(y, m - 1, d - 1))) return "Yesterday";
   return formatBusinessDate(value);
 }
+
+/**
+ * Compact "time ago" for notification rows: "Just now", "5m", "3h", "2d", then a
+ * date past a week. Elapsed wall-clock (not calendar) so it reflects real age —
+ * a frozen "Just now" is exactly the bug this replaces. `now` is injectable for
+ * deterministic tests.
+ */
+export function relativeTimeShort(value: string | Date | null | undefined, now: number = Date.now()): string {
+  if (!value) return "";
+  const t = value instanceof Date ? value.getTime() : Date.parse(value);
+  if (Number.isNaN(t)) return "";
+  const sec = Math.max(0, Math.round((now - t) / 1000));
+  if (sec < 45) return "Just now";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d`;
+  return formatBusinessDate(value);
+}

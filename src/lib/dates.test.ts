@@ -6,6 +6,7 @@ import {
   toBusinessISODate,
   todayISO,
   relativeDayLabel,
+  relativeTimeShort,
   formatBusinessDateTime,
 } from "./dates";
 
@@ -76,5 +77,37 @@ describe("formatBusinessDateTime", () => {
 
   it("renders a real timestamp (not the em-dash fallback)", () => {
     expect(formatBusinessDateTime("2026-06-28T12:00:00Z")).not.toBe("—");
+  });
+});
+
+describe("relativeTimeShort", () => {
+  const now = Date.parse("2026-07-17T18:00:00Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const SEC = 1000, MIN = 60 * SEC, HR = 60 * MIN, DAY = 24 * HR;
+
+  it("reads 'Just now' only under 45 seconds", () => {
+    expect(relativeTimeShort(ago(5 * SEC), now)).toBe("Just now");
+    expect(relativeTimeShort(ago(44 * SEC), now)).toBe("Just now");
+    expect(relativeTimeShort(ago(90 * SEC), now)).not.toBe("Just now");
+  });
+
+  it("counts minutes, hours, and days as it ages (no frozen 'Just now')", () => {
+    expect(relativeTimeShort(ago(5 * MIN), now)).toBe("5m");
+    expect(relativeTimeShort(ago(3 * HR), now)).toBe("3h");
+    expect(relativeTimeShort(ago(2 * DAY), now)).toBe("2d");
+  });
+
+  it("falls back to a date past a week", () => {
+    const old = "2026-01-15T12:00:00Z";
+    expect(relativeTimeShort(old, now)).toBe(formatBusinessDate(old));
+  });
+
+  it("never renders a future negative age", () => {
+    expect(relativeTimeShort(ago(-10 * MIN), now)).toBe("Just now");
+  });
+
+  it("is empty for missing or unparseable input", () => {
+    expect(relativeTimeShort(null, now)).toBe("");
+    expect(relativeTimeShort("not-a-date", now)).toBe("");
   });
 });

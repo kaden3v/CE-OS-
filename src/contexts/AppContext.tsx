@@ -41,10 +41,13 @@ type Notification = {
   id: string;
   title: string;
   description: string;
-  time: string;
+  /** ISO timestamp; rendered as a live relative time in the panel. */
+  createdAt: string;
   status: 'ok' | 'info' | 'warn' | 'alert';
   read: boolean;
 };
+
+const NOTIF_CAP = 50;
 
 export type Task = Tables<'tasks'>;
 
@@ -65,7 +68,7 @@ interface AppContextType {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   clearNotifications: () => void;
-  addNotification: (notification: Omit<Notification, 'id' | 'read' | 'time'>) => void;
+  addNotification: (notification: Omit<Notification, 'id' | 'read' | 'createdAt'>) => void;
   // Tasks (persisted to Supabase, shared across the org; assignable to teammates)
   tasks: Task[];
   addTask: (task: { title: string; due?: string | null; type?: string | null; assigned_to?: string | null }) => Promise<void>;
@@ -91,7 +94,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [notifications, setNotifications] = usePersistedState<Notification[]>('notifications', []);
+  // v2 key: the pre-v2 pile had frozen 'Just now' strings and, from before the
+  // actor_id filter (commit 01b8466), a flood of automated Etsy-sync rows shown
+  // as "A teammate added orders". Bumping the key drops that dead pile for good;
+  // nothing legitimate persisted there. The legacy key is cleared on mount below.
+  const [notifications, setNotifications] = usePersistedState<Notification[]>('notifications:v2', []);
+  useEffect(() => {
+    try { localStorage.removeItem('ceos:notifications'); } catch { /* ignore */ }
+  }, []);
 
   const TASK_SEED: Task[] = [];
 
@@ -134,8 +144,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const addNotification = useCallback((notif: Omit<Notification, 'id' | 'read' | 'time'>) => {
-    setNotifications(prev => [{ ...notif, id: crypto.randomUUID(), read: false, time: 'Just now' }, ...prev]);
+  const addNotification = useCallback((notif: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
+    setNotifications(prev => [{ ...notif, id: crypto.randomUUID(), read: false, createdAt: new Date().toISOString() }, ...prev].slice(0, NOTIF_CAP));
   }, [setNotifications]);
 
   const markNotificationRead = useCallback((id: string) => {
@@ -169,10 +179,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: `act-${row.id}`,
           title: `A teammate ${ACTION_LABELS[row.action] ?? row.action} ${entityLabel}`,
           description: row.summary ?? '',
-          time: 'Just now',
+          createdAt: new Date().toISOString(),
           status: 'info' as const,
           read: false,
-        }, ...prev].slice(0, 50));
+        }, ...prev].slice(0, NOTIF_CAP));
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tasks' }, (payload) => {
         const row = payload.new as Tables<'tasks'>;
@@ -182,10 +192,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             id: `task-${row.id}`,
             title: 'Task assigned to you',
             description: row.title,
-            time: 'Just now',
+            createdAt: new Date().toISOString(),
             status: 'info' as const,
             read: false,
-          }, ...prev].slice(0, 50));
+          }, ...prev].slice(0, NOTIF_CAP));
         }
       })
       .subscribe();
