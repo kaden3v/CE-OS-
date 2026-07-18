@@ -17,7 +17,6 @@ const Shipping = lazy(() => import("./pages/Shipping"));
 const PrintQueue = lazy(() => import("./pages/PrintQueue"));
 const Listings = lazy(() => import("./pages/Listings"));
 const FinancesOverview = lazy(() => import("./pages/FinancesOverview"));
-const FinancesManage = lazy(() => import("./pages/FinancesManage"));
 const Revenue = lazy(() => import("./pages/Revenue"));
 const Goals = lazy(() => import("./pages/Goals"));
 const Mileage = lazy(() => import("./pages/Mileage"));
@@ -78,7 +77,9 @@ export default function App() {
                   <Route path="expenses" element={<Expenses />} />
                   <Route path="production" element={<Production />} />
                   <Route path="reports" element={<Reports />} />
-                  <Route path="manage" element={<FinancesManage />} />
+                  {/* The Manage hub page is gone — the tab bar's Manage dropdown
+                      links records directly. Old links land on Vendors. */}
+                  <Route path="manage" element={<Navigate to="/finances/vendors" replace />} />
                   <Route path="subscriptions" element={<Subscriptions />} />
                   <Route path="supplies" element={<Supplies />} />
                   <Route path="vendors" element={<Vendors />} />

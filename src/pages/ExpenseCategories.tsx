@@ -102,8 +102,8 @@ export default function ExpenseCategories() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <Link to="/finances/manage" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-4">
-        <ArrowLeft className="w-4 h-4" /> Manage
+      <Link to="/finances/expenses" className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary mb-4">
+        <ArrowLeft className="w-4 h-4" /> Expenses
       </Link>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
