@@ -1,28 +1,34 @@
 import { NavLink } from "react-router";
-import { PieChart, TrendingUp, Target, Receipt, Factory, FileSpreadsheet, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
  * Primary in-page navigation for the consolidated Finance dashboard. The whole
- * section lives under a single sidebar entry; these tabs replace what used to be
- * nine separate sidebar items. Operational records (vendors, supplies,
- * subscriptions, mileage) live behind "Manage".
+ * section lives under a single sidebar entry; these tabs replace what used to
+ * be nine separate sidebar items. Operational records (vendors, supplies,
+ * subscriptions, mileage, rules) live behind "Manage".
+ *
+ * Style: a segmented pill control (text-only — seven icon+label pairs read as
+ * clutter). The active view is an elevated pill; the rest are quiet text. On
+ * phones the group scrolls horizontally with the scrollbar hidden.
  */
-const TABS: { to: string; label: string; icon: typeof PieChart; end?: boolean }[] = [
-  { to: "/finances", label: "Overview", icon: PieChart, end: true },
-  { to: "/finances/revenue", label: "Revenue", icon: TrendingUp },
-  { to: "/finances/goals", label: "Goals", icon: Target },
-  { to: "/finances/expenses", label: "Expenses", icon: Receipt },
-  { to: "/finances/production", label: "Production", icon: Factory },
-  { to: "/finances/reports", label: "Reports", icon: FileSpreadsheet },
-  { to: "/finances/manage", label: "Manage", icon: SlidersHorizontal },
+const TABS: { to: string; label: string; end?: boolean }[] = [
+  { to: "/finances", label: "Overview", end: true },
+  { to: "/finances/revenue", label: "Revenue" },
+  { to: "/finances/goals", label: "Goals" },
+  { to: "/finances/expenses", label: "Expenses" },
+  { to: "/finances/production", label: "Production" },
+  { to: "/finances/reports", label: "Reports" },
+  { to: "/finances/manage", label: "Manage" },
 ];
 
 export function FinanceTabs() {
   return (
     <div className="sticky top-0 z-10 border-b border-border-subtle bg-bg-base/95 backdrop-blur-md no-print">
-      <div className="max-w-7xl mx-auto px-4 md:px-8">
-        <nav className="flex items-center gap-0.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-2.5">
+        <nav
+          aria-label="Finance sections"
+          className="inline-flex max-w-full items-center gap-1 rounded-full border border-border-subtle bg-bg-elevated/70 p-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        >
           {TABS.map((t) => (
             <NavLink
               key={t.to}
@@ -30,14 +36,13 @@ export function FinanceTabs() {
               end={t.end}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-1.5 px-3 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors",
+                  "px-3.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors select-none",
                   isActive
-                    ? "border-accent-brand text-text-primary"
-                    : "border-transparent text-text-secondary hover:text-text-primary",
+                    ? "bg-bg-active text-text-primary font-medium shadow-sm ring-1 ring-border-strong/60"
+                    : "text-text-secondary hover:text-text-primary hover:bg-bg-hover/60",
                 )
               }
             >
-              <t.icon className="w-4 h-4" strokeWidth={1.5} />
               {t.label}
             </NavLink>
           ))}
