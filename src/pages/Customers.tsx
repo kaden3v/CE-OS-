@@ -1,24 +1,50 @@
-import { useState, useMemo, useEffect, FormEvent } from "react";
+import { useState, useMemo, useEffect, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Store, ShoppingBag, X, Mail, Plus, Users, Pencil, Trash2 } from "lucide-react";
+import { Store, ShoppingBag, X, Mail, Plus, Users, Pencil, Trash2, Search } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { MiniStat } from "@/components/dashboard/MiniStat";
+import { CustomerInsights } from "@/components/customers/CustomerInsights";
 import { cn } from "@/lib/utils";
 import { useEntity } from "@/hooks/useEntity";
+import { useOrders } from "@/hooks/useOrders";
 import { useFocusParam } from "@/hooks/useFocusParam";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { formatMoney } from "@/lib/format";
+import {
+  customerAggregates,
+  customerSegment,
+  customerStats,
+  SEGMENT_LABEL,
+  type CustomerAggregate,
+  type CustomerSegment,
+} from "@/lib/dashboardMetrics";
 import type { Tables } from "@/lib/database.types";
 
 type Customer = Tables<"customers">;
 type Subscription = Tables<"subscriptions">;
 
+type EnrichedCustomer = Customer & { agg?: CustomerAggregate; segment: CustomerSegment };
+
 const SEED: Customer[] = [];
+
+/** Outline-badge tint per lifecycle segment. */
+const SEGMENT_BADGE: Record<CustomerSegment, string> = {
+  new: "text-accent-brand border-accent-brand/40",
+  repeat: "text-status-ok border-status-ok/40",
+  "one-time": "text-text-secondary border-border-subtle",
+  lapsed: "text-status-warn border-status-warn/40",
+  prospect: "text-text-tertiary border-border-subtle",
+};
+
+const SEGMENT_FILTERS: (CustomerSegment | "all")[] = ["all", "new", "repeat", "one-time", "lapsed", "prospect"];
 
 export default function Customers() {
   const { data: customers, add, update, remove, isLoading } = useEntity<Customer>("customers", SEED, {
@@ -31,12 +57,60 @@ export default function Customers() {
       notes: c.notes,
     }),
   });
-  const { addToast } = useApp();
+  const { addToast, setGlobalOrderViewId } = useApp();
   const { user, activeOrgId } = useAuth();
+  const navigate = useNavigate();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useFocusParam(customers, setSelectedId);
   const selected = useMemo(() => customers.find((c) => c.id === selectedId) ?? null, [customers, selectedId]);
+
+  // Purchase history joins the directory to real orders. One stable "now" per
+  // mount keeps the rolling-window memos deterministic.
+  const { data: orders, isLoading: ordersLoading } = useOrders();
+  const [nowMs] = useState(() => Date.now());
+  const aggs = useMemo(() => customerAggregates(orders), [orders]);
+  const stats = useMemo(() => customerStats(orders, nowMs, 12), [orders, nowMs]);
+
+  const [search, setSearch] = useState("");
+  const [segmentFilter, setSegmentFilter] = useState<CustomerSegment | "all">("all");
+
+  // Directory enriched with purchase roll-ups, richest customers first.
+  const enriched = useMemo<EnrichedCustomer[]>(
+    () =>
+      customers
+        .map((c) => ({ ...c, agg: aggs.get(c.id), segment: customerSegment(aggs.get(c.id), nowMs) }))
+        .sort((a, b) => (b.agg?.total ?? 0) - (a.agg?.total ?? 0) || a.name.localeCompare(b.name)),
+    [customers, aggs, nowMs],
+  );
+
+  const segmentCounts = useMemo(() => {
+    const counts = new Map<CustomerSegment, number>();
+    for (const c of enriched) counts.set(c.segment, (counts.get(c.segment) ?? 0) + 1);
+    return counts;
+  }, [enriched]);
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return enriched.filter((c) => {
+      if (segmentFilter !== "all" && c.segment !== segmentFilter) return false;
+      if (!q) return true;
+      return [c.name, c.email, c.etsy_handle].some((v) => (v ?? "").toLowerCase().includes(q));
+    });
+  }, [enriched, search, segmentFilter]);
+
+  // Selected customer's purchase history (valid orders, newest first).
+  const selectedAgg = selectedId ? aggs.get(selectedId) : undefined;
+  const selectedOrders = useMemo(
+    () =>
+      !selectedId
+        ? []
+        : orders
+            .filter((o) => o.customer_id === selectedId && o.status !== "cancelled" && o.status !== "refunded")
+            .sort((a, b) => new Date(b.placed_at).getTime() - new Date(a.placed_at).getTime())
+            .slice(0, 5),
+    [orders, selectedId],
+  );
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", etsy_handle: "", phone: "" });
@@ -178,13 +252,65 @@ export default function Customers() {
     () => [
       {
         accessorKey: "name",
-        header: "Name",
-        cell: (info: any) => <span className="font-medium text-text-primary">{info.getValue()}</span>,
+        header: "Customer",
+        cell: (info: any) => {
+          const c: EnrichedCustomer = info.row.original;
+          return (
+            <div className="flex items-center gap-3 min-w-0 max-w-[16rem]">
+              <div className="w-8 h-8 rounded-full bg-bg-active border border-border-subtle flex items-center justify-center text-[11px] font-medium shrink-0">
+                {c.name.split(/\s+/).filter(Boolean).map((s) => s[0]).join("").slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="font-medium text-text-primary truncate">{c.name}</div>
+                {c.email && <div className="text-xs text-text-secondary truncate">{c.email}</div>}
+              </div>
+            </div>
+          );
+        },
       },
       {
-        accessorKey: "email",
-        header: "Email",
-        cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span>,
+        id: "segment",
+        header: "Segment",
+        cell: (info: any) => {
+          const c: EnrichedCustomer = info.row.original;
+          return (
+            <Badge variant="outline" className={cn("text-xs", SEGMENT_BADGE[c.segment])}>
+              {SEGMENT_LABEL[c.segment]}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: "orders",
+        header: "Orders",
+        cell: (info: any) => {
+          const c: EnrichedCustomer = info.row.original;
+          return <span className="tabular-nums text-text-secondary">{c.agg?.orders ?? 0}</span>;
+        },
+      },
+      {
+        id: "spent",
+        header: "Spent",
+        cell: (info: any) => {
+          const c: EnrichedCustomer = info.row.original;
+          return c.agg ? (
+            <span className="tabular-nums font-medium">{formatMoney(c.agg.total)}</span>
+          ) : (
+            <span className="text-text-tertiary">—</span>
+          );
+        },
+      },
+      {
+        id: "last_order",
+        header: "Last order",
+        cell: (info: any) => {
+          const c: EnrichedCustomer = info.row.original;
+          return (
+            <span className="text-text-secondary">
+              {c.agg ? new Date(c.agg.lastAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "etsy_handle",
@@ -205,11 +331,6 @@ export default function Customers() {
           </div>
         ),
       },
-      {
-        accessorKey: "created_at",
-        header: "Added",
-        cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span>,
-      },
     ],
     [],
   );
@@ -219,10 +340,10 @@ export default function Customers() {
   return (
     <div className="flex h-full relative">
       <div className={cn("flex-1 p-4 md:p-8 flex flex-col h-full transition-all", selected ? "md:pr-[480px] duration-200 ease-out" : "duration-150 ease-in")}>
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold mb-2">Customers</h1>
-            <p className="text-sm text-text-secondary">Directory of buyers across channels.</p>
+            <h1 className="text-2xl font-semibold mb-1">Customers</h1>
+            <p className="text-sm text-text-secondary">Who buys, who comes back, and who's drifting away.</p>
           </div>
           <Button variant="brand" onClick={() => setIsAddOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -230,9 +351,51 @@ export default function Customers() {
           </Button>
         </div>
 
+        <CustomerInsights
+          stats={stats}
+          directoryCount={customers.length}
+          loading={isLoading || ordersLoading}
+          onSelectCustomer={setSelectedId}
+        />
+
+        {/* Toolbar: search + lifecycle segment filter */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+            <Input
+              className="pl-9"
+              placeholder="Search name, email, handle…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {SEGMENT_FILTERS.map((s) => {
+              const count = s === "all" ? enriched.length : segmentCounts.get(s) ?? 0;
+              const active = segmentFilter === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSegmentFilter(s)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors",
+                    active
+                      ? "bg-bg-active text-text-primary border-border-strong font-medium"
+                      : "text-text-secondary border-border-subtle hover:text-text-primary hover:bg-bg-hover/60",
+                  )}
+                >
+                  {s === "all" ? "All" : SEGMENT_LABEL[s]}
+                  <span className={cn("ml-1.5 tabular-nums", active ? "text-text-secondary" : "text-text-tertiary")}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <Card className="flex-1 overflow-auto flex flex-col">
           {isLoading ? (
-            <LoadingTable cols={4} rows={10} />
+            <LoadingTable cols={6} rows={10} />
           ) : isEmpty ? (
             <EmptyState
               icon={Users}
@@ -241,7 +404,7 @@ export default function Customers() {
               action={<Button variant="outline" onClick={() => setIsAddOpen(true)}>Add Customer</Button>}
             />
           ) : (
-            <DataTable columns={columns} data={customers} onRowClick={(row) => setSelectedId(row.id)} />
+            <DataTable columns={columns} data={rows} onRowClick={(row) => setSelectedId(row.id)} />
           )}
         </Card>
       </div>
@@ -261,14 +424,22 @@ export default function Customers() {
                   {selected.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h2 className="text-xl font-semibold">{selected.name}</h2>
+                    <Badge variant="outline" className={cn("text-xs", SEGMENT_BADGE[customerSegment(selectedAgg, nowMs)])}>
+                      {SEGMENT_LABEL[customerSegment(selectedAgg, nowMs)]}
+                    </Badge>
                     {activeSub && <Badge variant="brand">{activeSub.tier}</Badge>}
                   </div>
                   {selected.email && (
                     <div className="text-sm text-text-secondary flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5" />
                       {selected.email}
+                    </div>
+                  )}
+                  {selectedAgg && (
+                    <div className="text-xs text-text-tertiary mt-1">
+                      Customer since {new Date(selectedAgg.firstAt).toLocaleDateString(undefined, { month: "short", year: "numeric" })}
                     </div>
                   )}
                 </div>
@@ -279,6 +450,56 @@ export default function Customers() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-8">
+              <section>
+                <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-3">Purchases</h3>
+                {!selectedAgg ? (
+                  <p className="text-sm text-text-tertiary">No orders yet.</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-4">
+                      <MiniStat label="Orders" value={String(selectedAgg.orders)} />
+                      <MiniStat label="Lifetime spend" value={formatMoney(selectedAgg.total)} />
+                      <MiniStat label="Avg order" value={formatMoney(selectedAgg.total / selectedAgg.orders)} />
+                      <MiniStat
+                        label="Last order"
+                        value={new Date(selectedAgg.lastAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      />
+                    </div>
+                    <ul className="divide-y divide-border-subtle/60 border border-border-subtle rounded-lg overflow-hidden">
+                      {selectedOrders.map((o) => (
+                        <li key={o.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGlobalOrderViewId(o.id);
+                              navigate("/orders");
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover transition-colors"
+                          >
+                            <span className="text-xs text-text-secondary whitespace-nowrap w-16 shrink-0">
+                              {new Date(o.placed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-text-secondary capitalize shrink-0">
+                              {o.channel === "shopify" ? <Store className="w-3 h-3" /> : <ShoppingBag className="w-3 h-3" />}
+                              {o.channel}
+                            </span>
+                            <span className="text-xs text-text-tertiary truncate flex-1">
+                              {o.items.map((i) => `${i.qty}× ${i.name_snapshot}`).join(", ") || `${o.items.length} items`}
+                            </span>
+                            <span className="text-sm font-medium tabular-nums whitespace-nowrap">{formatMoney(Number(o.total))}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {selectedAgg.orders > selectedOrders.length && (
+                      <p className="text-[11px] text-text-tertiary mt-2">
+                        Showing the {selectedOrders.length} most recent of {selectedAgg.orders} orders.
+                      </p>
+                    )}
+                  </>
+                )}
+              </section>
+
               <section>
                 <h3 className="text-xs uppercase tracking-wide text-text-secondary mb-2">Contact</h3>
                 <div className="space-y-2 text-sm">

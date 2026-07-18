@@ -3,6 +3,7 @@ import { Users } from "lucide-react";
 import { BarChart, Bar, XAxis, ResponsiveContainer, Cell } from "recharts";
 import { Card } from "@/components/ui/Card";
 import { RechartsChart } from "@/components/ui/RechartsChart";
+import { MiniStat } from "@/components/dashboard/MiniStat";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CustomerStats } from "@/lib/dashboardMetrics";
@@ -16,16 +17,6 @@ const initials = (name: string): string =>
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? "")
     .join("") || "?";
-
-function MiniStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-xl font-semibold tabular-nums">{value}</div>
-      <div className="text-[11px] text-text-secondary uppercase tracking-wide mt-0.5">{label}</div>
-      {hint && <div className="text-[10px] text-text-tertiary mt-0.5 truncate">{hint}</div>}
-    </div>
-  );
-}
 
 /**
  * Customer acquisition & loyalty at a glance: new customers per month

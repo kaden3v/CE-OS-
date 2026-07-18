@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   channelMix,
+  customerAggregates,
+  customerSegment,
   customerStats,
   topSellers,
   validOrders,
@@ -121,6 +123,54 @@ describe("customerStats", () => {
     expect(s.repeatRate).toBeNull();
     expect(s.returningShare30).toBeNull();
     expect(s.topCustomers90).toEqual([]);
+  });
+});
+
+describe("customerAggregates", () => {
+  it("rolls up orders, spend, and first/last dates per customer", () => {
+    const list = [
+      order({ customer_id: "c-1", total: 40, placed_at: daysAgo(100) }),
+      order({ customer_id: "c-1", total: "10.50", placed_at: daysAgo(5) }),
+      order({ customer_id: "c-1", total: 99, placed_at: daysAgo(50), status: "cancelled" }), // ignored
+      order({ customer_id: null, total: 77 }), // guest ignored
+    ];
+    const aggs = customerAggregates(list);
+    expect(aggs.size).toBe(1);
+    const a = aggs.get("c-1")!;
+    expect(a.orders).toBe(2);
+    expect(a.total).toBe(50.5);
+    expect(a.firstAt).toBe(new Date(daysAgo(100)).getTime());
+    expect(a.lastAt).toBe(new Date(daysAgo(5)).getTime());
+  });
+});
+
+describe("customerSegment", () => {
+  const agg = (over: Partial<ReturnType<typeof customerAggregates> extends Map<string, infer A> ? A : never>) => ({
+    customerId: "c",
+    orders: 1,
+    total: 10,
+    firstAt: NOW - 200 * DAY,
+    lastAt: NOW - 10 * DAY,
+    ...over,
+  });
+
+  it("prospect when there is no purchase history", () => {
+    expect(customerSegment(undefined, NOW)).toBe("prospect");
+  });
+
+  it("new when the first order is within 30 days (wins over repeat)", () => {
+    expect(customerSegment(agg({ firstAt: NOW - 29 * DAY, orders: 3, lastAt: NOW - DAY }), NOW)).toBe("new");
+    expect(customerSegment(agg({ firstAt: NOW - 31 * DAY, orders: 1, lastAt: NOW - 31 * DAY }), NOW)).toBe("one-time");
+  });
+
+  it("lapsed when the last order is older than 90 days", () => {
+    expect(customerSegment(agg({ orders: 4, lastAt: NOW - 91 * DAY }), NOW)).toBe("lapsed");
+    expect(customerSegment(agg({ orders: 4, lastAt: NOW - 89 * DAY }), NOW)).toBe("repeat");
+  });
+
+  it("repeat needs 2+ orders; otherwise one-time", () => {
+    expect(customerSegment(agg({ orders: 2 }), NOW)).toBe("repeat");
+    expect(customerSegment(agg({ orders: 1 }), NOW)).toBe("one-time");
   });
 });
 

@@ -197,6 +197,70 @@ export function customerStats(orders: readonly MetricOrder[], now: number, month
 }
 
 // ---------------------------------------------------------------------------
+// Per-customer purchase aggregates & lifecycle segments
+// ---------------------------------------------------------------------------
+
+export interface CustomerAggregate {
+  customerId: string;
+  orders: number;
+  /** Lifetime spend across valid orders. */
+  total: number;
+  /** Timestamp of the first valid order. */
+  firstAt: number;
+  /** Timestamp of the most recent valid order. */
+  lastAt: number;
+}
+
+/** Lifetime purchase roll-up per customer id (valid orders only). */
+export function customerAggregates(orders: readonly MetricOrder[]): Map<string, CustomerAggregate> {
+  const map = new Map<string, CustomerAggregate>();
+  for (const o of validOrders(orders)) {
+    if (!o.customer_id) continue;
+    const t = new Date(o.placed_at).getTime();
+    if (Number.isNaN(t)) continue;
+    const cur = map.get(o.customer_id);
+    map.set(
+      o.customer_id,
+      cur
+        ? {
+            ...cur,
+            orders: cur.orders + 1,
+            total: cur.total + n(o.total),
+            firstAt: Math.min(cur.firstAt, t),
+            lastAt: Math.max(cur.lastAt, t),
+          }
+        : { customerId: o.customer_id, orders: 1, total: n(o.total), firstAt: t, lastAt: t },
+    );
+  }
+  return map;
+}
+
+export type CustomerSegment = "new" | "repeat" | "one-time" | "lapsed" | "prospect";
+
+export const SEGMENT_LABEL: Record<CustomerSegment, string> = {
+  new: "New",
+  repeat: "Repeat",
+  "one-time": "One-time",
+  lapsed: "Lapsed",
+  prospect: "Prospect",
+};
+
+const NEW_WINDOW_MS = 30 * DAY_MS;
+const LAPSED_AFTER_MS = 90 * DAY_MS;
+
+/**
+ * One lifecycle badge per customer, priority-ordered:
+ * prospect (never ordered) → new (first order ≤30d ago) → lapsed (no order in
+ * 90d) → repeat (2+ orders) → one-time.
+ */
+export function customerSegment(agg: CustomerAggregate | undefined, now: number): CustomerSegment {
+  if (!agg || agg.orders === 0) return "prospect";
+  if (now - agg.firstAt <= NEW_WINDOW_MS) return "new";
+  if (now - agg.lastAt > LAPSED_AFTER_MS) return "lapsed";
+  return agg.orders >= 2 ? "repeat" : "one-time";
+}
+
+// ---------------------------------------------------------------------------
 // Channel mix & top sellers (trailing window)
 // ---------------------------------------------------------------------------
 
