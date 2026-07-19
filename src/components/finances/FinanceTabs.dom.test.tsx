@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { FinanceTabs } from "./FinanceTabs";
 
@@ -14,7 +14,7 @@ const renderAt = (path: string) =>
   );
 
 describe("FinanceTabs", () => {
-  it("renders the six primary sections with their routes", () => {
+  it("renders every finance section — reporting and records — on the one bar", () => {
     renderAt("/finances");
     const expected: [string, string][] = [
       ["Overview", "/finances"],
@@ -23,29 +23,6 @@ describe("FinanceTabs", () => {
       ["Expenses", "/finances/expenses"],
       ["Production", "/finances/production"],
       ["Reports", "/finances/reports"],
-    ];
-    for (const [label, href] of expected) {
-      const link = screen.getByRole("link", { name: label });
-      expect(link.getAttribute("href")).toBe(href);
-    }
-  });
-
-  it("marks only the current section active; Overview matches exactly", () => {
-    renderAt("/finances/expenses");
-    expect(screen.getByRole("link", { name: "Expenses" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBeNull();
-  });
-
-  it("Manage is a dropdown, not a link to a hub page", () => {
-    renderAt("/finances");
-    const button = screen.getByRole("button", { name: /Manage/ });
-    expect(button.getAttribute("aria-haspopup")).toBe("menu");
-    expect(button.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("link", { name: "Vendors" })).toBeNull(); // closed
-
-    fireEvent.click(button);
-    expect(button.getAttribute("aria-expanded")).toBe("true");
-    const expected: [string, string][] = [
       ["Vendors", "/finances/vendors"],
       ["Categories", "/finances/categories"],
       ["Rules", "/finances/rules"],
@@ -54,27 +31,28 @@ describe("FinanceTabs", () => {
       ["Mileage", "/finances/mileage"],
     ];
     for (const [label, href] of expected) {
-      const item = screen.getByRole("menuitem", { name: new RegExp(label) });
-      expect(item.getAttribute("href")).toBe(href);
+      const link = screen.getByRole("link", { name: label });
+      expect(link.getAttribute("href")).toBe(href);
     }
+    // No dropdown, no hub link — twelve flat links and nothing else.
+    expect(screen.getAllByRole("link")).toHaveLength(expected.length);
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("shows which manage record you're on, in the pill itself", () => {
-    renderAt("/finances/vendors");
-    expect(screen.getByRole("button", { name: /Manage · Vendors/ })).toBeTruthy();
+  it("marks only the current section active; Overview matches exactly", () => {
+    renderAt("/finances/rules");
+    expect(screen.getByRole("link", { name: "Rules" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Overview" }).getAttribute("aria-current")).toBeNull();
   });
 
-  it("recognizes manage detail routes (e.g. a vendor page)", () => {
+  it("record pills light up on their detail routes too", () => {
     renderAt("/finances/vendors/abc-123");
-    expect(screen.getByRole("button", { name: /Manage · Vendors/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Vendors" }).getAttribute("aria-current")).toBe("page");
   });
 
-  it("closes on Escape", () => {
+  it("centers the bar within the header", () => {
     renderAt("/finances");
-    const button = screen.getByRole("button", { name: /Manage/ });
-    fireEvent.click(button);
-    expect(button.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(button.getAttribute("aria-expanded")).toBe("false");
+    const nav = screen.getByRole("navigation", { name: "Finance sections" });
+    expect(nav.parentElement?.className).toContain("justify-center");
   });
 });
