@@ -75,8 +75,6 @@ interface AppContextType {
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   // Order Detail Slide-in (Global)
-  globalOrderViewId: string | null;
-  setGlobalOrderViewId: (id: string | null) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -106,7 +104,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const tasks = taskEntity.data;
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [globalOrderViewId, setGlobalOrderViewId] = useState<string | null>(null);
 
   // All handlers are useCallback-stable (functional setState only) so the
   // context value below can be memoized. Critically, a stable `addToast` stops
@@ -236,12 +233,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteTask,
     isCommandPaletteOpen,
     setCommandPaletteOpen,
-    globalOrderViewId,
-    setGlobalOrderViewId,
   }), [
     settings, updateSettings, toasts, addToast, removeToast,
     notifications, addNotification, markNotificationRead, markAllNotificationsRead, clearNotifications,
-    tasks, addTask, toggleTask, deleteTask, isCommandPaletteOpen, globalOrderViewId,
+    tasks, addTask, toggleTask, deleteTask, isCommandPaletteOpen,
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

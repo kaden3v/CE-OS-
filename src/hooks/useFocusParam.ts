@@ -16,8 +16,16 @@ export function useFocusParam(rows: Array<{ id: string | number }>, open: (id: s
     if (!rows.some((r) => String(r.id) === focus)) return;
     handledRef.current = focus;
     open(focus);
-    const next = new URLSearchParams(params);
-    next.delete("focus");
-    setParams(next, { replace: true });
+    // Functional form, not `new URLSearchParams(params)`: `params` is this
+    // render's snapshot, and `open()` has just written ?view=<id> into the URL.
+    // Rebuilding from the snapshot would drop it again.
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("focus");
+        return next;
+      },
+      { replace: true },
+    );
   }, [focus, rows, open, params, setParams]);
 }

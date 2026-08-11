@@ -15,6 +15,7 @@ import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 import { formatDate } from "@/lib/format";
@@ -60,7 +61,7 @@ export default function Propagation() {
   });
   const { addToast } = useApp();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useDrawerParam();
   const selected = batches.find((b) => b.id === selectedId) ?? null;
 
   // The drawer covers the whole screen on mobile — Escape has to get out of it.

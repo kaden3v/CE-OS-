@@ -20,7 +20,7 @@ type Command = {
 };
 
 export function CommandPalette() {
-  const { isCommandPaletteOpen, setCommandPaletteOpen, setGlobalOrderViewId } = useApp();
+  const { isCommandPaletteOpen, setCommandPaletteOpen } = useApp();
   const { activeOrgId } = useAuth();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -92,10 +92,9 @@ export function CommandPalette() {
             group: "Orders",
             label: `${r.id.slice(0, 8)} · ${r.customers.name}`,
             icon: <ShoppingCart className="w-4 h-4 text-text-tertiary" />,
-            onSelect: () => {
-              setGlobalOrderViewId(r.id);
-              handleNavigate("/orders");
-            },
+            // Deep-link rather than priming cross-page context: the drawer's
+            // open state lives in the URL now (see useDrawerParam).
+            onSelect: () => handleNavigate(`/orders?view=${encodeURIComponent(r.id)}`),
           }));
       (ven.data ?? []).forEach((r: { id: string; name: string }) =>
         found.push({ id: `ven-${r.id}`, group: "Vendors", label: r.name, icon: <Store className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate(`/finances/vendors/${r.id}`) }));

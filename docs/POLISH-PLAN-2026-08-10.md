@@ -332,18 +332,35 @@ build green.
 **Not verified**: the authenticated pages themselves, for the credential reason in "Verification
 notes". `T12` still covers that pass.
 
-### Phase 1 follow-up
+### Phase 1 follow-up — ✅ **DONE 2026-08-11**
 
-| # | Task | Addresses |
-|---|---|---|
-| T20 | Close drawers on Android/browser back, by moving drawer state into a URL search param (`?view=<id>`) rather than raw `history.pushState` | **F6** (remainder) |
+| # | Task | Addresses | Status |
+|---|---|---|---|
+| T20 | Close drawers on Android/browser back, by moving drawer state into a URL search param | **F6** (remainder) | ✅ |
 
-> Deferred deliberately. Raw `history.pushState` alongside react-router is the quick version, and
-> it breaks in a way that matters: the Orders drawer contains `<Link to="/customers">`, so a
-> cleanup-time `history.back()` would bounce the user off the page they just navigated to. Driving
-> it from the URL fixes back *and* makes drawers deep-linkable, but it touches `globalOrderViewId`
-> in `AppContext` (shared with the command palette) across 5 pages — a Phase-2-sized change, not a
-> Phase 1 one.
+All five detail drawers now hold their open state in the URL as `?view=<id>`, via
+`useDrawerParam` — so browser/Android back closes the panel instead of leaving the page, and an
+open record is linkable.
+
+Built on react-router's `navigate`/`setSearchParams`, **not** raw `history.pushState`, which was
+the reason for deferring it: `pushState` doesn't update the router's own location, and an
+unmount-time `history.back()` would undo a real navigation — the Orders drawer contains links to
+other pages, so that version would have bounced the user off the page they'd just opened. With the
+state in the URL there is no unmount cleanup at all: closing is explicit, and following a link out
+of a drawer simply navigates.
+
+Opening pushes an entry and closing from the UI pops it, so the two cancel out rather than leaving
+a trail. A drawer opened by a *deep link* has no entry of ours to pop, so closing strips the param
+in place — going back from a deep link should leave the app, not re-open the drawer.
+
+This also retired **`globalOrderViewId` from `AppContext`**. Four places used to prime that shared
+state and then navigate (command palette, activity feed, dashboard, Orders itself); they all deep-link
+now, so the drawer has one source of truth instead of a cross-page context field.
+
+`useDrawerParam.dom.test.tsx` covers all seven behaviours against a `MemoryRouter`: deep-link open,
+open-writes-URL, close-after-open returning to the list, deep-linked close, other query params
+preserved, and switching records. **The remaining unverified piece is the same as everywhere else —
+the real Android back gesture on an authed page needs credentials.**
 
 ### Also found while implementing
 

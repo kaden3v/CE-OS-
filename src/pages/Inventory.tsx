@@ -23,6 +23,7 @@ import { Select } from "@/components/ui/Select";
 import type { Tables } from "@/lib/database.types";
 import { useEntity as useEntityRaw } from "@/hooks/useEntity";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type InventoryRow = Tables<"inventory">;
@@ -99,7 +100,7 @@ export default function Inventory() {
   const { data: mortality, refresh: refreshMortality } = useEntityRaw<MortalityRow>("mortality_events", [], { orderBy: "noted_at", ascending: false });
   const [lowStockFilter, setLowStockFilter] = useState(false);
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [selectedId, setSelectedId] = useDrawerParam();
   const [activeTab, setActiveTab] = useState("Stock");
 
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
@@ -119,7 +120,8 @@ export default function Inventory() {
     });
   }, [data, search, lowStockFilter]);
 
-  const selectedItem = useMemo(() => inventory.find(i => i.id === selectedId), [inventory, selectedId]);
+  // String(): inventory ids are `string | number`, the URL only yields strings.
+  const selectedItem = useMemo(() => inventory.find((i) => String(i.id) === selectedId), [inventory, selectedId]);
 
   // The drawer covers the whole screen on mobile — Escape has to get out of it.
   useEscapeKey(!!selectedItem, () => { setSelectedId(null); setActiveTab("Stock"); });

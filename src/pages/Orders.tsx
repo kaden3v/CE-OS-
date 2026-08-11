@@ -18,6 +18,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { orderStatusTone, shipmentStatusTone, orderStatusLabel } from "@/lib/status";
 import type { Tables } from "@/lib/database.types";
@@ -37,7 +38,11 @@ const statusColor = orderStatusTone;
 
 export default function Orders() {
   const confirm = useConfirm();
-  const { globalOrderViewId, setGlobalOrderViewId, addToast } = useApp();
+  const { addToast } = useApp();
+  // Was AppContext's globalOrderViewId, set by the command palette before it
+  // navigated here. The palette now links straight to /orders?view=<id>, so the
+  // drawer has one source of truth — the URL — and no cross-page context.
+  const [selectedId, setSelectedId] = useDrawerParam();
   const { data: orders, isLoading, error, refresh, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
   const { data: customers } = useEntity<Customer>("customers", [], { toRow: (c) => ({ name: c.name }) });
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
@@ -47,14 +52,14 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  const selected = useMemo(() => orders.find((o) => o.id === globalOrderViewId) ?? null, [orders, globalOrderViewId]);
+  const selected = useMemo(() => orders.find((o) => o.id === selectedId) ?? null, [orders, selectedId]);
   const selectedShipment = useMemo(
     () => (selected ? shipments.find((s) => s.order_id === selected.id) ?? null : null),
     [shipments, selected],
   );
 
   // The drawer covers the whole screen on mobile — Escape has to get out of it.
-  useEscapeKey(!!selected && !isAddOpen, () => setGlobalOrderViewId(null));
+  useEscapeKey(!!selected && !isAddOpen, () => setSelectedId(null));
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -194,7 +199,7 @@ export default function Orders() {
       addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" });
       return;
     }
-    setGlobalOrderViewId(null);
+    setSelectedId(null);
     addToast({ title: "Order deleted", status: "info" });
   };
 
@@ -275,7 +280,7 @@ export default function Orders() {
               action={<Button variant="outline" onClick={() => setIsAddOpen(true)} disabled={cultivars.length === 0}>New Order</Button>}
             />
           ) : (
-            <DataTable columns={columns} data={filtered} onRowClick={(row: OrderWithRelations) => setGlobalOrderViewId(row.id)} />
+            <DataTable columns={columns} data={filtered} onRowClick={(row: OrderWithRelations) => setSelectedId(row.id)} />
           )}
         </Card>
       </div>
@@ -310,7 +315,7 @@ export default function Orders() {
                   </div>
                 )}
               </div>
-              <button onClick={() => setGlobalOrderViewId(null)} aria-label="Close" className="p-2 -mr-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors">
+              <button onClick={() => setSelectedId(null)} aria-label="Close" className="p-2 -mr-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

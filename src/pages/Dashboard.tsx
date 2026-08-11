@@ -34,7 +34,7 @@ type AlertItem = { id: string; href: string; label: string; detail: string; tone
 
 export default function Dashboard() {
   const [viewMode, setViewMode] = useState<"operations" | "reporting">("operations");
-  const { tasks, toggleTask, setGlobalOrderViewId } = useApp();
+  const { tasks, toggleTask } = useApp();
   const pendingTasks = tasks.filter(t => !t.completed).slice(0, 5);
 
   const { data: orders } = useOrders();
@@ -265,8 +265,7 @@ export default function Dashboard() {
                       </div>
                       {order ? (
                         <Link
-                          to="/orders"
-                          onClick={() => setGlobalOrderViewId(order.id)}
+                          to={`/orders?view=${encodeURIComponent(order.id)}`}
                           className="text-xs text-text-secondary hover:text-text-primary shrink-0"
                         >
                           Open

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import { useEntity } from "@/hooks/useEntity";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { useFocusParam } from "@/hooks/useFocusParam";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,7 +42,7 @@ export default function Customers() {
   const { addToast } = useApp();
   const { user, activeOrgId } = useAuth();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useDrawerParam();
   useFocusParam(customers, setSelectedId);
   const selected = useMemo(() => customers.find((c) => c.id === selectedId) ?? null, [customers, selectedId]);
 

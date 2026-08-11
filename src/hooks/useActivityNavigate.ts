@@ -1,12 +1,11 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router";
-import { useApp } from "@/contexts/AppContext";
 
 /**
  * Deep-link from an activity event to the record it touched.
  *
  * Tiered by what each page supports today:
- *  - orders   → open the global order viewer (works from anywhere) + /orders
+ *  - orders   → /orders?view=<id>, which opens the drawer (see useDrawerParam)
  *  - vendors  → the existing /finances/vendors/:id detail route
  *  - focus    → list page with `?focus=<id>` (page opens the row via useFocusParam)
  *  - other    → best-effort navigate to the entity's list page
@@ -54,19 +53,15 @@ export function canNavigateToRecord(entity: string, entityId: string | null): bo
 
 export function useActivityNavigate() {
   const navigate = useNavigate();
-  const { setGlobalOrderViewId } = useApp();
 
   return useCallback(
     (entity: string, entityId: string | null) => {
       const target = activityRecordTarget(entity, entityId);
       if (!target) return;
-      if (target.kind === "order") {
-        setGlobalOrderViewId(target.id);
-        navigate("/orders");
-      } else {
-        navigate(target.path);
-      }
+      // Orders open via ?view=<id> like every other drawer, rather than priming
+      // context state before navigating (see useDrawerParam).
+      navigate(target.kind === "order" ? `/orders?view=${encodeURIComponent(target.id)}` : target.path);
     },
-    [navigate, setGlobalOrderViewId],
+    [navigate],
   );
 }
