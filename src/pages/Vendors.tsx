@@ -225,34 +225,34 @@ export default function Vendors() {
             </div>
           )}
           <div>
-            <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Company name *</label>
-            <Input required placeholder="E.g. Brad's Greenhouse" value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setDup(null); }} />
+            <label htmlFor="vendors-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Company name *</label>
+            <Input id="vendors-1" required placeholder="E.g. Brad's Greenhouse" value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setDup(null); }} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Category</label>
-              <Select className="w-full" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              <label htmlFor="vendors-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Category</label>
+              <Select id="vendors-2" className="w-full" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
               </Select>
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Website</label>
-              <Input placeholder="example.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+              <label htmlFor="vendors-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Website</label>
+              <Input id="vendors-3" placeholder="example.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Email</label>
-              <Input type="email" placeholder="orders@vendor.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <label htmlFor="vendors-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Email</label>
+              <Input id="vendors-4" type="email" placeholder="orders@vendor.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Phone</label>
-              <Input type="tel" placeholder="555-0123" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <label htmlFor="vendors-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Phone</label>
+              <Input id="vendors-5" type="tel" placeholder="555-0123" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
-            <Input placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <label htmlFor="vendors-6" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+            <Input id="vendors-6" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
             <div>

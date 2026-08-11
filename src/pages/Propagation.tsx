@@ -383,8 +383,8 @@ export default function Propagation() {
       >
             <form onSubmit={handleEdit} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
-                <Input required value={editForm.cultivar} onChange={(e) => setEditForm({ ...editForm, cultivar: e.target.value })} />
+                <label htmlFor="propagation-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
+                <Input id="propagation-1" required value={editForm.cultivar} onChange={(e) => setEditForm({ ...editForm, cultivar: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -398,18 +398,18 @@ export default function Propagation() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
-                  <Input type="number" min="1" required value={editForm.count} onChange={(e) => setEditForm({ ...editForm, count: parseInt(e.target.value) || 0 })} />
+                  <label htmlFor="propagation-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                  <Input id="propagation-2" type="number" min="1" required value={editForm.count} onChange={(e) => setEditForm({ ...editForm, count: parseInt(e.target.value) || 0 })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Started</label>
-                  <Input type="date" value={editForm.started} onChange={(e) => setEditForm({ ...editForm, started: e.target.value })} />
+                  <label htmlFor="propagation-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Started</label>
+                  <Input id="propagation-3" type="date" value={editForm.started} onChange={(e) => setEditForm({ ...editForm, started: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Est. ready</label>
-                  <Input type="date" value={editForm.est_ready} onChange={(e) => setEditForm({ ...editForm, est_ready: e.target.value })} />
+                  <label htmlFor="propagation-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Est. ready</label>
+                  <Input id="propagation-4" type="date" value={editForm.est_ready} onChange={(e) => setEditForm({ ...editForm, est_ready: e.target.value })} />
                 </div>
               </div>
               <div>
@@ -431,8 +431,8 @@ export default function Propagation() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Add Propagation Batch" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
-                <Input required placeholder="P. agnata" value={form.cultivar} onChange={(e) => setForm({ ...form, cultivar: e.target.value })} />
+                <label htmlFor="propagation-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
+                <Input id="propagation-5" required placeholder="P. agnata" value={form.cultivar} onChange={(e) => setForm({ ...form, cultivar: e.target.value })} />
               </div>
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
@@ -445,8 +445,8 @@ export default function Propagation() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
-                <Input type="number" min="1" required value={form.count} onChange={(e) => setForm({ ...form, count: parseInt(e.target.value) || 0 })} />
+                <label htmlFor="propagation-6" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                <Input id="propagation-6" type="number" min="1" required value={form.count} onChange={(e) => setForm({ ...form, count: parseInt(e.target.value) || 0 })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsOpen(false)}>Cancel</Button>

@@ -6,7 +6,7 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
 import { Plus, X, Truck, ThermometerSun } from "lucide-react";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
 import { trackingUrl } from "@/lib/tracking";
@@ -23,7 +23,7 @@ const STATUSES = ["pending", "ready", "held", "shipped", "delivered", "exception
 type Status = (typeof STATUSES)[number];
 
 export default function Shipping() {
-  const { data: shipments, add, update, isLoading } = useEntity<Shipment>("shipments", [], {
+  const { data: shipments, add, update, isLoading, error, refresh } = useEntity<Shipment>("shipments", [], {
     toRow: (s) => ({
       order_id: s.order_id,
       status: s.status,
@@ -242,7 +242,9 @@ export default function Shipping() {
       <Card className="flex-1 overflow-auto flex flex-col">
         {isLoading ? (
           <LoadingTable cols={7} rows={8} />
-        ) : isEmpty ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : isEmpty ? (
           <EmptyState
             icon={Truck}
             title="No shipments yet"
@@ -257,8 +259,8 @@ export default function Shipping() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Shipment" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Order *</label>
-                <Select required className="w-full" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
+                <label htmlFor="shipping-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Order *</label>
+                <Select id="shipping-1" required className="w-full" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
                   <option value="">— Pick an order —</option>
                   {orders.map((o) => (
                     <option key={o.id} value={o.id}>{orderLabel(o.id)}</option>
@@ -267,22 +269,22 @@ export default function Shipping() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Carrier</label>
-                  <Input placeholder="USPS / UPS / FedEx" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
+                  <label htmlFor="shipping-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Carrier</label>
+                  <Input id="shipping-2" placeholder="USPS / UPS / FedEx" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Tracking #</label>
-                  <Input placeholder="1Z..." value={form.tracking_number} onChange={(e) => setForm({ ...form, tracking_number: e.target.value })} />
+                  <label htmlFor="shipping-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Tracking #</label>
+                  <Input id="shipping-3" placeholder="1Z..." value={form.tracking_number} onChange={(e) => setForm({ ...form, tracking_number: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Ship to ZIP</label>
-                  <Input placeholder="85001" value={form.ship_to_zip} onChange={(e) => setForm({ ...form, ship_to_zip: e.target.value })} />
+                  <label htmlFor="shipping-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Ship to ZIP</label>
+                  <Input id="shipping-4" placeholder="85001" value={form.ship_to_zip} onChange={(e) => setForm({ ...form, ship_to_zip: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">State</label>
-                  <Input placeholder="AZ" value={form.ship_to_state} onChange={(e) => setForm({ ...form, ship_to_state: e.target.value })} />
+                  <label htmlFor="shipping-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">State</label>
+                  <Input id="shipping-5" placeholder="AZ" value={form.ship_to_state} onChange={(e) => setForm({ ...form, ship_to_state: e.target.value })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

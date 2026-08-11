@@ -7,7 +7,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
@@ -31,7 +31,7 @@ type LaborType = "owner" | "hired";
 export default function Production() {
   const confirm = useConfirm();
   const { activeOrgId } = useAuth();
-  const { data: runs, isLoading, refresh: refreshRuns } = useEntity<Run>("production_runs", [], { orderBy: "run_on" });
+  const { data: runs, isLoading, error, refresh: refreshRuns } = useEntity<Run>("production_runs", [], { orderBy: "run_on" });
   const { data: runSupplies, refresh: refreshRunSupplies } = useEntity<RunSupply>("production_run_supplies", [], { orderBy: "created_at" });
   const { data: supplies, refresh: refreshSupplies } = useEntity<Supply>("supplies", []);
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
@@ -179,7 +179,9 @@ export default function Production() {
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
         {isLoading ? (
           <LoadingTable cols={9} rows={8} />
-        ) : runs.length === 0 ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refreshRuns} />
+          ) : runs.length === 0 ? (
           <EmptyState
             icon={Factory}
             title="No production runs yet"
@@ -194,31 +196,31 @@ export default function Production() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Log Production Run" size="lg">
             <form onSubmit={handleCreate} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Description</label>
-                <Input placeholder="Potted up 40 D. capensis into 3.5-inch pots" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <label htmlFor="production-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Description</label>
+                <Input id="production-1" placeholder="Potted up 40 D. capensis into 3.5-inch pots" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
-                  <Select className="w-full" value={form.cultivar_id} onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}>
+                  <label htmlFor="production-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
+                  <Select id="production-2" className="w-full" value={form.cultivar_id} onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}>
                     <option value="">— None —</option>
                     {cultivars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Units produced</label>
-                  <Input type="number" min="0" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} />
+                  <label htmlFor="production-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Units produced</label>
+                  <Input id="production-3" type="number" min="0" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor hours</label>
-                  <Input type="number" step="0.25" min="0" value={form.labor_hours} onChange={(e) => setForm({ ...form, labor_hours: Number(e.target.value) || 0 })} />
+                  <label htmlFor="production-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor hours</label>
+                  <Input id="production-4" type="number" step="0.25" min="0" value={form.labor_hours} onChange={(e) => setForm({ ...form, labor_hours: Number(e.target.value) || 0 })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor rate ($/hr)</label>
-                  <Input type="number" step="0.01" min="0" value={form.labor_rate} onChange={(e) => setForm({ ...form, labor_rate: Number(e.target.value) || 0 })} />
+                  <label htmlFor="production-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor rate ($/hr)</label>
+                  <Input id="production-5" type="number" step="0.01" min="0" value={form.labor_rate} onChange={(e) => setForm({ ...form, labor_rate: Number(e.target.value) || 0 })} />
                 </div>
               </div>
 

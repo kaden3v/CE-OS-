@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEntity } from "@/hooks/useEntity";
@@ -64,7 +64,7 @@ export default function Expenses() {
   const location = useLocation();
   const book = useCategoryBook();
 
-  const { data: expenses, add, update, updateMany, remove, removeMany, isLoading, refresh } = useEntity<Expense>("expenses", SEED, {
+  const { data: expenses, add, update, updateMany, remove, removeMany, isLoading, error, refresh } = useEntity<Expense>("expenses", SEED, {
     orderBy: "occurred_on",
     toRow: (e) => ({
       vendor_id: e.vendor_id,
@@ -583,7 +583,8 @@ export default function Expenses() {
 
       <Card className="flex-1 flex flex-col min-h-0 mb-12">
         {isLoading && <LoadingTable cols={9} rows={8} />}
-        {isEmpty && (
+        {!isLoading && error && <ErrorState description={error} onRetry={refresh} />}
+        {isEmpty && !error && (
           <EmptyState
             icon={FileText}
             title="No expenses yet"
@@ -591,7 +592,7 @@ export default function Expenses() {
             action={<Button variant="outline" onClick={openCreate}>Add Expense</Button>}
           />
         )}
-        {!isLoading && !isEmpty && (
+        {!isLoading && !isEmpty && !error && (
           <ExpenseTable
             rows={sorted}
             vendors={vendors}

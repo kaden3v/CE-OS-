@@ -87,7 +87,7 @@ const toRow = (it: Partial<InventoryItem>): Record<string, unknown> => {
 
 export default function Inventory() {
   const confirm = useConfirm();
-  const { data: inventory, add: addInventoryItem, update: updateInventoryItem, remove: removeInventoryItem } = useEntityRaw<InventoryItem, InventoryRow>(
+  const { data: inventory, add: addInventoryItem, update: updateInventoryItem, remove: removeInventoryItem, error: inventoryError, refresh: refreshInventory } = useEntityRaw<InventoryItem, InventoryRow>(
     "inventory",
     INVENTORY,
     { toRow, fromRow },
@@ -363,8 +363,10 @@ export default function Inventory() {
                 </Card>
               ))}
             </div>
-          ) : isError ? (
-            <ErrorState />
+          ) : inventoryError || isError ? (
+            // inventoryError is the real fetch failure; isError is the Settings
+            // dev toggle, which only ever simulated one.
+            <ErrorState description={inventoryError ?? undefined} onRetry={refreshInventory} />
           ) : isEmpty ? (
             <EmptyState title="Inventory is empty" description="Add a plant to begin." action={<Button variant="outline" onClick={() => setIsAddModalOpen(true)}>Add Plant</Button>} />
           ) : filteredData.length === 0 ? (
@@ -649,17 +651,17 @@ export default function Inventory() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
-                  <Input type="number" min="1" required value={lossForm.count} onChange={(e) => setLossForm({ ...lossForm, count: parseInt(e.target.value) || 1 })} />
+                  <label htmlFor="inventory-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                  <Input id="inventory-1" type="number" min="1" required value={lossForm.count} onChange={(e) => setLossForm({ ...lossForm, count: parseInt(e.target.value) || 1 })} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cause</label>
-                <Input placeholder="Rot, pests, shipping damage…" value={lossForm.cause} onChange={(e) => setLossForm({ ...lossForm, cause: e.target.value })} />
+                <label htmlFor="inventory-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cause</label>
+                <Input id="inventory-2" placeholder="Rot, pests, shipping damage…" value={lossForm.cause} onChange={(e) => setLossForm({ ...lossForm, cause: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
-                <Input placeholder="Optional" value={lossForm.notes} onChange={(e) => setLossForm({ ...lossForm, notes: e.target.value })} />
+                <label htmlFor="inventory-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+                <Input id="inventory-3" placeholder="Optional" value={lossForm.notes} onChange={(e) => setLossForm({ ...lossForm, notes: e.target.value })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsLossOpen(false)}>Cancel</Button>
@@ -698,8 +700,8 @@ export default function Inventory() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Common Name</label>
-                  <Input placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({ ...newPlant, common: e.target.value })} className="w-full" />
+                  <label htmlFor="inventory-4" className="text-sm font-medium">Common Name</label>
+                  <Input id="inventory-4" placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({ ...newPlant, common: e.target.value })} className="w-full" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Genus</label>
@@ -714,16 +716,16 @@ export default function Inventory() {
                 </div>
                 <div className="grid grid-cols-3 gap-2 pt-2">
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Too small/young to sell">Grow-Out</label>
-                     <Input type="number" min="0" required value={newPlant.growout} onChange={(e) => setNewPlant({...newPlant, growout: parseInt(e.target.value) || 0})} className="w-full" />
+                     <label htmlFor="inventory-5" className="text-xs text-text-secondary uppercase" title="Too small/young to sell">Grow-Out</label>
+                     <Input id="inventory-5" type="number" min="0" required value={newPlant.growout} onChange={(e) => setNewPlant({...newPlant, growout: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Sellable stock">Sale-Ready</label>
-                     <Input type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
+                     <label htmlFor="inventory-6" className="text-xs text-text-secondary uppercase" title="Sellable stock">Sale-Ready</label>
+                     <Input id="inventory-6" type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Cost per unit — drives profit on sale">Cost $/unit</label>
-                     <Input type="number" min="0" step="0.01" value={newPlant.cost} onChange={(e) => setNewPlant({...newPlant, cost: parseFloat(e.target.value) || 0})} className="w-full" />
+                     <label htmlFor="inventory-7" className="text-xs text-text-secondary uppercase" title="Cost per unit — drives profit on sale">Cost $/unit</label>
+                     <Input id="inventory-7" type="number" min="0" step="0.01" value={newPlant.cost} onChange={(e) => setNewPlant({...newPlant, cost: parseFloat(e.target.value) || 0})} className="w-full" />
                    </div>
                 </div>
               </form>

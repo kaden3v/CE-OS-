@@ -185,12 +185,12 @@ export default function ExpenseCategories() {
         {edit && (
           <div className="p-4 space-y-4">
             <div>
-              <label className={labelCls}>Name</label>
-              <Input autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="e.g. Greenhouse heating" />
+              <label htmlFor="expensecategories-1" className={labelCls}>Name</label>
+              <Input id="expensecategories-1" autoFocus value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="e.g. Greenhouse heating" />
             </div>
             <div>
-              <label className={labelCls}>Schedule F line</label>
-              <Select className={selectCls} value={edit.scheduleF} onChange={(e) => setEdit({ ...edit, scheduleF: e.target.value as ScheduleFCategory })}>
+              <label htmlFor="expensecategories-2" className={labelCls}>Schedule F line</label>
+              <Select id="expensecategories-2" className={selectCls} value={edit.scheduleF} onChange={(e) => setEdit({ ...edit, scheduleF: e.target.value as ScheduleFCategory })}>
                 {SCHEDULE_F_CATEGORIES.map((sf) => (
                   <option key={sf} value={sf}>{sf}</option>
                 ))}
@@ -198,8 +198,8 @@ export default function ExpenseCategories() {
               <p className="text-xs text-text-tertiary mt-1.5">Which tax line this category totals into on Schedule F (farm).</p>
             </div>
             <div>
-              <label className={labelCls}>Schedule C line</label>
-              <Select className={selectCls} value={edit.scheduleC} onChange={(e) => setEdit({ ...edit, scheduleC: e.target.value as ScheduleCCategory })}>
+              <label htmlFor="expensecategories-3" className={labelCls}>Schedule C line</label>
+              <Select id="expensecategories-3" className={selectCls} value={edit.scheduleC} onChange={(e) => setEdit({ ...edit, scheduleC: e.target.value as ScheduleCCategory })}>
                 {SCHEDULE_C_CATEGORIES.map((sc) => (
                   <option key={sc} value={sc}>{sc}</option>
                 ))}

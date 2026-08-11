@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Store, ShoppingBag, X, Mail, Plus, Users, Pencil, Trash2 } from "lucide-react";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ const SEED: Customer[] = [];
 
 export default function Customers() {
   const confirm = useConfirm();
-  const { data: customers, add, update, remove, isLoading } = useEntity<Customer>("customers", SEED, {
+  const { data: customers, add, update, remove, isLoading, error, refresh } = useEntity<Customer>("customers", SEED, {
     toRow: (c) => ({
       name: c.name,
       email: c.email,
@@ -242,7 +242,9 @@ export default function Customers() {
         <Card className="flex-1 overflow-auto flex flex-col">
           {isLoading ? (
             <LoadingTable cols={4} rows={10} />
-          ) : isEmpty ? (
+            ) : error ? (
+              <ErrorState description={error} onRetry={refresh} />
+            ) : isEmpty ? (
             <EmptyState
               icon={Users}
               title="No customers yet"
@@ -319,8 +321,8 @@ export default function Customers() {
                     <form onSubmit={startSubscription} className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs text-text-tertiary mb-1">Tier</label>
-                          <Input value={subForm.tier} onChange={(e) => setSubForm({ ...subForm, tier: e.target.value })} />
+                          <label htmlFor="customers-1" className="block text-xs text-text-tertiary mb-1">Tier</label>
+                          <Input id="customers-1" value={subForm.tier} onChange={(e) => setSubForm({ ...subForm, tier: e.target.value })} />
                         </div>
                         <div>
                           <label className="block text-xs text-text-tertiary mb-1">Billing</label>
@@ -336,8 +338,8 @@ export default function Customers() {
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs text-text-tertiary mb-1">Price (optional)</label>
-                        <Input type="number" step="0.01" min="0" placeholder="29.99" value={subForm.price} onChange={(e) => setSubForm({ ...subForm, price: e.target.value })} />
+                        <label htmlFor="customers-2" className="block text-xs text-text-tertiary mb-1">Price (optional)</label>
+                        <Input id="customers-2" type="number" step="0.01" min="0" placeholder="29.99" value={subForm.price} onChange={(e) => setSubForm({ ...subForm, price: e.target.value })} />
                       </div>
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" type="button" onClick={() => setIsSubFormOpen(false)}>Cancel</Button>
@@ -381,21 +383,21 @@ export default function Customers() {
       <Modal open={isEditOpen && !!selected} onClose={() => setIsEditOpen(false)} title="Edit Customer" size="sm">
             <form onSubmit={handleEdit} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
-                <Input required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                <label htmlFor="customers-3" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
+                <Input id="customers-3" required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Email</label>
-                <Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                <label htmlFor="customers-4" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Email</label>
+                <Input id="customers-4" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Etsy handle</label>
-                  <Input value={editForm.etsy_handle} onChange={(e) => setEditForm({ ...editForm, etsy_handle: e.target.value })} />
+                  <label htmlFor="customers-5" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Etsy handle</label>
+                  <Input id="customers-5" value={editForm.etsy_handle} onChange={(e) => setEditForm({ ...editForm, etsy_handle: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Phone</label>
-                  <Input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+                  <label htmlFor="customers-6" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Phone</label>
+                  <Input id="customers-6" type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
                 </div>
               </div>
               <div>
@@ -417,20 +419,20 @@ export default function Customers() {
       <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} title="New Customer" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
-                <Input required placeholder="Jane Doe" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label htmlFor="customers-7" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
+                <Input id="customers-7" required placeholder="Jane Doe" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Email</label>
-                <Input type="email" placeholder="jane@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <label htmlFor="customers-8" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Email</label>
+                <Input id="customers-8" type="email" placeholder="jane@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Etsy handle</label>
-                <Input placeholder="janeplants" value={form.etsy_handle} onChange={(e) => setForm({ ...form, etsy_handle: e.target.value })} />
+                <label htmlFor="customers-9" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Etsy handle</label>
+                <Input id="customers-9" placeholder="janeplants" value={form.etsy_handle} onChange={(e) => setForm({ ...form, etsy_handle: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Phone</label>
-                <Input type="tel" placeholder="555-0123" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <label htmlFor="customers-10" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Phone</label>
+                <Input id="customers-10" type="tel" placeholder="555-0123" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsAddOpen(false)}>Cancel</Button>

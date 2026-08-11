@@ -4,7 +4,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
@@ -21,7 +21,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export default function PrintQueue() {
-  const { data: jobs, update, remove, isLoading } = useEntity<PrintJob>("print_jobs", [], {
+  const { data: jobs, update, remove, isLoading, error, refresh } = useEntity<PrintJob>("print_jobs", [], {
     toRow: (j) => ({
       shipment_id: j.shipment_id,
       kind: j.kind,
@@ -107,7 +107,9 @@ export default function PrintQueue() {
       <Card className="flex-1 overflow-auto flex flex-col">
         {isLoading ? (
           <LoadingTable cols={5} rows={6} />
-        ) : isEmpty ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : isEmpty ? (
           <EmptyState icon={Printer} title="Queue empty" description="Print jobs queued from shipments will appear here." />
         ) : (
           <DataTable columns={columns} data={jobs} />

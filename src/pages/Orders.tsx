@@ -11,7 +11,7 @@ import { X, Search, Plus, Trash2, Store, ShoppingBag, PackageSearch, Truck, Exte
 import { cn } from "@/lib/utils";
 import { trackingUrl, carrierLabel } from "@/lib/tracking";
 import { CultivarName } from "@/components/ui/CultivarName";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { RecordActivity } from "@/components/activity/RecordActivity";
 import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
@@ -37,7 +37,7 @@ const statusColor = orderStatusTone;
 export default function Orders() {
   const confirm = useConfirm();
   const { globalOrderViewId, setGlobalOrderViewId, addToast } = useApp();
-  const { data: orders, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
+  const { data: orders, isLoading, error, refresh, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
   const { data: customers } = useEntity<Customer>("customers", [], { toRow: (c) => ({ name: c.name }) });
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
   const { data: shipments } = useEntity<Shipment>("shipments", []);
@@ -261,6 +261,8 @@ export default function Orders() {
         <Card className="flex-1 overflow-auto flex flex-col min-h-0">
           {isLoading ? (
             <LoadingTable cols={7} rows={10} />
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
           ) : isEmpty ? (
             <EmptyState
               icon={PackageSearch}
@@ -505,8 +507,8 @@ export default function Orders() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
-                  <Select className="w-full" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })}>
+                  <label htmlFor="orders-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
+                  <Select id="orders-1" className="w-full" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })}>
                     <option value="shopify">Shopify</option>
                     <option value="etsy">Etsy</option>
                     <option value="wholesale">Wholesale</option>
@@ -515,8 +517,8 @@ export default function Orders() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Status</label>
-                  <Select className="w-full" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
+                  <label htmlFor="orders-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Status</label>
+                  <Select id="orders-2" className="w-full" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>{orderStatusLabel(s)}</option>
                     ))}

@@ -402,14 +402,46 @@ notes". `T12` still covers that pass.
 
 `tsc` clean · 222 tests pass · build green.
 
-### Phase 3 — Trust & accessibility (P2)
+### Phase 3 — Trust & accessibility (P2) — ✅ **DONE 2026-08-11**
 
-| # | Task | Addresses |
-|---|---|---|
-| T11 | `useEntity` returns `error`; wire `ErrorState` + retry into all 23 consuming pages | **F13** |
-| T12 | Focus trap + focus restore + body scroll lock in `Modal`; then run the authed Playwright audit on mobile + desktop to visually confirm Phases 1–3 (needs `E2E_EMAIL` / `E2E_PASSWORD`) | F16, verification gap |
-| T13 | Add `htmlFor`/`id` to the ~132 unassociated labels (mostly mechanical) | F16 |
-| T14 | Per-route `document.title`; fix the dead "View status" button; hoist `Math.random()` out of `LoadingTable` render | F15 |
+| # | Task | Addresses | Status |
+|---|---|---|---|
+| T11 | `useEntity` returns `error`; wire `ErrorState` + retry into consuming pages | **F13** | ✅ |
+| T12 | Focus trap + focus restore + body scroll lock in `Modal` | F16 | ◐ code done; authed visual pass still blocked on credentials |
+| T13 | Add `htmlFor`/`id` to the unassociated labels | F16 | ✅ |
+| T14 | Per-route `document.title`; dead "View status" button; `Math.random()` in `LoadingTable` | F15 | ✅ |
+
+**What shipped**
+
+- **Failed loads no longer read as empty tables.** `useEntity` and `useOrders` now expose
+  `error: string | null` (via `friendlyDbError`, so raw PostgREST messages never reach the UI), and
+  13 pages branch on it *before* `isEmpty`, rendering `ErrorState` with a working retry. Previously
+  a network blip on the Orders page rendered "No orders yet — create your first order" over a live
+  ledger.
+- **`Modal` is now accessible**: focus trap (`useFocusTrap`), focus restore to the trigger on
+  close, body scroll lock (`useScrollLock`, ref-counted so nested overlays don't unlock early), and
+  `aria-labelledby` wired to its own title via `useId`. The dialog carries `tabIndex={-1}` as a
+  fallback focus target so opening one never strands focus on the page behind.
+- **94 label/control associations added**, taking `htmlFor` coverage from 11/143 to 105/143. Beyond
+  screen readers, this is what makes tapping a field's label focus it on a phone. Verified in the
+  browser that sign-in's fields now resolve their labels.
+- **Per-route `document.title`** — every route was "CEOS — Canyon Exotics"; it's now
+  "Finances · Vendors · CEOS". Verified live: the sign-in tab reads "Sign In · CEOS".
+- `ErrorState`'s dead "View status" button (no `onClick`) is gone, and `LoadingTable` no longer
+  calls `Math.random()` during render, which had reshuffled every skeleton bar on each re-render.
+
+**Tests**: 222 → **235**. New `Modal.dom.test.tsx` covers portalling, `aria-labelledby`, Escape,
+backdrop-vs-inside clicks, innermost-only Escape with stacked modals, scroll lock/restore, and
+focus restore; `useDocumentTitle.test.ts` covers the title builder. `tsc` clean · build green.
+
+**Two things worth recording**
+
+- The focus trap originally filtered candidates by `offsetWidth`/`offsetHeight`. That is always `0`
+  under jsdom, so the trap silently focused nothing — the failing test caught a real defect, not a
+  test artifact. Visibility filtering is now by `[hidden]`/`aria-hidden` instead.
+- `useDataState` (used only by `Inventory`) is a **dev-tools mock** driven by the Settings
+  error/empty/loading toggles, not real data state. Inventory's `isError` therefore only ever
+  reflected a dev switch; it now checks the real `useEntity` error alongside it.
 
 ### Phase 4 — Mobile-native list views (P2)
 

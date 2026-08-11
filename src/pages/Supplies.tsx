@@ -208,13 +208,13 @@ export default function Supplies() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="New Supply" size="sm">
         <form onSubmit={handleAdd} className="p-4 space-y-4">
           <div>
-            <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
-            <Input required placeholder="e.g. Pumice" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <label htmlFor="supplies-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
+            <Input id="supplies-1" required placeholder="e.g. Pumice" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Unit</label>
-              <Input placeholder="bag, pc, bale" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
+              <label htmlFor="supplies-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Unit</label>
+              <Input id="supplies-2" placeholder="bag, pc, bale" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Vendor</label>
@@ -230,16 +230,16 @@ export default function Supplies() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">On hand</label>
-              <Input type="number" min="0" value={form.on_hand} onChange={(e) => setForm({ ...form, on_hand: Number(e.target.value) })} />
+              <label htmlFor="supplies-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">On hand</label>
+              <Input id="supplies-3" type="number" min="0" value={form.on_hand} onChange={(e) => setForm({ ...form, on_hand: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Reorder at</label>
-              <Input type="number" min="0" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: Number(e.target.value) })} />
+              <label htmlFor="supplies-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Reorder at</label>
+              <Input id="supplies-4" type="number" min="0" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Unit cost $</label>
-              <Input type="number" min="0" step="0.01" placeholder="0.00" value={form.cost || ""} onChange={(e) => setForm({ ...form, cost: Number(e.target.value) })} />
+              <label htmlFor="supplies-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Unit cost $</label>
+              <Input id="supplies-5" type="number" min="0" step="0.01" placeholder="0.00" value={form.cost || ""} onChange={(e) => setForm({ ...form, cost: Number(e.target.value) })} />
             </div>
           </div>
           <p className="text-xs text-text-tertiary">On-hand and unit cost here are the opening balance; logging purchases updates them as a weighted average.</p>

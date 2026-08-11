@@ -9,7 +9,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/Badge";
 import { CompanyLogo } from "@/components/ui/CompanyLogo";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,7 +43,7 @@ const isoShift = (iso: string, days = 0, years = 0): string => {
 export default function Subscriptions() {
   const confirm = useConfirm();
   const { user, activeOrgId } = useAuth();
-  const { data: subs, add, update, remove, isLoading, refresh } = useEntity<Recurring>("recurring_expenses", [], {
+  const { data: subs, add, update, remove, isLoading, error, refresh } = useEntity<Recurring>("recurring_expenses", [], {
     orderBy: "created_at",
     toRow: (s) => ({
       name: s.name, website: s.website, vendor_id: s.vendor_id, category: s.category,
@@ -314,7 +314,9 @@ export default function Subscriptions() {
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
         {isLoading ? (
           <LoadingTable cols={8} rows={6} />
-        ) : subs.length === 0 ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : subs.length === 0 ? (
           <EmptyState
             icon={Repeat}
             title="No subscriptions tracked"
@@ -348,37 +350,37 @@ export default function Subscriptions() {
       >
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
-                <Input autoFocus required className="w-full" placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label htmlFor="subscriptions-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
+                <Input id="subscriptions-1" autoFocus required className="w-full" placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Website</label>
-                <Input className="w-full" placeholder="shopify.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+                <label htmlFor="subscriptions-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Website</label>
+                <Input id="subscriptions-2" className="w-full" placeholder="shopify.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Vendor</label>
-                  <Select className="w-full" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
+                  <label htmlFor="subscriptions-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Vendor</label>
+                  <Select id="subscriptions-3" className="w-full" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
                     <option value="">— None —</option>
                     {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
-                  <Input className="w-full" placeholder="Software" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+                  <label htmlFor="subscriptions-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
+                  <Input id="subscriptions-4" className="w-full" placeholder="Software" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Amount</label>
+                  <label htmlFor="subscriptions-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Amount</label>
                   <div className="relative">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-text-secondary pointer-events-none">$</span>
-                    <Input type="number" step="0.01" min="0" inputMode="decimal" className="w-full pl-6" value={form.amount} onFocus={(e) => e.target.select()} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })} />
+                    <Input id="subscriptions-5" type="number" step="0.01" min="0" inputMode="decimal" className="w-full pl-6" value={form.amount} onFocus={(e) => e.target.select()} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Billing</label>
-                  <Select className="w-full capitalize" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
+                  <label htmlFor="subscriptions-6" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Billing</label>
+                  <Select id="subscriptions-6" className="w-full capitalize" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
                     {CYCLES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
                   </Select>
                 </div>
@@ -390,13 +392,13 @@ export default function Subscriptions() {
                 </div>
               )}
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Next renewal</label>
-                <Input type="date" className="w-full" value={form.next_renewal} onChange={(e) => setForm({ ...form, next_renewal: e.target.value })} />
+                <label htmlFor="subscriptions-7" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Next renewal</label>
+                <Input id="subscriptions-7" type="date" className="w-full" value={form.next_renewal} onChange={(e) => setForm({ ...form, next_renewal: e.target.value })} />
                 <p className="text-xs text-text-tertiary mt-1">When the next charge is expected. Logging a charge advances this automatically.</p>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Notes</label>
-                <Input className="w-full" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <label htmlFor="subscriptions-8" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Notes</label>
+                <Input id="subscriptions-8" className="w-full" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsOpen(false)}>Cancel</Button>

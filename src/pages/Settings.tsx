@@ -269,8 +269,8 @@ export default function Settings() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Email</label>
-                  <Input value={user?.email ?? ""} disabled className="w-full opacity-50" />
+                  <label htmlFor="settings-1" className="text-xs uppercase tracking-wide text-text-secondary">Email</label>
+                  <Input id="settings-1" value={user?.email ?? ""} disabled className="w-full opacity-50" />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">

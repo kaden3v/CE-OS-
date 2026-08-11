@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Toggle } from "@/components/ui/Toggle";
-import { EmptyState, LoadingTable } from "@/components/ui/StateRenderer";
+import { EmptyState, LoadingTable, ErrorState } from "@/components/ui/StateRenderer";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
@@ -24,7 +24,7 @@ const PURPOSE_PRESETS = ["Post office run", "Supply pickup", "Other"];
 export default function Mileage() {
   const confirm = useConfirm();
   const { addToast } = useApp();
-  const { data: trips, add: addTrip, remove: removeTrip, isLoading } = useEntity<Trip>("mileage_log", [], { orderBy: "trip_date" });
+  const { data: trips, add: addTrip, remove: removeTrip, isLoading, error, refresh } = useEntity<Trip>("mileage_log", [], { orderBy: "trip_date" });
   const { data: routes, add: addRoute, remove: removeRoute } = useEntity<Route>("mileage_routes", [], { orderBy: "created_at", ascending: true });
   const { data: settingsRows, update: updateSettings } = useEntity<Settings>("finance_settings", []);
   const settings = settingsRows[0];
@@ -152,7 +152,9 @@ export default function Mileage() {
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
         {isLoading ? (
           <LoadingTable cols={5} rows={6} />
-        ) : trips.length === 0 ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : trips.length === 0 ? (
           <EmptyState icon={Car} title="No trips logged" description="Log a business trip or save a route for one-tap logging." action={<Button variant="outline" onClick={() => setTripOpen(true)}>Log Miles</Button>} />
         ) : (
           <table className="w-full min-w-max text-sm text-left">
@@ -187,22 +189,22 @@ export default function Mileage() {
         <form onSubmit={submitTrip} className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Date</label>
-              <Input type="date" value={tripForm.trip_date} onChange={(e) => setTripForm({ ...tripForm, trip_date: e.target.value })} />
+              <label htmlFor="mileage-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Date</label>
+              <Input id="mileage-1" type="date" value={tripForm.trip_date} onChange={(e) => setTripForm({ ...tripForm, trip_date: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Miles *</label>
-              <Input type="number" step="0.1" min="0" required placeholder="0" value={tripForm.miles} onChange={(e) => setTripForm({ ...tripForm, miles: e.target.value })} />
+              <label htmlFor="mileage-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Miles *</label>
+              <Input id="mileage-2" type="number" step="0.1" min="0" required placeholder="0" value={tripForm.miles} onChange={(e) => setTripForm({ ...tripForm, miles: e.target.value })} />
             </div>
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Purpose</label>
+            <label htmlFor="mileage-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Purpose</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {PURPOSE_PRESETS.map((p) => (
                 <button key={p} type="button" onClick={() => setTripForm({ ...tripForm, purpose: p })} className={`text-xs px-2 py-1 rounded border transition-colors ${tripForm.purpose === p ? "border-accent-brand text-accent-brand bg-accent-brand-dim" : "border-border-subtle text-text-secondary hover:bg-bg-hover"}`}>{p}</button>
               ))}
             </div>
-            <Input placeholder="Purpose" value={tripForm.purpose} onChange={(e) => setTripForm({ ...tripForm, purpose: e.target.value })} />
+            <Input id="mileage-3" placeholder="Purpose" value={tripForm.purpose} onChange={(e) => setTripForm({ ...tripForm, purpose: e.target.value })} />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
             <span className="text-sm">Round trip</span>
@@ -219,12 +221,12 @@ export default function Mileage() {
       <Modal open={routeOpen} onClose={() => setRouteOpen(false)} title="Save a Route" size="sm">
         <form onSubmit={submitRoute} className="p-4 space-y-4">
           <div>
-            <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Route name *</label>
-            <Input required placeholder="e.g. Post office" value={routeForm.name} onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })} />
+            <label htmlFor="mileage-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Route name *</label>
+            <Input id="mileage-4" required placeholder="e.g. Post office" value={routeForm.name} onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })} />
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Miles *</label>
-            <Input type="number" step="0.1" min="0" required placeholder="4.2" value={routeForm.miles} onChange={(e) => setRouteForm({ ...routeForm, miles: e.target.value })} />
+            <label htmlFor="mileage-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Miles *</label>
+            <Input id="mileage-5" type="number" step="0.1" min="0" required placeholder="4.2" value={routeForm.miles} onChange={(e) => setRouteForm({ ...routeForm, miles: e.target.value })} />
           </div>
           <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
             <span className="text-sm">Round trip</span>

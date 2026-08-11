@@ -76,9 +76,9 @@ export function QuarterlyReport() {
       </div>
 
       <div className="flex items-center gap-3 mb-6">
-        <label className="text-sm text-text-secondary">Income tax rate</label>
+        <label htmlFor="quarterlyreport-1" className="text-sm text-text-secondary">Income tax rate</label>
         <div className="relative w-24">
-          <Input type="number" min="0" max="100" value={incomeRate} onChange={(e) => setIncomeRate(e.target.value)} className="pr-7" />
+          <Input id="quarterlyreport-1" type="number" min="0" max="100" value={incomeRate} onChange={(e) => setIncomeRate(e.target.value)} className="pr-7" />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-secondary">%</span>
         </div>
         <span className="text-xs text-text-tertiary">Your marginal federal + state estimate.</span>

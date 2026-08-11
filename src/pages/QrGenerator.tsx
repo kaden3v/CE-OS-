@@ -136,8 +136,8 @@ export default function QrGenerator() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Size</label>
-            <Select className="w-full" value={size} onChange={(e) => setSize(e.target.value)}>
+            <label htmlFor="qrgenerator-1" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Size</label>
+            <Select id="qrgenerator-1" className="w-full" value={size} onChange={(e) => setSize(e.target.value)}>
               <option value="starter">Starter</option>
               <option value="intermediate">Intermediate</option>
               <option value="mature">Mature</option>
@@ -145,8 +145,8 @@ export default function QrGenerator() {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Acquisition Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="qrgenerator-2" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Acquisition Date</label>
+            <Input id="qrgenerator-2" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
           <Button variant="brand" className="w-full" onClick={generate} disabled={!cultivar}>

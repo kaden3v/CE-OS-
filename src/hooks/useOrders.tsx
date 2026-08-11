@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { logDbError } from "@/lib/dbErrors";
+import { logDbError, friendlyDbError } from "@/lib/dbErrors";
 import { logActivity } from "@/lib/activity";
 import type { Tables } from "@/lib/database.types";
 
@@ -24,10 +24,13 @@ export function useOrders() {
 
   const [data, setData] = useState<OrderWithRelations[]>([]);
   const [isLoading, setIsLoading] = useState(ready);
+  /** Message when the last fetch failed — see the note on useEntity's `error`. */
+  const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!ready) return;
     setIsLoading(true);
+    setError(null);
     const { data: rows, error } = await supabase!
       .from("orders")
       .select("*, customer:customers(id,name,email), items:order_items(*)")
@@ -35,6 +38,7 @@ export function useOrders() {
       .order("placed_at", { ascending: false });
     if (error) {
       logDbError("fetch orders", error);
+      setError(friendlyDbError(error, "Couldn't load orders. Check your connection and try again."));
       setIsLoading(false);
       return;
     }
@@ -243,5 +247,5 @@ export function useOrders() {
     return { ok: true };
   };
 
-  return { data, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder, refresh: fetchAll };
+  return { data, isLoading, error, createOrder, updateStatus, updateItem, removeItem, deleteOrder, refresh: fetchAll };
 }

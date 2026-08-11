@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Plus, X, ExternalLink } from "lucide-react";
 import { Link } from "react-router";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
@@ -22,7 +22,7 @@ type Cultivar = Tables<"cultivars">;
 const SEED: Cultivar[] = [];
 
 export default function Cultivars() {
-  const { data: cultivars, add, isLoading } = useEntity<Cultivar>("cultivars", SEED, {
+  const { data: cultivars, add, isLoading, error, refresh } = useEntity<Cultivar>("cultivars", SEED, {
     toRow: (c) => ({
       name: c.name,
       common: c.common,
@@ -95,7 +95,9 @@ export default function Cultivars() {
         <Card className="flex-1 overflow-auto flex flex-col">
           {isLoading ? (
             <LoadingTable cols={4} rows={10} />
-          ) : isEmpty ? (
+            ) : error ? (
+              <ErrorState description={error} onRetry={refresh} />
+            ) : isEmpty ? (
             <EmptyState
               title="No cultivars yet"
               description="Add the first one to begin tracking parentage and care."
@@ -163,21 +165,21 @@ export default function Cultivars() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Add Cultivar" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
-                <Input required placeholder="P. agnata 'Red'" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label htmlFor="cultivars-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
+                <Input id="cultivars-1" required placeholder="P. agnata 'Red'" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Common</label>
-                <Input placeholder="Red Mexican Butterwort" value={form.common} onChange={(e) => setForm({ ...form, common: e.target.value })} />
+                <label htmlFor="cultivars-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Common</label>
+                <Input id="cultivars-2" placeholder="Red Mexican Butterwort" value={form.common} onChange={(e) => setForm({ ...form, common: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Genus</label>
-                  <Input placeholder="Pinguicula" value={form.genus} onChange={(e) => setForm({ ...form, genus: e.target.value })} />
+                  <label htmlFor="cultivars-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Genus</label>
+                  <Input id="cultivars-3" placeholder="Pinguicula" value={form.genus} onChange={(e) => setForm({ ...form, genus: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Origin</label>
-                  <Input placeholder="Mexico / Hybrid" value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} />
+                  <label htmlFor="cultivars-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Origin</label>
+                  <Input id="cultivars-4" placeholder="Mexico / Hybrid" value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { FileBadge, Plus, AlertTriangle, Calendar, Building2, Search, ShieldCheck, FileText, Trash2, Edit } from "lucide-react";
-import { EmptyState } from "@/components/ui/StateRenderer";
+import { EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
@@ -32,7 +32,7 @@ function statusInfo(days: number | null) {
 
 export default function Licenses() {
   const confirm = useConfirm();
-  const { data: licenses, add, update, remove, isLoading } = useEntity<License>("licenses", SEED, {
+  const { data: licenses, add, update, remove, isLoading, error, refresh } = useEntity<License>("licenses", SEED, {
     toRow: (l) => ({
       name: l.name,
       issuer: l.issuer,
@@ -201,6 +201,8 @@ export default function Licenses() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-bg-base/30">
           {isLoading ? (
             <div className="text-text-secondary text-sm">Loading…</div>
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
           ) : filtered.length === 0 ? (
             <div className="py-12">
               <EmptyState
@@ -291,17 +293,17 @@ export default function Licenses() {
             {editing ? "Update the details of your tracking entry." : "Add a new regulatory permit or license to track."}
           </p>
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">License Name *</label>
-            <Input required placeholder="e.g. Nursery License" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <label htmlFor="licenses-1" className="block text-sm font-medium text-text-secondary mb-1">License Name *</label>
+            <Input id="licenses-1" required placeholder="e.g. Nursery License" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Issuer</label>
-            <Input placeholder="e.g. USDA APHIS" value={form.issuer} onChange={(e) => setForm({ ...form, issuer: e.target.value })} />
+            <label htmlFor="licenses-2" className="block text-sm font-medium text-text-secondary mb-1">Issuer</label>
+            <Input id="licenses-2" placeholder="e.g. USDA APHIS" value={form.issuer} onChange={(e) => setForm({ ...form, issuer: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Reference No.</label>
-              <Input placeholder="Permit / registration #" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
+              <label htmlFor="licenses-3" className="block text-sm font-medium text-text-secondary mb-1">Reference No.</label>
+              <Input id="licenses-3" placeholder="Permit / registration #" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Status</label>
@@ -319,12 +321,12 @@ export default function Licenses() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Expiration Date</label>
-              <Input type="date" value={form.expires_on} onChange={(e) => setForm({ ...form, expires_on: e.target.value })} />
+              <label htmlFor="licenses-4" className="block text-sm font-medium text-text-secondary mb-1">Expiration Date</label>
+              <Input id="licenses-4" type="date" value={form.expires_on} onChange={(e) => setForm({ ...form, expires_on: e.target.value })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Note</label>
-              <Input placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <label htmlFor="licenses-5" className="block text-sm font-medium text-text-secondary mb-1">Note</label>
+              <Input id="licenses-5" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle mt-6">

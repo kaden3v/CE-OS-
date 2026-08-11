@@ -161,8 +161,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
             />
           </div>
           <div>
-            <label className={labelCls}>Date</label>
-            <Input type="date" value={form.occurred_on} onChange={(e) => setForm({ ...form, occurred_on: e.target.value })} />
+            <label htmlFor="expensemodal-1" className={labelCls}>Date</label>
+            <Input id="expensemodal-1" type="date" value={form.occurred_on} onChange={(e) => setForm({ ...form, occurred_on: e.target.value })} />
           </div>
         </div>
 
@@ -173,8 +173,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Payment method</label>
-            <Select className={selectCls} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
+            <label htmlFor="expensemodal-2" className={labelCls}>Payment method</label>
+            <Select id="expensemodal-2" className={selectCls} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               {PAYMENT_METHODS.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
@@ -220,8 +220,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
         </div>
 
         <div>
-          <label className={labelCls}>Memo</label>
-          <Input placeholder="Optional" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <label htmlFor="expensemodal-3" className={labelCls}>Memo</label>
+          <Input id="expensemodal-3" placeholder="Optional" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
 
         <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">

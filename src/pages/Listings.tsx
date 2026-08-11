@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Plus, X, Store, ShoppingBag, ExternalLink } from "lucide-react";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
@@ -58,7 +58,7 @@ const renderStatus = (s: string) => {
 };
 
 export default function Listings() {
-  const { data: listings, add, isLoading } = useEntity<Listing>("listings", SEED, {
+  const { data: listings, add, isLoading, error, refresh } = useEntity<Listing>("listings", SEED, {
     toRow: (l) => ({
       cultivar_id: l.cultivar_id,
       channel: l.channel,
@@ -224,7 +224,9 @@ export default function Listings() {
       <Card className="flex-1 overflow-auto flex flex-col">
         {isLoading ? (
           <LoadingTable cols={6} rows={8} />
-        ) : isEmpty ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : isEmpty ? (
           <EmptyState
             title="No listings yet"
             description="Drafts you create here can later sync to Shopify/Etsy."
@@ -238,8 +240,8 @@ export default function Listings() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Listing" size="lg">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Title *</label>
-                <Input required placeholder='Pinguicula "Pirouette" — Mature' value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <label htmlFor="listings-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Title *</label>
+                <Input id="listings-1" required placeholder='Pinguicula "Pirouette" — Mature' value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -271,16 +273,16 @@ export default function Listings() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Price</label>
-                  <Input type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+                  <label htmlFor="listings-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Price</label>
+                  <Input id="listings-2" type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stock</label>
-                  <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
+                  <label htmlFor="listings-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stock</label>
+                  <Input id="listings-3" type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">URL</label>
-                  <Input placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                  <label htmlFor="listings-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">URL</label>
+                  <Input id="listings-4" placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

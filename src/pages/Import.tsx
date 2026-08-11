@@ -233,9 +233,9 @@ export default function Import() {
           <Button variant="outline" size="sm" onClick={downloadTemplate}>
             <FileDown className="w-3.5 h-3.5" /> Template
           </Button>
-          <label className="inline-flex items-center gap-2 text-xs px-2 py-2 rounded-md border border-border-strong hover:bg-bg-hover cursor-pointer text-text-primary">
+          <label htmlFor="import-1" className="inline-flex items-center gap-2 text-xs px-2 py-2 rounded-md border border-border-strong hover:bg-bg-hover cursor-pointer text-text-primary">
             <UploadCloud className="w-3.5 h-3.5" /> Choose CSV file
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+            <input id="import-1" type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
           </label>
         </div>
 
