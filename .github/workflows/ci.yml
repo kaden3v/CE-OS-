@@ -34,31 +34,50 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Unauthenticated UI audit on desktop + mobile viewports. Separate job so a
-  # browser download doesn't slow the fast checks above, and non-blocking for
-  # now: it reports findings rather than asserting a clean bill of health.
+  # Unauthenticated UI audit on desktop + mobile viewports. Separate job so the
+  # browser download doesn't slow the fast checks above.
+  #
+  # The spec drives the real sign-in form, and SignIn disables its inputs when
+  # Supabase isn't configured — so this cannot pass without the two VITE_
+  # values, and it is skipped rather than left permanently red when they are
+  # absent. Set them as repository secrets to turn it on. Non-blocking even
+  # then: it reports findings, it doesn't assert a clean bill of health.
   ui-audit:
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
 
+      - id: creds
+        name: Check for Supabase credentials
+        run: echo "present=${{ secrets.VITE_SUPABASE_URL != '' && secrets.VITE_SUPABASE_ANON_KEY != '' }}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.creds.outputs.present != 'true'
+        run: echo "::notice::Skipping UI audit — VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are not set."
+
       - uses: actions/setup-node@v4
+        if: steps.creds.outputs.present == 'true'
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        if: steps.creds.outputs.present == 'true'
         run: npm ci
 
       - name: Install Chromium
+        if: steps.creds.outputs.present == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Public UI audit (desktop + mobile)
+        if: steps.creds.outputs.present == 'true'
         run: npx playwright test --config=playwright.audit.config.ts
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.creds.outputs.present == 'true'
         with:
           name: ui-audit
           path: |

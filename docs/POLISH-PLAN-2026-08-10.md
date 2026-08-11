@@ -475,8 +475,13 @@ render one per row, no horizontal overflow, `$1,284.75` fits in full, clickable 
 | T19 | Type the `DataTable` column defs; retire `any` where the typed client allows | F20 | ✅ |
 
 - **CI now runs the tests.** The suite passed for months without CI ever invoking it. The `verify`
-  job runs typecheck → lint → test → build; a separate non-blocking `ui-audit` job runs the
-  unauthenticated Playwright audit on desktop + mobile and uploads reports/screenshots.
+  job runs typecheck → lint → test → build.
+
+  A second `ui-audit` job runs the Playwright audit on desktop + mobile — **gated on the Supabase
+  secrets being set**, and skipped with a notice otherwise. Running it locally showed why: the spec
+  drives the real sign-in form, and `SignIn` disables its inputs when Supabase isn't configured
+  ([SignIn.tsx:120](src/pages/SignIn.tsx:120)), so `fill()` times out. Ungated it would have been a
+  permanently red job in a repo with no secrets — worse than no job at all.
 - **ESLint exists** (`eslint.config.js`, flat config, ESLint 9 — `eslint-plugin-jsx-a11y` doesn't
   support 10 yet, so all four plugins are pinned to a compatible set). `npm run lint` is now really
   linting; the old `tsc --noEmit` moved to `npm run typecheck`.
