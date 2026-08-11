@@ -2,16 +2,22 @@ import React, { useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Portal } from "./Portal";
 
 export function Toasts() {
   const { toasts, removeToast } = useApp();
 
+  // z-toast, not z-50: <Toasts /> mounts before the router in App.tsx, so at an
+  // equal z-index every modal (later in the DOM) painted over it — errors
+  // raised from inside a dialog were never seen.
   return (
-    <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 sm:w-[360px] pointer-events-none">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={() => removeToast(toast.id)} />
-      ))}
-    </div>
+    <Portal>
+      <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-4 left-4 sm:left-auto z-toast flex flex-col gap-2 sm:w-[360px] pointer-events-none">
+        {toasts.map((toast) => (
+          <ToastItem key={toast.id} toast={toast} onDismiss={() => removeToast(toast.id)} />
+        ))}
+      </div>
+    </Portal>
   );
 }
 

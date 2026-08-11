@@ -15,6 +15,7 @@ import { RecordActivity } from "@/components/activity/RecordActivity";
 import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { orderStatusTone, shipmentStatusTone, orderStatusLabel } from "@/lib/status";
 import type { Tables } from "@/lib/database.types";
@@ -46,6 +47,9 @@ export default function Orders() {
     () => (selected ? shipments.find((s) => s.order_id === selected.id) ?? null : null),
     [shipments, selected],
   );
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected && !isAddOpen, () => setGlobalOrderViewId(null));
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -269,13 +273,13 @@ export default function Orders() {
       {/* Detail panel */}
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-start justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-start justify-between bg-bg-elevated md:bg-transparent">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-xl font-semibold font-mono">{selected.id.slice(0, 8)}</h2>
@@ -481,7 +485,7 @@ export default function Orders() {
 
       {/* Create modal */}
       {isAddOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card className="w-full max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[85dvh]">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">New Order</h2>
@@ -534,7 +538,10 @@ export default function Orders() {
                 </div>
                 <div className="space-y-2">
                   {draft.items.map((line, i) => (
-                    <div key={i} className="grid grid-cols-[2fr_60px_80px_32px] gap-2 items-end">
+                    // Last track is 44px, not 32px: the remove button is
+                    // icon-only and now carries a 44px touch minimum, which
+                    // would have overflowed a 32px column on a phone.
+                    <div key={i} className="grid grid-cols-[1fr_60px_80px_44px] gap-2 items-end">
                       <select
                         className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
                         value={line.cultivar_id}

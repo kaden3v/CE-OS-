@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useFocusParam } from "@/hooks/useFocusParam";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,6 +38,9 @@ export default function Customers() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useFocusParam(customers, setSelectedId);
   const selected = useMemo(() => customers.find((c) => c.id === selectedId) ?? null, [customers, selectedId]);
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected, () => setSelectedId(null));
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", etsy_handle: "", phone: "" });
@@ -249,13 +253,13 @@ export default function Customers() {
       {/* Detail panel */}
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-start justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-start justify-between bg-bg-elevated md:bg-transparent">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-full bg-accent-brand/20 text-accent-brand flex items-center justify-center text-lg font-medium border border-accent-brand/30">
                   {selected.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
@@ -370,7 +374,7 @@ export default function Customers() {
       </div>
 
       {isEditOpen && selected && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card role="dialog" aria-modal="true" aria-labelledby="customer-edit-title" className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 id="customer-edit-title" className="text-lg font-semibold">Edit Customer</h2>
@@ -416,7 +420,7 @@ export default function Customers() {
       )}
 
       {isAddOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card role="dialog" aria-modal="true" aria-labelledby="customer-add-title" className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 id="customer-add-title" className="text-lg font-semibold">New Customer</h2>

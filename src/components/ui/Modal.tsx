@@ -1,6 +1,8 @@
-import { ReactNode, useEffect } from "react";
+import { ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Portal } from "./Portal";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 
 const SIZES = {
   sm: "sm:max-w-md",
@@ -26,45 +28,45 @@ interface ModalProps {
  * backdrop tap. Renders as a bottom sheet on phones, centered card on desktop.
  */
 export function Modal({ open, onClose, title, children, size = "md", className }: ModalProps) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  // Shared stack, so Escape over an open drawer closes only this modal.
+  useEscapeKey(open, onClose);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}
-    >
+    <Portal>
       <div
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-        className={cn(
-          "w-full bg-bg-elevated border border-border-strong shadow-2xl flex flex-col",
-          "max-h-[90dvh] sm:max-h-[85dvh] rounded-t-2xl sm:rounded-xl",
-          SIZES[size],
-          className,
-        )}
+        className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4"
+        onClick={onClose}
       >
-        <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="p-2 -mr-2 rounded-lg text-text-secondary hover:text-text-primary active:bg-bg-hover transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "w-full bg-bg-elevated border border-border-strong shadow-2xl flex flex-col",
+            // The sheet is flush with the bottom of the screen on phones. The
+            // tab bar now sits *behind* the backdrop (z-nav < z-modal), so the
+            // only thing to clear is the home indicator.
+            "max-h-[90dvh] sm:max-h-[85dvh] rounded-t-2xl sm:rounded-xl",
+            "pb-[env(safe-area-inset-bottom)] sm:pb-0",
+            SIZES[size],
+            className,
+          )}
+        >
+          <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="p-2 -mr-2 rounded-lg text-text-secondary hover:text-text-primary active:bg-bg-hover transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="overflow-y-auto overscroll-contain">{children}</div>
         </div>
-        <div className="overflow-y-auto overscroll-contain">{children}</div>
       </div>
-    </div>
+    </Portal>
   );
 }

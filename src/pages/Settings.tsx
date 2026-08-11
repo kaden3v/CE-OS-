@@ -509,7 +509,7 @@ export default function Settings() {
 
       {/* Change-password modal */}
       {pwOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">Change password</h2>

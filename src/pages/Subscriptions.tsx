@@ -330,7 +330,7 @@ export default function Subscriptions() {
       </Card>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}>
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}>
           <Card role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title" className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl max-h-[90dvh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3 p-5 border-b border-border-subtle">
               <div className="flex items-center gap-3">

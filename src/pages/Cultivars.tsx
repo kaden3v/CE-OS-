@@ -12,6 +12,7 @@ import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useFocusParam } from "@/hooks/useFocusParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
@@ -34,6 +35,9 @@ export default function Cultivars() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useFocusParam(cultivars, setSelectedId);
   const selected = useMemo(() => cultivars.find((c) => c.id === selectedId) ?? null, [cultivars, selectedId]);
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected, () => setSelectedId(null));
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ name: "", common: "", genus: "Pinguicula", origin: "" });
@@ -105,13 +109,13 @@ export default function Cultivars() {
 
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
               <div>
                 <CultivarName className="text-xl font-semibold" name={selected.name} />
                 <div className="text-sm text-text-secondary">{selected.common ?? "—"}</div>

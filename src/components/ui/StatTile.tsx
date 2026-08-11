@@ -60,13 +60,26 @@ function Sparkline({ data, colorVariant }: { data: number[]; colorVariant: "up" 
   );
 }
 
+// p-4 on phones, not p-5: these tiles sit two-up in a 375px viewport, and the
+// extra 8px of content width is what lets a six-figure currency value fit.
 const TILE_BASE =
-  "bg-bg-elevated backdrop-blur-md rounded-[16px] border border-border-subtle p-5 sm:p-6 flex flex-col overflow-hidden";
+  "bg-bg-elevated backdrop-blur-md rounded-[16px] border border-border-subtle p-4 sm:p-6 flex flex-col overflow-hidden";
 
 export function StatTile({ label, value, hint, trend, className, onClick }: StatTileProps) {
   const body = (
     <>
-      <h3 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tabular-nums text-text-primary truncate">
+      {/*
+        text-xl on phones, not text-2xl. In the two-column mobile grid a tile
+        gives 134px of content width; at 24px "$12,345.67" needs 137px and
+        "$123,456.78" needs 153px, so both were silently ellipsised — a money
+        figure that reads as complete but is missing digits. At 20px everything
+        up to $999,999.99 fits. `title` keeps the full value recoverable in the
+        rare case the ellipsis still fires.
+      */}
+      <h3
+        title={value}
+        className="text-xl sm:text-3xl lg:text-4xl font-semibold tabular-nums text-text-primary truncate"
+      >
         {value}
       </h3>
       {trend && (

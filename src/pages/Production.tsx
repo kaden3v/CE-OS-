@@ -188,7 +188,7 @@ export default function Production() {
       </Card>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setIsOpen(false)}>
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setIsOpen(false)}>
           <Card role="dialog" aria-modal="true" aria-labelledby="production-run-title" onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85dvh] rounded-t-2xl sm:rounded-xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
               <h2 id="production-run-title" className="text-lg font-semibold">Log Production Run</h2>

@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { Portal } from "./Portal";
 
 interface DialogProps {
   open: boolean;
@@ -15,9 +16,10 @@ export function Dialog({ open, onOpenChange, title, description, children, width
   if (!open) return null;
 
   return (
+    <Portal>
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+        <div className="fixed inset-0 z-modal flex items-center justify-center p-4 sm:p-0">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -45,5 +47,6 @@ export function Dialog({ open, onOpenChange, title, description, children, width
         </div>
       )}
     </AnimatePresence>
+    </Portal>
   );
 }

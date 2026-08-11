@@ -21,6 +21,7 @@ import { friendlyDbError } from "@/lib/dbErrors";
 
 import type { Tables } from "@/lib/database.types";
 import { useEntity as useEntityRaw } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 
 type InventoryRow = Tables<"inventory">;
 type CultivarRow = Tables<"cultivars">;
@@ -116,6 +117,9 @@ export default function Inventory() {
   }, [data, search, lowStockFilter]);
 
   const selectedItem = useMemo(() => inventory.find(i => i.id === selectedId), [inventory, selectedId]);
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selectedItem, () => { setSelectedId(null); setActiveTab("Stock"); });
 
   // Modal logic
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -363,7 +367,7 @@ export default function Inventory() {
           ) : filteredData.length === 0 ? (
             <ZeroResultState onClearOption={() => { setLowStockFilter(false); setSearch(""); }} />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-24 md:pb-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredData.map((item) => {
                 const isLowStock = sellable(item.stock) < 10;
                 return (
@@ -421,12 +425,12 @@ export default function Inventory() {
       {/* Detail Panel / Screen */}
       <div 
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col", selectedItem ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in"
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col", selectedItem ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in"
         )}
       >
         {selectedItem && (
           <>
-            <div className="p-4 md:p-6 pb-0 border-b border-border-subtle flex flex-col bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pb-0 pt-safe md:pt-6 border-b border-border-subtle flex flex-col bg-bg-elevated md:bg-transparent">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <button 
@@ -623,7 +627,7 @@ export default function Inventory() {
       </div>
 
       {isLossOpen && selectedItem && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">Log Loss — {selectedItem.name}</h2>
@@ -734,7 +738,7 @@ export default function Inventory() {
 
       {/* Edit Details Modal */}
       {isEditModalOpen && selectedItem && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
               <h2 className="text-lg font-semibold">Edit details</h2>

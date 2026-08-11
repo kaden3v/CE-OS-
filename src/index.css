@@ -47,6 +47,24 @@
     }
   }
 
+  /* Icon-only buttons were drawn at p-1/p-1.5 — a ~24-28px hit area against a
+     44px guideline, which is a real miss rate on the expense/supply/vendor row
+     actions. Enforce the floor on touch pointers only, so the desktop density
+     the app was designed at is untouched. `:only-child` deliberately skips
+     buttons that also carry a text label: those are already wide enough.
+
+     display goes in @layer base so Tailwind's own display utilities (flex,
+     hidden, …) still win where a component sets one explicitly. */
+  @media (pointer: coarse) {
+    button:has(> svg:only-child) {
+      min-width: 44px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
   /* Focus rings only on focus-visible */
   :focus:not(:focus-visible) {
     outline: none;
@@ -68,8 +86,53 @@
 @utility pb-safe {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 }
+/* Mirror of pb-safe, for surfaces that now reach the top of the screen
+   themselves (full-screen drawers) rather than sitting under the topbar. */
 @utility pt-safe {
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+
+/* ---------------------------------------------------------------------------
+   Layering scale.
+
+   Every overlay in the app used to declare a bare `z-50`, which did nothing:
+   <main> carried `z-0`, and a z-index on a flex item creates a stacking
+   context, so a page's z-50 drawer was still painted *under* the z-10 topbar
+   and the z-40 mobile tab bar. On a phone that put the drawer's close button
+   behind the header and its footer actions behind the nav.
+
+   The fix has two halves and they only work together:
+     1. overlays render through <Portal> (into document.body), escaping the
+        page's stacking context entirely, and
+     2. they pick a rung on this named scale instead of guessing a number.
+
+   Anything still inside a page may keep Tailwind's local z-0..z-50 — those
+   only ever need to beat their own siblings.
+   --------------------------------------------------------------------------- */
+@utility z-sticky {
+  /* In-page sticky headers: finance tabs, sticky table <thead>. */
+  z-index: 100;
+}
+@utility z-nav {
+  /* Persistent chrome: desktop sidebar, mobile bottom tab bar. */
+  z-index: 200;
+}
+@utility z-topbar {
+  /* Topbar sits one rung above the tab bar so the notification and task
+     panels hanging off it clear the nav on short screens. */
+  z-index: 210;
+}
+@utility z-drawer {
+  /* Page detail panels (orders, inventory, customers, …). Above all chrome. */
+  z-index: 300;
+}
+@utility z-modal {
+  /* Dialogs, bottom sheets, the command palette. Above drawers. */
+  z-index: 400;
+}
+@utility z-toast {
+  /* Always last: a toast raised from inside a modal must stay visible. */
+  z-index: 600;
 }
 
 @media print {

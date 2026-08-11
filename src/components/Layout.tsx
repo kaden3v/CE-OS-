@@ -166,7 +166,7 @@ export function Layout() {
       settings.density === 'compact' ? 'font-compact' : ''
     )}>
       {/* Sidebar - hidden on mobile and when printing */}
-      <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-20 no-print">
+      <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-nav no-print">
         <div className="p-6 pb-2">
           <div className="text-xl font-semibold tracking-tight h-8 flex items-center">
             <span>CEOS</span>
@@ -294,7 +294,7 @@ export function Layout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 h-dvh relative">
         {/* Topbar - hidden when printing */}
-        <header className="min-h-[56px] flex-shrink-0 pt-[env(safe-area-inset-top)] bg-bg-elevated backdrop-blur-md border-b border-border-subtle flex items-center px-4 md:px-6 justify-between z-10 no-print">
+        <header className="min-h-[56px] flex-shrink-0 pt-[env(safe-area-inset-top)] bg-bg-elevated backdrop-blur-md border-b border-border-subtle flex items-center px-4 md:px-6 justify-between z-topbar no-print">
           <div className="flex items-center text-sm text-text-secondary truncate pr-4">
             {getBreadcrumb()}
           </div>
@@ -364,12 +364,15 @@ export function Layout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto relative z-0 pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">
+        {/* No z-index here on purpose: a z-index on this flex item would create
+            a stacking context and trap every page drawer/modal beneath the
+            topbar and tab bar. Overlays portal out; see ui/Portal.tsx. */}
+        <main className="flex-1 overflow-auto relative pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">
           <Outlet />
         </main>
 
         {/* Mobile Bottom Nav — extends under the iPhone home indicator */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 h-[calc(64px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] bg-bg-elevated backdrop-blur-xl border-t border-border-subtle flex justify-around items-center z-40 no-print">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-[calc(64px+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] bg-bg-elevated backdrop-blur-xl border-t border-border-subtle flex justify-around items-center z-nav no-print">
           {MOBILE_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.href}
@@ -402,8 +405,8 @@ export function Layout() {
         {/* Mobile More Sheet */}
         {mobileMenuOpen && (
           <>
-            <div className="md:hidden fixed inset-0 bg-[#0E0F11]/80 backdrop-blur-sm z-50 transition-opacity" onClick={() => setMobileMenuOpen(false)} />
-            <div className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80dvh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-50 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6 slide-in-from-bottom-full animate-in duration-200 ease-out">
+            <div className="md:hidden fixed inset-0 bg-[#0E0F11]/80 backdrop-blur-sm z-modal transition-opacity" onClick={() => setMobileMenuOpen(false)} />
+            <div className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80dvh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-modal p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6 slide-in-from-bottom-full animate-in duration-200 ease-out">
                <div>
                   <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Management</h3>
                   <div className="grid grid-cols-2 gap-2">

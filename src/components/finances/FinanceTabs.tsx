@@ -20,7 +20,7 @@ const TABS: { to: string; label: string; icon: typeof PieChart; end?: boolean }[
 
 export function FinanceTabs() {
   return (
-    <div className="sticky top-0 z-10 border-b border-border-subtle bg-bg-base/95 backdrop-blur-md no-print">
+    <div className="sticky top-0 z-sticky border-b border-border-subtle bg-bg-base/95 backdrop-blur-md no-print">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <nav className="flex items-center gap-0.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((t) => (

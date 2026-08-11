@@ -12,6 +12,7 @@ import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 import { formatDate } from "@/lib/format";
@@ -56,6 +57,9 @@ export default function Propagation() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = batches.find((b) => b.id === selectedId) ?? null;
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected, () => setSelectedId(null));
 
   /**
    * Move a ready batch's plants into inventory as GROW-OUT stock (fresh from the
@@ -242,7 +246,7 @@ export default function Propagation() {
               action={<Button variant="outline" onClick={() => setIsOpen(true)}>Add Batch</Button>}
             />
           ) : (
-            <div className="flex h-full gap-6 min-w-max pr-6 pb-24 md:pb-0">
+            <div className="flex h-full gap-6 min-w-max pr-6">
               {STAGES.map((col) => (
                 <div key={col.id} className="flex-1 flex flex-col w-[85vw] md:w-[280px] shrink-0 snap-center md:snap-none">
                   <div className="flex items-center justify-between mb-4 px-2">
@@ -302,13 +306,13 @@ export default function Propagation() {
       {/* Detail panel */}
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
               <div>
                 <h2 className="text-xl font-semibold mb-2">Batch {selected.batch_id}</h2>
                 <div className="flex items-center gap-2 text-sm text-text-secondary">
@@ -367,7 +371,7 @@ export default function Propagation() {
       </div>
 
       {isEditOpen && selected && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">Edit Batch {selected.batch_id}</h2>
@@ -425,7 +429,7 @@ export default function Propagation() {
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
           <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border-subtle">
               <h2 className="text-lg font-semibold">Add Propagation Batch</h2>
