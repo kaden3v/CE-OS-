@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -63,12 +64,12 @@ export default function Cultivars() {
     addToast({ title: "Cultivar added", description: name, status: "ok" });
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Cultivar>[]>(
     () => [
-      { accessorKey: "name", header: "Name", cell: (info: any) => <CultivarName name={info.getValue()} className="font-medium" /> },
-      { accessorKey: "common", header: "Common", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
-      { accessorKey: "genus", header: "Genus", cell: (info: any) => (info.getValue() ? <Badge>{info.getValue()}</Badge> : null) },
-      { accessorKey: "origin", header: "Origin", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
+      { accessorKey: "name", header: "Name", cell: (info) => <CultivarName name={info.row.original.name} className="font-medium" /> },
+      { accessorKey: "common", header: "Common", cell: (info) => <span className="text-text-secondary">{info.row.original.common ?? "—"}</span> },
+      { accessorKey: "genus", header: "Genus", cell: (info) => (info.row.original.genus ? <Badge>{info.row.original.genus}</Badge> : null) },
+      { accessorKey: "origin", header: "Origin", cell: (info) => <span className="text-text-secondary">{info.row.original.origin ?? "—"}</span> },
     ],
     [],
   );

@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +20,48 @@ jobs:
         run: npm ci
 
       - name: Typecheck
+        run: npm run typecheck
+
+      # --max-warnings holds the known-debt baseline: the count can fall but
+      # never grow. See the rule notes in eslint.config.js.
+      - name: Lint
         run: npm run lint
+
+      # The suite existed and passed for months without CI ever running it.
+      - name: Unit tests
+        run: npm test
 
       - name: Build
         run: npm run build
+
+  # Unauthenticated UI audit on desktop + mobile viewports. Separate job so a
+  # browser download doesn't slow the fast checks above, and non-blocking for
+  # now: it reports findings rather than asserting a clean bill of health.
+  ui-audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Public UI audit (desktop + mobile)
+        run: npx playwright test --config=playwright.audit.config.ts
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-audit
+          path: |
+            e2e/reports/
+            e2e/screens/
+          if-no-files-found: ignore

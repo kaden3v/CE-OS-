@@ -4,7 +4,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
-  Receipt, Factory, PackageOpen, Car, Plus, AlertTriangle, Clock, RefreshCw,
+  Receipt, Factory, PackageOpen, Car, AlertTriangle, Clock, RefreshCw,
   CalendarClock, CheckCircle2, ChevronRight, PieChart, Target,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";

@@ -7,6 +7,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useEntity } from "@/hooks/useEntity";
@@ -132,20 +133,20 @@ export default function Production() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, materialsByRun]);
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Run>[]>(
     () => [
-      { accessorKey: "run_on", header: "Date", cell: (info: any) => <span className="text-text-secondary whitespace-nowrap">{formatBusinessDate(info.getValue())}</span> },
-      { accessorKey: "description", header: "Run", cell: (info: any) => <span className="font-medium">{info.getValue() ?? "—"}</span> },
-      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
-      { accessorKey: "quantity", header: "Units", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },
-      { id: "materials", header: "Materials", cell: (info: any) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).materials)}</span> },
-      { id: "labor", header: "Labor", cell: (info: any) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).labor)} {info.row.original.labor_type === "hired" ? <span className="text-[10px] uppercase text-status-info ml-1">hired</span> : null}</span> },
-      { id: "total", header: "Run cost", cell: (info: any) => <span className="tabular-nums font-medium">{formatMoney(runCost(info.row.original).total)}</span> },
-      { id: "perUnit", header: "Per unit", cell: (info: any) => <span className="tabular-nums">{formatMoney(runCost(info.row.original).perUnit)}</span> },
+      { accessorKey: "run_on", header: "Date", cell: (info) => <span className="text-text-secondary whitespace-nowrap">{formatBusinessDate(info.row.original.run_on)}</span> },
+      { accessorKey: "description", header: "Run", cell: (info) => <span className="font-medium">{info.row.original.description ?? "—"}</span> },
+      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info) => <CultivarName name={cultivarName(info.row.original.cultivar_id)} className="text-text-secondary" /> },
+      { accessorKey: "quantity", header: "Units", cell: (info) => <span className="tabular-nums">{info.row.original.quantity}</span> },
+      { id: "materials", header: "Materials", cell: (info) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).materials)}</span> },
+      { id: "labor", header: "Labor", cell: (info) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).labor)} {info.row.original.labor_type === "hired" ? <span className="text-[10px] uppercase text-status-info ml-1">hired</span> : null}</span> },
+      { id: "total", header: "Run cost", cell: (info) => <span className="tabular-nums font-medium">{formatMoney(runCost(info.row.original).total)}</span> },
+      { id: "perUnit", header: "Per unit", cell: (info) => <span className="tabular-nums">{formatMoney(runCost(info.row.original).perUnit)}</span> },
       {
         id: "actions",
         header: "",
-        cell: (info: any) => (
+        cell: (info) => (
           <button onClick={() => handleDelete(info.row.original)} aria-label="Delete run" className="p-1.5 rounded text-text-secondary hover:text-status-alert hover:bg-bg-active">
             <Trash2 className="w-4 h-4" />
           </button>

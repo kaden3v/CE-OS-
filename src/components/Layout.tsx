@@ -8,32 +8,22 @@ import {
   Users,
   Truck,
   DollarSign,
-  Receipt,
-  PackageOpen,
-  Store,
-  FileSpreadsheet,
   FileBadge,
   ShieldCheck,
   UserCog,
-  Repeat,
   UploadCloud,
   History,
   Settings,
   Bell,
   Search,
-  ChevronRight,
-  ChevronDown,
   Menu,
   List,
   CheckSquare,
   PieChart,
-  TrendingUp,
-  Car,
-} from "lucide-react";
+  } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Input } from "./ui/Input";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { NotificationCenter } from "./ui/NotificationCenter";

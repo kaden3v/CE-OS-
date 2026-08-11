@@ -89,9 +89,10 @@ export function parseCsvDate(raw: string): string | null {
   if (iso) {
     [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
   } else {
-    const parts = s.split(/[/.\-]/).map((p) => p.trim());
+    const parts = s.split(/[/.-]/).map((p) => p.trim());
     if (parts.length !== 3) return null;
-    let [a, b, c] = parts;
+    const [a, b] = parts;
+    let [, , c] = parts;
     if (c.length === 2) c = `20${c}`;
     [month, day, year] = [Number(a), Number(b), Number(c)]; // assumes US M/D/Y order
   }

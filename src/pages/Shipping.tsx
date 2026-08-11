@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
-import { Plus, X, Truck, ThermometerSun } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus, Truck, ThermometerSun } from "lucide-react";
 import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
@@ -19,8 +20,9 @@ import { Select } from "@/components/ui/Select";
 
 type Shipment = Tables<"shipments">;
 
-const STATUSES = ["pending", "ready", "held", "shipped", "delivered", "exception"] as const;
-type Status = (typeof STATUSES)[number];
+// Declared as a union rather than `typeof [...] [number]`: the array existed
+// only to derive this type, so it was dead weight at runtime.
+type Status = "pending" | "ready" | "held" | "shipped" | "delivered" | "exception";
 
 export default function Shipping() {
   const { data: shipments, add, update, isLoading, error, refresh } = useEntity<Shipment>("shipments", [], {
@@ -140,16 +142,16 @@ export default function Shipping() {
     return `${o.id.slice(0, 8)} · ${o.customer?.name ?? "—"}`;
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Shipment>[]>(
     () => [
-      { accessorKey: "id", header: "Shipment", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
-      { accessorKey: "order_id", header: "Order", cell: (info: any) => { const label = orderLabel(info.getValue()); return <span className="font-medium truncate inline-block align-middle max-w-[220px]" title={label}>{label}</span>; } },
-      { accessorKey: "carrier", header: "Carrier", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
+      { accessorKey: "id", header: "Shipment", meta: { mobileHidden: true }, cell: (info) => <span className="font-mono text-xs">{info.row.original.id.slice(0, 8)}</span> },
+      { accessorKey: "order_id", header: "Order", meta: { mobileTitle: true }, cell: (info) => { const label = orderLabel(info.row.original.order_id); return <span className="font-medium truncate inline-block align-middle max-w-[220px]" title={label}>{label}</span>; } },
+      { accessorKey: "carrier", header: "Carrier", cell: (info) => <span className="text-text-secondary">{info.row.original.carrier ?? "—"}</span> },
       {
         accessorKey: "tracking_number",
         header: "Tracking",
-        cell: (info: any) => {
-          const t = info.getValue();
+        cell: (info) => {
+          const t = info.row.original.tracking_number;
           if (!t) return <span className="font-mono text-xs">—</span>;
           const url = trackingUrl(info.row.original.carrier ?? null, t);
           return (
@@ -169,13 +171,13 @@ export default function Shipping() {
       {
         accessorKey: "ship_to_state",
         header: "Destination",
-        cell: (info: any) => <span className="text-text-secondary">{info.getValue() ? `${info.row.original.ship_to_zip ?? ""} ${info.getValue()}` : "—"}</span>,
+        cell: (info) => <span className="text-text-secondary">{info.row.original.ship_to_state ? `${info.row.original.ship_to_zip ?? ""} ${info.row.original.ship_to_state}` : "—"}</span>,
       },
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => {
-          const s = info.getValue();
+        cell: (info) => {
+          const s = info.row.original.status;
           return (
             <div className="flex items-center gap-2 capitalize">
               <StatusDot status={shipmentStatusTone(s)} />
@@ -187,7 +189,7 @@ export default function Shipping() {
       {
         accessorKey: "weather_note",
         header: "Weather",
-        cell: (info: any) => {
+        cell: (info) => {
           const sh: Shipment = info.row.original;
           if (!sh.weather_note) return <span className="text-text-tertiary">—</span>;
           return (
@@ -203,7 +205,7 @@ export default function Shipping() {
       {
         id: "actions",
         header: "",
-        cell: (info: any) => {
+        cell: (info) => {
           const sh: Shipment = info.row.original;
           return (
             <div className="flex gap-1">

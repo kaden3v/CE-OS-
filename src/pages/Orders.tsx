@@ -1,6 +1,7 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Link } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -197,33 +198,36 @@ export default function Orders() {
     addToast({ title: "Order deleted", status: "info" });
   };
 
-  const columns = useMemo(
+  // Typed column defs: annotating the array makes `info.row.original` an
+  // OrderWithRelations, so accessor typos and wrong field access are caught at
+  // compile time instead of `info: any` swallowing them.
+  const columns = useMemo<ColumnDef<OrderWithRelations>[]>(
     () => [
-      { accessorKey: "id", header: "Order #", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
+      { accessorKey: "id", header: "Order #", meta: { mobileHidden: true }, cell: (info) => <span className="font-mono text-xs">{String(info.getValue()).slice(0, 8)}</span> },
       {
         accessorKey: "channel",
         header: "Channel",
-        cell: (info: any) => (
+        cell: (info) => (
           <div className="flex items-center gap-2 text-text-secondary capitalize">
             {info.getValue() === "shopify" ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
-            {info.getValue()}
+            {String(info.getValue())}
           </div>
         ),
       },
-      { accessorKey: "customer", header: "Customer", cell: (info: any) => <span className="font-medium">{info.row.original.customer?.name ?? "—"}</span> },
-      { accessorKey: "items", header: "Items", cell: (info: any) => <span className="text-text-secondary">{info.row.original.items?.length ?? 0}</span> },
+      { accessorKey: "customer", header: "Customer", meta: { mobileTitle: true }, cell: (info) => <span className="font-medium">{info.row.original.customer?.name ?? "—"}</span> },
+      { accessorKey: "items", header: "Items", cell: (info) => <span className="text-text-secondary">{info.row.original.items?.length ?? 0}</span> },
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => (
+        cell: (info) => (
           <div className="flex items-center gap-2">
-            <StatusDot status={statusColor(info.getValue())} />
-            {orderStatusLabel(info.getValue())}
+            <StatusDot status={statusColor(info.row.original.status)} />
+            {orderStatusLabel(info.row.original.status)}
           </div>
         ),
       },
-      { accessorKey: "total", header: "Total", cell: (info: any) => <span className="font-medium tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
-      { accessorKey: "placed_at", header: "Placed", cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span> },
+      { accessorKey: "total", header: "Total", cell: (info) => <span className="font-medium tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
+      { accessorKey: "placed_at", header: "Placed", cell: (info) => <span className="text-text-secondary">{new Date(String(info.getValue())).toLocaleDateString()}</span> },
     ],
     [],
   );

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { Plus, X, Store, ShoppingBag, ExternalLink } from "lucide-react";
+import { Plus, Store, ShoppingBag, ExternalLink } from "lucide-react";
 import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
@@ -128,33 +128,33 @@ export default function Listings() {
 
   const cultivarName = (id: string | null) => (id ? cultivars.find((c) => c.id === id)?.name ?? "—" : "—");
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Listing>[]>(
     () => [
       {
         accessorKey: "title",
         header: "Title",
-        cell: (info: any) => {
+        cell: (info) => {
           const rawUrl = info.row.original.url as string | null;
           // Only render http(s) links; DB-sourced URLs (synced from Etsy) must
           // not be allowed to carry a javascript:/data: scheme into href.
           const url = rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : null;
-          if (!url) return <span className="font-medium">{info.getValue()}</span>;
+          if (!url) return <span className="font-medium">{info.row.original.title}</span>;
           return (
             <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-medium inline-flex items-center gap-1 hover:underline" title="Open live listing">
-              {info.getValue()}
+              {info.row.original.title}
               <ExternalLink className="w-3 h-3 text-text-tertiary shrink-0" />
             </a>
           );
         },
       },
-      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
-      { accessorKey: "channel", header: "Channel", cell: (info: any) => <div className="flex items-center gap-2 text-text-secondary capitalize">{channelIcon(info.getValue())}{info.getValue()}</div> },
-      { accessorKey: "price", header: "Price", cell: (info: any) => <span className="tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
-      { accessorKey: "stock", header: "Listed qty", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },
+      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info) => <CultivarName name={cultivarName(info.row.original.cultivar_id)} className="text-text-secondary" /> },
+      { accessorKey: "channel", header: "Channel", cell: (info) => <div className="flex items-center gap-2 text-text-secondary capitalize">{channelIcon(info.row.original.channel)}{info.row.original.channel}</div> },
+      { accessorKey: "price", header: "Price", cell: (info) => <span className="tabular-nums">${Number(info.row.original.price).toFixed(2)}</span> },
+      { accessorKey: "stock", header: "Listed qty", cell: (info) => <span className="tabular-nums">{info.row.original.stock}</span> },
       {
         id: "on_hand",
         header: "On hand",
-        cell: (info: any) => {
+        cell: (info) => {
           const cid = info.row.original.cultivar_id as string | null;
           if (!cid) return <span className="text-text-tertiary">—</span>;
           const onHand = onHandByCultivar.get(cid) ?? 0;
@@ -166,12 +166,12 @@ export default function Listings() {
           );
         },
       },
-      { accessorKey: "status", header: "Status", cell: (info: any) => renderStatus(info.getValue()) },
+      { accessorKey: "status", header: "Status", cell: (info) => renderStatus(info.row.original.status) },
       {
         accessorKey: "last_synced_at",
         header: "Synced",
-        cell: (info: any) => {
-          const v = info.getValue() as string | null;
+        cell: (info) => {
+          const v = info.row.original.last_synced_at as string | null;
           if (!v) return <span className="text-text-tertiary text-xs">manual</span>;
           const mins = Math.floor((Date.now() - new Date(v).getTime()) / 60000);
           const label = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`;
@@ -181,7 +181,7 @@ export default function Listings() {
       {
         id: "quality",
         header: "Quality",
-        cell: (info: any) => {
+        cell: (info) => {
           const { score, missing } = scoreListing(info.row.original);
           return (
             <div

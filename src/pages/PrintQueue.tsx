@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Printer, CheckCircle2 } from "lucide-react";
@@ -51,17 +52,17 @@ export default function PrintQueue() {
     addToast({ title: "Queue cleared", description: `${printed.length} job(s)`, status: "info" });
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<PrintJob>[]>(
     () => [
-      { accessorKey: "id", header: "ID", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
-      { accessorKey: "kind", header: "Type", cell: (info: any) => KIND_LABEL[info.getValue()] ?? info.getValue() },
-      { accessorKey: "shipment_id", header: "Shipment", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ? info.getValue().slice(0, 8) : "—"}</span> },
-      { accessorKey: "created_at", header: "Queued", cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleTimeString()}</span> },
+      { accessorKey: "id", header: "ID", cell: (info) => <span className="font-mono text-xs">{info.row.original.id.slice(0, 8)}</span> },
+      { accessorKey: "kind", header: "Type", cell: (info) => KIND_LABEL[info.row.original.kind] ?? info.row.original.kind },
+      { accessorKey: "shipment_id", header: "Shipment", cell: (info) => <span className="text-text-secondary">{info.row.original.shipment_id ? info.row.original.shipment_id.slice(0, 8) : "—"}</span> },
+      { accessorKey: "created_at", header: "Queued", cell: (info) => <span className="text-text-secondary">{new Date(info.row.original.created_at).toLocaleTimeString()}</span> },
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => {
-          const v = info.getValue();
+        cell: (info) => {
+          const v = info.row.original.status;
           const pending = v === "pending" || v === "printing";
           return (
             <div className={`flex items-center gap-2 ${pending ? "text-status-warn" : v === "failed" ? "text-status-alert" : "text-status-ok"}`}>

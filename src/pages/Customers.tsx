@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, FormEvent } from "react";
 import { Textarea } from "@/components/ui/Textarea";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
@@ -183,24 +184,24 @@ export default function Customers() {
     addToast({ title: "Customer added", description: name, status: "ok" });
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
       {
         accessorKey: "name",
         header: "Name",
-        cell: (info: any) => <span className="font-medium text-text-primary">{info.getValue()}</span>,
+        cell: (info) => <span className="font-medium text-text-primary">{info.row.original.name}</span>,
       },
       {
         accessorKey: "email",
         header: "Email",
-        cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span>,
+        cell: (info) => <span className="text-text-secondary">{info.row.original.email ?? "—"}</span>,
       },
       {
         accessorKey: "etsy_handle",
         header: "Channel",
-        cell: (info: any) => (
+        cell: (info) => (
           <div className="flex items-center gap-2 text-text-secondary">
-            {info.getValue() ? (
+            {info.row.original.etsy_handle ? (
               <>
                 <ShoppingBag className="w-3.5 h-3.5" /> Etsy
               </>
@@ -217,7 +218,7 @@ export default function Customers() {
       {
         accessorKey: "created_at",
         header: "Added",
-        cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span>,
+        cell: (info) => <span className="text-text-secondary">{new Date(info.row.original.created_at).toLocaleDateString()}</span>,
       },
     ],
     [],

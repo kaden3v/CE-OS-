@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/Badge";
 import { CompanyLogo } from "@/components/ui/CompanyLogo";
 import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
@@ -188,12 +189,12 @@ export default function Subscriptions() {
     }
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Recurring>[]>(
     () => [
       {
         accessorKey: "name",
         header: "Subscription",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           return (
             <div className="flex items-center gap-2.5">
@@ -203,16 +204,16 @@ export default function Subscriptions() {
           );
         },
       },
-      { accessorKey: "vendor_id", header: "Vendor", cell: (info: any) => <span className="text-text-secondary">{vendorName(info.getValue())}</span> },
+      { accessorKey: "vendor_id", header: "Vendor", cell: (info) => <span className="text-text-secondary">{vendorName(info.row.original.vendor_id)}</span> },
       {
         accessorKey: "amount",
         header: "Amount",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           const pc = priceChange(s);
           return (
             <span className="inline-flex items-center gap-1.5 tabular-nums">
-              {formatMoney(info.getValue())}<span className="text-text-tertiary">/{cycleAbbr(s.billing_cycle)}</span>
+              {formatMoney(info.row.original.amount)}<span className="text-text-tertiary">/{cycleAbbr(s.billing_cycle)}</span>
               {pc && (
                 <span title={pc.tip} className={pc.dir === "up" ? "text-status-alert" : "text-status-ok"} aria-label="price changed">
                   {pc.dir === "up" ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -222,12 +223,12 @@ export default function Subscriptions() {
           );
         },
       },
-      { id: "monthly", header: "Monthly", cell: (info: any) => <span className="tabular-nums text-text-secondary">{formatMoney(monthlyEquiv(info.row.original))}</span> },
-      { accessorKey: "next_renewal", header: "Next renewal", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ? formatBusinessDate(info.getValue()) : "—"}</span> },
+      { id: "monthly", header: "Monthly", cell: (info) => <span className="tabular-nums text-text-secondary">{formatMoney(monthlyEquiv(info.row.original))}</span> },
+      { accessorKey: "next_renewal", header: "Next renewal", cell: (info) => <span className="text-text-secondary">{info.row.original.next_renewal ? formatBusinessDate(info.row.original.next_renewal) : "—"}</span> },
       {
         id: "auto",
         header: "Auto-log",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           return <Toggle checked={!!s.auto_log} onChange={() => toggleAutoLog(s)} ariaLabel="Auto-log on renewal" />;
         },
@@ -235,7 +236,7 @@ export default function Subscriptions() {
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           if (isOverdue(s)) return <Badge variant="outline" className="text-status-warn border-status-warn/40">Overdue</Badge>;
           return <Badge variant={s.status === "active" ? "brand" : "default"} className="capitalize">{s.status}</Badge>;
@@ -244,7 +245,7 @@ export default function Subscriptions() {
       {
         id: "actions",
         header: "",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           return (
             <div className="flex items-center gap-1 justify-end">
