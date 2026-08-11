@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useApp } from "@/contexts/AppContext";
 import { useExpenseCategories } from "@/contexts/ExpenseCategoriesContext";
 import { SCHEDULE_C_CATEGORIES, type ScheduleCCategory } from "@/lib/scheduleC";
+import { Select } from "@/components/ui/Select";
 import {
   SCHEDULE_F_CATEGORIES,
   SCHEDULE_F_FALLBACK,
@@ -189,20 +190,20 @@ export default function ExpenseCategories() {
             </div>
             <div>
               <label className={labelCls}>Schedule F line</label>
-              <select className={selectCls} value={edit.scheduleF} onChange={(e) => setEdit({ ...edit, scheduleF: e.target.value as ScheduleFCategory })}>
+              <Select className={selectCls} value={edit.scheduleF} onChange={(e) => setEdit({ ...edit, scheduleF: e.target.value as ScheduleFCategory })}>
                 {SCHEDULE_F_CATEGORIES.map((sf) => (
                   <option key={sf} value={sf}>{sf}</option>
                 ))}
-              </select>
+              </Select>
               <p className="text-xs text-text-tertiary mt-1.5">Which tax line this category totals into on Schedule F (farm).</p>
             </div>
             <div>
               <label className={labelCls}>Schedule C line</label>
-              <select className={selectCls} value={edit.scheduleC} onChange={(e) => setEdit({ ...edit, scheduleC: e.target.value as ScheduleCCategory })}>
+              <Select className={selectCls} value={edit.scheduleC} onChange={(e) => setEdit({ ...edit, scheduleC: e.target.value as ScheduleCCategory })}>
                 {SCHEDULE_C_CATEGORIES.map((sc) => (
                   <option key={sc} value={sc}>{sc}</option>
                 ))}
-              </select>
+              </Select>
               <p className="text-xs text-text-tertiary mt-1.5">Used if you ever swap the report to Schedule C.</p>
             </div>
             <div className="pt-2 flex justify-end gap-3 border-t border-border-subtle">
@@ -231,12 +232,12 @@ export default function ExpenseCategories() {
                   : `${del.count} expense${del.count === 1 ? "" : "s"} use this category. Choose where to move them:`}
             </p>
             {del.count !== null && del.count > 0 && (
-              <select className={selectCls} value={del.reassignTo} onChange={(e) => setDel({ ...del, reassignTo: e.target.value })}>
+              <Select className={selectCls} value={del.reassignTo} onChange={(e) => setDel({ ...del, reassignTo: e.target.value })}>
                 <option value="">Leave uncategorized (needs review)</option>
                 {book.names.filter((n) => n.toLowerCase() !== del.name.toLowerCase()).map((n) => (
                   <option key={n} value={n}>Move to “{n}”</option>
                 ))}
-              </select>
+              </Select>
             )}
             <div className="pt-2 flex justify-end gap-3 border-t border-border-subtle">
               <Button variant="ghost" type="button" onClick={() => setDel(null)}>Cancel</Button>

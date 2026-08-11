@@ -11,6 +11,7 @@ import { isInflow, passesPolarity, type Polarity } from "@/lib/expenseImport";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate } from "@/lib/dates";
 import type { Expense } from "./types";
+import { Select } from "@/components/ui/Select";
 
 export interface ImportRow {
   occurred_on: string;
@@ -177,7 +178,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
               ] as const).map(([key, label]) => (
                 <div key={key}>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">{label}</label>
-                  <select
+                  <Select
                     className={selectCls}
                     value={mapping[key]}
                     onChange={(e) => setMapping((m) => ({ ...m, [key]: Number(e.target.value) }))}
@@ -186,7 +187,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                     {headers.map((h, i) => (
                       <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               ))}
             </div>
@@ -218,7 +219,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
               <div className="flex items-center gap-4 ml-auto">
                 <label className="flex items-center gap-2 text-text-secondary">
                   Import
-                  <select
+                  <Select
                     className={selectClsSmall}
                     value={polarity}
                     onChange={(e) => setPolarity(e.target.value as Polarity)}
@@ -227,7 +228,7 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                     <option value="all">All rows</option>
                     <option value="out">Money out only</option>
                     <option value="in">Money in only</option>
-                  </select>
+                  </Select>
                 </label>
                 <label className="flex items-center gap-2 text-text-secondary">
                   Skip duplicates

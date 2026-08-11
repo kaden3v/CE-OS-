@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, isoYear, currentYear } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Vendor = Tables<"vendors">;
 type Expense = Tables<"expenses">;
@@ -230,9 +231,9 @@ export default function Vendors() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Category</label>
-              <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              <Select className="w-full" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                 {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Website</label>

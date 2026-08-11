@@ -9,6 +9,8 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrgMembers } from "@/hooks/useOrgMembers";
 import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 const ROLES: OrgRole[] = ["owner", "manager", "staff"];
 
@@ -16,6 +18,7 @@ const roleBadge = (role: OrgRole) =>
   role === "owner" ? "brand" : role === "manager" ? "outline" : "default";
 
 export default function Team() {
+  const confirm = useConfirm();
   const { user, activeOrgId, orgRole, refreshOrg } = useAuth();
   const { addToast } = useApp();
   const { members, isLoading, updateRole, removeMember } = useOrgMembers();
@@ -54,7 +57,7 @@ export default function Team() {
   };
 
   const handleRemove = async (memberId: string, name: string) => {
-    if (!confirm(`Remove ${name} from this workspace? They will lose access to all shared data.`)) return;
+    if (!(await confirm({ title: `Remove ${name}?`, message: "They will lose access to all shared data in this workspace.", confirmLabel: "Remove", tone: "danger" }))) return;
     const result = await removeMember(memberId);
     if (!result.ok) {
       addToast({ title: "Couldn't remove member", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -110,7 +113,7 @@ export default function Team() {
                   </div>
 
                   {canManage && !isSelf ? (
-                    <select
+                    <Select
                       value={m.role}
                       disabled={isLastOwner}
                       onChange={(e) => handleRoleChange(m.id, e.target.value as OrgRole)}
@@ -121,7 +124,7 @@ export default function Team() {
                           {r}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   ) : (
                     <Badge variant={roleBadge(m.role)} className="capitalize">
                       {m.role}

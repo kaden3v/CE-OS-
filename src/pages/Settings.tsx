@@ -1,5 +1,7 @@
 import { useEffect, useState, FormEvent } from "react";
+import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -12,6 +14,7 @@ import { friendlyDbError } from "@/lib/dbErrors";
 import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw } from "lucide-react";
 import { Link } from "react-router";
 import { ChannelFeesSettings } from "@/components/settings/ChannelFeesSettings";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type NotificationPrefs = {
   low_stock?: boolean;
@@ -37,6 +40,7 @@ const CONNECTORS = [
 ];
 
 export default function Settings() {
+  const confirm = useConfirm();
   const { settings, updateSettings, setCommandPaletteOpen, addToast } = useApp();
   const { user, isConfigured, isAdmin, signOut, resyncSession } = useAuth();
   const [resyncing, setResyncing] = useState(false);
@@ -190,12 +194,22 @@ export default function Settings() {
   };
 
   const handleRemoveAdmin = async (email: string) => {
-    if (email === user?.email) {
-      const ok = confirm("This is your own email. Removing it will demote you when you next sign in. Continue?");
-      if (!ok) return;
-    } else {
-      if (!confirm(`Remove ${email} from the admin allowlist? Existing admin users keep access until you also flip their profile.is_admin to false.`)) return;
-    }
+    const ok =
+      email === user?.email
+        ? await confirm({
+            title: "Remove your own admin access?",
+            message: "This is your own email. Removing it will demote you the next time you sign in.",
+            confirmLabel: "Remove anyway",
+            tone: "danger",
+          })
+        : await confirm({
+            title: `Remove ${email} from the allowlist?`,
+            message:
+              "Existing admin users keep access until you also clear their profile.is_admin flag.",
+            confirmLabel: "Remove",
+            tone: "danger",
+          });
+    if (!ok) return;
     if (!supabase) return;
     const { error } = await supabase.from("admin_emails").delete().eq("email", email);
     if (error) {
@@ -443,9 +457,16 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* Developer Tools */}
+        {/* Developer Tools. framer-motion rather than
+            `animate-in fade-in slide-in-from-bottom-2`: those are
+            tailwindcss-animate classes and that package isn't installed, so the
+            entrance never rendered. */}
         {isDev && (
-          <section className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0, 0, 0.2, 1] }}
+          >
             <h2 className="text-lg font-medium mb-4 text-status-info flex items-center gap-2">
               <TerminalSquare className="w-5 h-5" />
               Developer Tools
@@ -503,20 +524,17 @@ export default function Settings() {
                 </Button>
               </div>
             </Card>
-          </section>
+          </motion.section>
         )}
       </div>
 
       {/* Change-password modal */}
-      {pwOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Change password</h2>
-              <button onClick={() => { setPwOpen(false); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <Lock className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={pwOpen}
+        onClose={() => { setPwOpen(false); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}
+        title="Change password"
+        size="sm"
+      >
             <form onSubmit={handlePasswordChange} className="p-4 space-y-4">
               <div>
                 <label htmlFor="current-pw" className="text-xs uppercase tracking-wide text-text-secondary">Current password</label>
@@ -550,9 +568,7 @@ export default function Settings() {
                 </Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

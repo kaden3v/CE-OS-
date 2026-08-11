@@ -31,6 +31,7 @@ import {
   Car,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "./ui/Input";
 import { useApp } from "@/contexts/AppContext";
@@ -121,6 +122,12 @@ export function Layout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigate, setCommandPaletteOpen, addToast]);
 
+  // Density lives on <html>, not on the app root: overlays portal into <body>
+  // and would otherwise keep comfortable spacing while the page went compact.
+  useEffect(() => {
+    document.documentElement.classList.toggle("font-compact", settings.density === "compact");
+  }, [settings.density]);
+
   const getBreadcrumb = () => {
     const path = location.pathname;
     if (path === "/") return "Dashboard";
@@ -163,7 +170,6 @@ export function Layout() {
       // h-dvh (not h-screen): iOS Safari's 100vh is taller than the visible
       // viewport when the URL bar shows, which clips the bottom of the app.
       "flex h-dvh bg-bg-base text-text-primary overflow-hidden",
-      settings.density === 'compact' ? 'font-compact' : ''
     )}>
       {/* Sidebar - hidden on mobile and when printing */}
       <aside className="hidden md:flex w-[240px] flex-shrink-0 bg-bg-elevated backdrop-blur-xl border-r border-border-subtle flex-col z-nav no-print">
@@ -306,7 +312,7 @@ export function Layout() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary group-hover:text-text-secondary transition-colors" />
               <div className="w-full pl-8 pr-2 py-2 bg-bg-base border border-border-subtle rounded-md text-sm text-text-tertiary flex items-center justify-between group-hover:border-border-strong transition-colors">
                 <span>Search everywhere...</span>
-                <kbd className="font-sans text-[10px] px-2 py-2 rounded bg-bg-elevated border border-border-subtle">⌘K</kbd>
+                <kbd className="font-sans text-[10px] px-1.5 py-0.5 rounded bg-bg-elevated border border-border-subtle">⌘K</kbd>
               </div>
             </div>
           </div>
@@ -402,11 +408,27 @@ export function Layout() {
 
         <KeyboardReference open={keyboardRefOpen} onClose={() => setKeyboardRefOpen(false)} />
 
-        {/* Mobile More Sheet */}
+        {/* Mobile More Sheet — framer-motion, not `slide-in-from-bottom-full
+            animate-in`: those tailwindcss-animate classes resolve to nothing
+            (package not installed), so the sheet used to just pop into place. */}
+        <AnimatePresence>
         {mobileMenuOpen && (
           <>
-            <div className="md:hidden fixed inset-0 bg-[#0E0F11]/80 backdrop-blur-sm z-modal transition-opacity" onClick={() => setMobileMenuOpen(false)} />
-            <div className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80dvh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-modal p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6 slide-in-from-bottom-full animate-in duration-200 ease-out">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden fixed inset-0 bg-[#0E0F11]/80 backdrop-blur-sm z-modal"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+              className="md:hidden fixed bottom-0 left-0 right-0 max-h-[80dvh] overflow-y-auto bg-bg-base/95 backdrop-blur-md border-t border-border-subtle rounded-t-2xl z-modal p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6"
+            >
                <div>
                   <h3 className="text-xs uppercase tracking-wide text-text-tertiary mb-2">Management</h3>
                   <div className="grid grid-cols-2 gap-2">
@@ -434,9 +456,10 @@ export function Layout() {
                     <NavLink onClick={() => setMobileMenuOpen(false)} to="/settings" className="flex items-center gap-2 p-2 bg-bg-hover rounded-lg text-sm text-text-primary"><Settings className="w-4 h-4 text-text-secondary"/> Settings</NavLink>
                   </div>
                </div>
-            </div>
+            </motion.div>
           </>
         )}
+        </AnimatePresence>
       </div>
     </div>
   );

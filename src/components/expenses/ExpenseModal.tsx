@@ -11,6 +11,7 @@ import { RECEIPT_ACCEPT, isAcceptedReceipt, receiptTooLarge } from "@/lib/receip
 import type { ReceiptDraft } from "@/lib/receiptScan";
 import { CategorySelect } from "./CategorySelect";
 import { PAYMENT_METHODS, type Expense, type ExpenseFormData, type Vendor } from "./types";
+import { Select } from "@/components/ui/Select";
 
 interface ExpenseModalProps {
   open: boolean;
@@ -173,11 +174,11 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Payment method</label>
-            <select className={selectCls} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
+            <Select className={selectCls} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               {PAYMENT_METHODS.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className={labelCls}>Vendor</label>
@@ -204,12 +205,12 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <select className={selectCls} value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
+                <Select className={selectCls} value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
                   <option value="">— None —</option>
                   {vendors.map((v) => (
                     <option key={v.id} value={v.id}>{v.name}</option>
                   ))}
-                </select>
+                </Select>
                 <button type="button" onClick={() => setCreatingVendor(true)} aria-label="New vendor" className="shrink-0 p-2 rounded-lg border border-border-strong hover:bg-bg-hover text-text-secondary">
                   <Plus className="w-4 h-4" />
                 </button>

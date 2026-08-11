@@ -347,19 +347,60 @@ notes". `T12` still covers that pass.
 
 ### Also found while implementing
 
-- **`font-compact` does not exist.** [Layout.tsx:166](src/components/Layout.tsx:166) toggles it from
-  the Settings "density" preference, but the class is defined nowhere in `index.css`. The compact
-  density control is inert — it has never done anything. Fold into `T8`.
+- **`font-compact` did not exist.** `Layout` toggled it from the Settings "density" preference, but
+  the class was defined nowhere in `index.css`, so the control had never done anything. Fixed in
+  `T8`.
+- **Unused imports across the codebase.** A `tsc --noUnusedLocals` pass surfaces ~20, most of them
+  pre-dating this work (`Layout` alone carries 9 unused lucide icons). Left alone deliberately —
+  `T17` adds ESLint, which sweeps them systematically rather than one at a time.
 
-### Phase 2 — One design system (P1)
+### Phase 2 — One design system (P1) — ✅ **DONE 2026-08-10**
 
-| # | Task | Addresses |
-|---|---|---|
-| T6 | Fold the 9 hand-rolled overlays + `Dialog` into `Modal`; delete `Dialog.tsx` | **F8** |
-| T7 | Add `Select` (and `Textarea`) primitives matching `Input`; replace all 43 selects | **F9** |
-| T8 | Retune the spacing scale on `Badge`, `Button size="sm"`, `<kbd>` — restore `py-0.5`/`py-1` where the flattening hurt | **F10** |
-| T9 | Pick one animation system: either install `tailwindcss-animate` or port the 3 dead call sites to framer-motion. Do not ship both | **F11** |
-| T10 | Replace the 20 `confirm()` calls with a `ConfirmDialog` built on `Modal` | **F14** |
+| # | Task | Addresses | Status |
+|---|---|---|---|
+| T6 | Fold the 9 hand-rolled overlays + `Dialog` into `Modal`; delete `Dialog.tsx` | **F8** | ✅ |
+| T7 | Add `Select` (and `Textarea`) primitives matching `Input`; replace all 43 selects | **F9** | ✅ |
+| T8 | Retune the spacing scale on `Badge`, `Button size="sm"`, `<kbd>` | **F10** | ✅ |
+| T9 | Pick one animation system | **F11** | ✅ |
+| T10 | Replace the 20 `confirm()` calls with a `ConfirmDialog` built on `Modal` | **F14** | ✅ |
+
+**What shipped**
+
+- **One modal primitive.** All 10 hand-rolled overlays (Settings, Inventory ×2, Subscriptions,
+  Orders, Production, Propagation ×2, Customers ×2) now render through `Modal`, and `Dialog.tsx`
+  is deleted — its single caller (`Licenses`) moved over too. `Modal` adoption went 15 → 22 files.
+  Every dialog in the app now behaves the same: bottom sheet on phones, Escape, backdrop tap,
+  `dvh`-capped height. `Subscriptions`' own raw Escape listener was removed — it bypassed the
+  handler stack and would fire even when it wasn't the top layer.
+- **`Select` + `Textarea` primitives**, sharing `FIELD_BASE` with `Input` (`ui/field.ts`). All 43
+  selects and 4 textareas migrated. Verified in-browser: a `Select` and an `Input` now match on
+  background, border colour, border width, radius, font size and padding — previously they differed
+  on all six. The dropdown chevron is a `select-chevron` utility in `index.css`, **not** a Tailwind
+  arbitrary value: `bg-[url("data:image/svg+xml,…")]` silently compiles to nothing because
+  arbitrary values can't contain the spaces that SVG needs, which left every select with
+  `appearance-none` and no chevron at all.
+- **Spacing retuned**, measured against the running stylesheet:
+
+  | element | before | after |
+  |---|---|---|
+  | `Badge` | ~26px tall | **19px** |
+  | `Button size="sm"` | same height as default | **28px** (default 44px) |
+  | `<kbd>` chip | ~34px | **24px** |
+
+- **One animation system.** The three `animate-in` / `slide-in-from-*` call sites (toasts, mobile
+  More sheet, Settings dev section) are ported to framer-motion, which was already a dependency
+  and already drove every other overlay. `tailwindcss-animate` is *not* installed, so those classes
+  had been compiling to nothing. Toasts also gained the exit animation they never had.
+- **`ConfirmDialog`.** A `ConfirmProvider` + promise-based `useConfirm()` replaces all 19 native
+  `confirm()` calls. Promise-shaped on purpose: every call site was already inside an `async`
+  handler, so each became a one-liner (`if (!(await confirm({...}))) return;`) instead of 19 pages
+  each growing their own pending-confirmation state. Destructive actions get `tone: "danger"` and
+  a real verb on the button ("Delete", "Revoke", "Discard") rather than "OK".
+- **`font-compact` now exists.** Settings' "Compact density" toggle wrote a class that was defined
+  nowhere — the control had never done anything. It's now real CSS scoped to data tables, set on
+  `<html>` rather than the app root so portalled overlays inherit it too.
+
+`tsc` clean · 222 tests pass · build green.
 
 ### Phase 3 — Trust & accessibility (P2)
 

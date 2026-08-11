@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Dialog } from "@/components/ui/Dialog";
+import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { FileBadge, Plus, AlertTriangle, Calendar, Building2, Search, ShieldCheck, FileText, Trash2, Edit } from "lucide-react";
 import { EmptyState } from "@/components/ui/StateRenderer";
@@ -11,6 +11,8 @@ import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 import { formatDate } from "@/lib/format";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type License = Tables<"licenses">;
 
@@ -29,6 +31,7 @@ function statusInfo(days: number | null) {
 }
 
 export default function Licenses() {
+  const confirm = useConfirm();
   const { data: licenses, add, update, remove, isLoading } = useEntity<License>("licenses", SEED, {
     toRow: (l) => ({
       name: l.name,
@@ -109,7 +112,7 @@ export default function Licenses() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remove this license?")) return;
+    if (!(await confirm({ title: "Remove this license?", message: "Its renewal reminders stop with it.", confirmLabel: "Remove", tone: "danger" }))) return;
     const result = await remove(id);
     if (result.ok === false) {
       addToast({ title: "Delete failed", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -277,13 +280,16 @@ export default function Licenses() {
         </div>
       </Card>
 
-      <Dialog
+      <Modal
         open={isOpen}
-        onOpenChange={setIsOpen}
+        onClose={() => setIsOpen(false)}
+        size="md"
         title={editing ? "Edit License" : "Add License"}
-        description={editing ? "Update the details of your tracking entry." : "Add a new regulatory permit or license to track."}
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <p className="text-sm text-text-secondary -mt-1">
+            {editing ? "Update the details of your tracking entry." : "Add a new regulatory permit or license to track."}
+          </p>
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">License Name *</label>
             <Input required placeholder="e.g. Nursery License" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -299,16 +305,16 @@ export default function Licenses() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Status</label>
-              <select
+              <Select
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value as License["status"] })}
-                className="w-full bg-[rgba(0,0,0,0.2)] border border-border-strong rounded-md py-2 px-3 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-text-primary"
+                className="w-full"
               >
                 <option value="active">Active</option>
                 <option value="pending">Pending</option>
                 <option value="expired">Expired</option>
                 <option value="revoked">Revoked</option>
-              </select>
+              </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -326,7 +332,7 @@ export default function Licenses() {
             <Button type="submit">{editing ? "Save Changes" : "Add License"}</Button>
           </div>
         </form>
-      </Dialog>
+      </Modal>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type QrCode = Tables<"qr_codes">;
 type Cultivar = Tables<"cultivars">;
@@ -122,25 +123,25 @@ export default function QrGenerator() {
             {cultivars.length === 0 ? (
               <p className="text-sm text-text-tertiary italic">Add cultivars first → <Link className="text-accent-brand hover:underline" to="/cultivars">Cultivars Registry</Link></p>
             ) : (
-              <select
-                className="w-full bg-bg-base border border-border-subtle rounded-lg px-2 py-2 text-sm focus:outline-none focus:border-border-strong"
+              <Select
+                className="w-full"
                 value={cultivarId || cultivars[0].id}
                 onChange={(e) => setCultivarId(e.target.value)}
               >
                 {cultivars.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
-              </select>
+              </Select>
             )}
           </div>
 
           <div>
             <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Size</label>
-            <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-2 py-2 text-sm" value={size} onChange={(e) => setSize(e.target.value)}>
+            <Select className="w-full" value={size} onChange={(e) => setSize(e.target.value)}>
               <option value="starter">Starter</option>
               <option value="intermediate">Intermediate</option>
               <option value="mature">Mature</option>
-            </select>
+            </Select>
           </div>
 
           <div>

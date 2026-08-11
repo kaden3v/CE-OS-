@@ -7,6 +7,7 @@ import { formatBusinessDate } from "@/lib/dates";
 import { deleteSupplyPurchase } from "@/lib/cogs";
 import type { Tables } from "@/lib/database.types";
 import type { PurchaseEditing } from "./SupplyPurchaseModal";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Supply = Tables<"supplies">;
 type SupplyPurchase = Tables<"supply_purchases">;
@@ -23,13 +24,14 @@ interface PurchaseHistoryModalProps {
 }
 
 export function PurchaseHistoryModal({ open, onClose, supply, purchases, vendors, onEdit, onChanged }: PurchaseHistoryModalProps) {
+  const confirm = useConfirm();
   const { addToast } = useApp();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const vendorName = (id: string | null) => (id ? vendors.find((v) => v.id === id)?.name ?? "—" : "—");
 
   const handleDelete = async (p: SupplyPurchase) => {
-    if (!confirm("Delete this purchase? Stock, unit cost, and the linked expense will all be reversed.")) return;
+    if (!(await confirm({ title: "Delete this purchase?", message: "Stock, unit cost, and the linked expense will all be reversed.", confirmLabel: "Delete", tone: "danger" }))) return;
     setBusyId(p.id);
     try {
       await deleteSupplyPurchase(p.id);

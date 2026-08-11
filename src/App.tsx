@@ -42,6 +42,7 @@ import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
 import { Toasts } from "./components/ui/Toasts";
 import { CommandPalette } from "./components/ui/CommandPalette";
+import { ConfirmProvider } from "./components/ui/ConfirmDialog";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <AppProvider>
+          <ConfirmProvider>
           <Toasts />
           <BrowserRouter>
             <CommandPalette />
@@ -97,6 +99,7 @@ export default function App() {
             </Routes>
             </Suspense>
           </BrowserRouter>
+          </ConfirmProvider>
         </AppProvider>
       </AuthProvider>
     </ErrorBoundary>

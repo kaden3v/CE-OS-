@@ -17,6 +17,7 @@ import { formatBusinessDate } from "@/lib/dates";
 import { SupplyPurchaseModal, type PurchaseEditing } from "@/components/supplies/SupplyPurchaseModal";
 import { PurchaseHistoryModal } from "@/components/supplies/PurchaseHistoryModal";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Supply = Tables<"supplies">;
 type Vendor = Tables<"vendors">;
@@ -217,14 +218,14 @@ export default function Supplies() {
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Vendor</label>
-              <select
-                className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+              <Select
+                className="w-full"
                 value={form.vendor_id}
                 onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}
               >
                 <option value="">— None —</option>
                 {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
+              </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

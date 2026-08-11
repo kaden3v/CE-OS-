@@ -15,6 +15,7 @@ import { useOrders } from "@/hooks/useOrders";
 import { checkShippingWeather } from "@/lib/weather";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Shipment = Tables<"shipments">;
 
@@ -257,12 +258,12 @@ export default function Shipping() {
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Order *</label>
-                <select required className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
+                <Select required className="w-full" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
                   <option value="">— Pick an order —</option>
                   {orders.map((o) => (
                     <option key={o.id} value={o.id}>{orderLabel(o.id)}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

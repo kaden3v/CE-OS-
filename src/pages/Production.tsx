@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, FormEvent } from "react";
 import { useLocation } from "react-router";
-import { Factory, Plus, X, Trash2 } from "lucide-react";
+import { Factory, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,6 +17,8 @@ import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, todayISO, isoYear, currentYear } from "@/lib/dates";
 import { logProductionRun, deleteProductionRun } from "@/lib/cogs";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Run = Tables<"production_runs">;
 type RunSupply = Tables<"production_run_supplies">;
@@ -26,6 +29,7 @@ type DraftSupply = { supply_id: string; qty_used: number };
 type LaborType = "owner" | "hired";
 
 export default function Production() {
+  const confirm = useConfirm();
   const { activeOrgId } = useAuth();
   const { data: runs, isLoading, refresh: refreshRuns } = useEntity<Run>("production_runs", [], { orderBy: "run_on" });
   const { data: runSupplies, refresh: refreshRunSupplies } = useEntity<RunSupply>("production_run_supplies", [], { orderBy: "created_at" });
@@ -106,7 +110,7 @@ export default function Production() {
   };
 
   const handleDelete = async (run: Run) => {
-    if (!confirm("Delete this run? Consumed stock will be restored to each supply.")) return;
+    if (!(await confirm({ title: "Delete this run?", message: "Consumed stock will be restored to each supply.", confirmLabel: "Delete", tone: "danger" }))) return;
     try {
       await deleteProductionRun(run.id);
       await Promise.all([refreshRuns(), refreshRunSupplies(), refreshSupplies()]);
@@ -187,14 +191,8 @@ export default function Production() {
         )}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setIsOpen(false)}>
-          <Card role="dialog" aria-modal="true" aria-labelledby="production-run-title" onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85dvh] rounded-t-2xl sm:rounded-xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 id="production-run-title" className="text-lg font-semibold">Log Production Run</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Log Production Run" size="lg">
+            <form onSubmit={handleCreate} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Description</label>
                 <Input placeholder="Potted up 40 D. capensis into 3.5-inch pots" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -202,10 +200,10 @@ export default function Production() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={form.cultivar_id} onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}>
+                  <Select className="w-full" value={form.cultivar_id} onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}>
                     <option value="">— None —</option>
                     {cultivars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Units produced</label>
@@ -254,12 +252,12 @@ export default function Production() {
                     const sup = supplies.find((x) => x.id === line.supply_id);
                     return (
                       <div key={i} className="grid grid-cols-[2fr_80px_90px_32px] gap-2 items-center">
-                        <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={line.supply_id} onChange={(e) => updateSupplyLine(i, { supply_id: e.target.value })}>
+                        <Select className="w-full" value={line.supply_id} onChange={(e) => updateSupplyLine(i, { supply_id: e.target.value })}>
                           <option value="">— Pick supply —</option>
                           {supplies.map((s) => (
                             <option key={s.id} value={s.id}>{s.name} · {Number(s.on_hand)}{s.unit ? ` ${s.unit}` : ""} @ {formatMoney(s.cost ?? 0)}</option>
                           ))}
-                        </select>
+                        </Select>
                         <Input type="number" step="0.01" min="0" placeholder="Qty" value={line.qty_used} onChange={(e) => updateSupplyLine(i, { qty_used: Number(e.target.value) || 0 })} />
                         <span className="text-xs text-text-secondary tabular-nums text-right">{formatMoney(sup ? Number(sup.cost ?? 0) * line.qty_used : 0)}</span>
                         <Button type="button" variant="ghost" size="icon" onClick={() => removeSupplyLine(i)} aria-label="Remove supply line"><Trash2 className="w-4 h-4" /></Button>
@@ -280,9 +278,7 @@ export default function Production() {
                 <Button type="submit" disabled={isSaving}>{isSaving ? "Saving…" : "Log Run"}</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

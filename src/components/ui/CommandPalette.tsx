@@ -241,7 +241,7 @@ export function CommandPalette() {
               {Object.entries(groups).map(([group, items]) => (
                 <div key={group} className="mb-4 last:mb-0">
                   <div className={cn(
-                    "px-2 py-2 text-xs font-medium uppercase tracking-wider mb-2 flex items-center gap-2",
+                    "px-2 py-1 text-xs font-medium uppercase tracking-wider mb-2 flex items-center gap-2",
                     group === "Scenarios" ? "text-accent-brand" : "text-text-secondary",
                   )}>
                     {group === "Scenarios" && <PlayCircle className="w-3.5 h-3.5" />}
@@ -272,9 +272,9 @@ export function CommandPalette() {
 
             {/* Keyboard-only affordances — meaningless on a touch device. */}
             <div className="hidden sm:flex px-4 py-2 border-t border-border-subtle text-xs text-text-tertiary items-center justify-center gap-4 bg-bg-base/30">
-              <span><kbd className="font-sans px-2 py-2 rounded bg-bg-active border border-border-subtle">↑↓</kbd> to navigate</span>
-              <span><kbd className="font-sans px-2 py-2 rounded bg-bg-active border border-border-subtle">↵</kbd> to select</span>
-              <span><kbd className="font-sans px-2 py-2 rounded bg-bg-active border border-border-subtle">esc</kbd> to close</span>
+              <span><kbd className="font-sans px-1.5 py-0.5 rounded bg-bg-active border border-border-subtle">↑↓</kbd> to navigate</span>
+              <span><kbd className="font-sans px-1.5 py-0.5 rounded bg-bg-active border border-border-subtle">↵</kbd> to select</span>
+              <span><kbd className="font-sans px-1.5 py-0.5 rounded bg-bg-active border border-border-subtle">esc</kbd> to close</span>
             </div>
           </motion.div>
         </motion.div>

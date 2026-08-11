@@ -2,6 +2,7 @@ import { useState, useMemo, FormEvent } from "react";
 import { Link } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -19,6 +20,8 @@ import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { orderStatusTone, shipmentStatusTone, orderStatusLabel } from "@/lib/status";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Customer = Tables<"customers">;
 type Cultivar = Tables<"cultivars">;
@@ -32,6 +35,7 @@ type Status = (typeof STATUSES)[number];
 const statusColor = orderStatusTone;
 
 export default function Orders() {
+  const confirm = useConfirm();
   const { globalOrderViewId, setGlobalOrderViewId, addToast } = useApp();
   const { data: orders, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
   const { data: customers } = useEntity<Customer>("customers", [], { toRow: (c) => ({ name: c.name }) });
@@ -183,7 +187,7 @@ export default function Orders() {
   };
 
   const handleDelete = async (orderId: string) => {
-    if (!confirm("Delete this order? This also removes its line items.")) return;
+    if (!(await confirm({ title: "Delete this order?", message: "Its line items go with it. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await deleteOrder(orderId);
     if (!result.ok) {
       addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -484,21 +488,13 @@ export default function Orders() {
       </div>
 
       {/* Create modal */}
-      {isAddOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[85dvh]">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">New Order</h2>
-              <button onClick={() => setIsAddOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} title="New Order" size="lg">
+            <form onSubmit={handleCreate} className="p-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Customer</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  <Select
+                    className="w-full"
                     value={draft.customer_id}
                     onChange={(e) => setDraft({ ...draft, customer_id: e.target.value })}
                   >
@@ -506,25 +502,25 @@ export default function Orders() {
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })}>
+                  <Select className="w-full" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })}>
                     <option value="shopify">Shopify</option>
                     <option value="etsy">Etsy</option>
                     <option value="wholesale">Wholesale</option>
                     <option value="direct">Direct</option>
                     <option value="other">Other</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Status</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
+                  <Select className="w-full" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>{orderStatusLabel(s)}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -542,8 +538,8 @@ export default function Orders() {
                     // icon-only and now carries a 44px touch minimum, which
                     // would have overflowed a 32px column on a phone.
                     <div key={i} className="grid grid-cols-[1fr_60px_80px_44px] gap-2 items-end">
-                      <select
-                        className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                      <Select
+                        className="w-full"
                         value={line.cultivar_id}
                         onChange={(e) => updateLine(i, { cultivar_id: e.target.value })}
                       >
@@ -551,7 +547,7 @@ export default function Orders() {
                         {cultivars.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
-                      </select>
+                      </Select>
                       <Input type="number" min="1" placeholder="Qty" value={line.qty} onChange={(e) => updateLine(i, { qty: Number(e.target.value) || 1 })} />
                       <Input type="number" step="0.01" min="0" placeholder="Price" value={line.price} onChange={(e) => updateLine(i, { price: Number(e.target.value) || 0 })} />
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(i)} aria-label="Remove line" disabled={draft.items.length === 1}>
@@ -570,9 +566,7 @@ export default function Orders() {
                 <Button type="submit">Create Order</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

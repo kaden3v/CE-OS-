@@ -18,10 +18,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { Select } from "@/components/ui/Select";
 
 import type { Tables } from "@/lib/database.types";
 import { useEntity as useEntityRaw } from "@/hooks/useEntity";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type InventoryRow = Tables<"inventory">;
 type CultivarRow = Tables<"cultivars">;
@@ -84,6 +86,7 @@ const toRow = (it: Partial<InventoryItem>): Record<string, unknown> => {
 
 
 export default function Inventory() {
+  const confirm = useConfirm();
   const { data: inventory, add: addInventoryItem, update: updateInventoryItem, remove: removeInventoryItem } = useEntityRaw<InventoryItem, InventoryRow>(
     "inventory",
     INVENTORY,
@@ -278,7 +281,7 @@ export default function Inventory() {
 
   const handleDelete = async () => {
     if (!selectedItem) return;
-    if (!confirm(`Delete "${selectedItem.name}" from inventory? This also removes its photos. This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete "${selectedItem.name}"?`, message: "This removes the inventory record and its photos. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await removeInventoryItem(selectedItem.id);
     if (result.ok === false) {
       addToast({ title: "Delete failed", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -626,27 +629,24 @@ export default function Inventory() {
         )}
       </div>
 
-      {isLossOpen && selectedItem && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Log Loss — {selectedItem.name}</h2>
-              <button onClick={() => setIsLossOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={isLossOpen && !!selectedItem}
+        onClose={() => setIsLossOpen(false)}
+        title={`Log Loss — ${selectedItem?.name ?? ""}`}
+        size="sm"
+      >
             <form onSubmit={handleLogLoss} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                  <select
+                  <Select
                     value={lossForm.stage}
                     onChange={(e) => setLossForm({ ...lossForm, stage: e.target.value as typeof lossForm.stage })}
-                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    className="w-full"
                   >
                     <option value="growout">Grow-Out ({selectedItem.stock.growout})</option>
                     <option value="juv">Sale-Ready ({selectedItem.stock.juv})</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
@@ -666,9 +666,7 @@ export default function Inventory() {
                 <Button type="submit">Log Loss</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
 
       <Modal open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add to Inventory" size="sm">
             <div className="p-4">
@@ -676,16 +674,16 @@ export default function Inventory() {
                 {cultivars.length > 0 && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Link to Cultivar (recommended)</label>
-                    <select
+                    <Select
                       value={newPlant.cultivar_id}
                       onChange={(e) => setNewPlant({ ...newPlant, cultivar_id: e.target.value })}
-                      className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                      className="w-full"
                     >
                       <option value="">— Custom (fill below) —</option>
                       {cultivars.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 )}
                 <div className="space-y-2">
@@ -737,29 +735,26 @@ export default function Inventory() {
       </Modal>
 
       {/* Edit Details Modal */}
-      {isEditModalOpen && selectedItem && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 className="text-lg font-semibold">Edit details</h2>
-              <button onClick={() => setIsEditModalOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={isEditModalOpen && !!selectedItem}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit details"
+        size="sm"
+      >
             <form id="edit-plant-form" onSubmit={handleEditSave} className="p-4 space-y-4">
               {cultivars.length > 0 && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Linked cultivar</label>
-                  <select
+                  <Select
                     value={editFields.cultivar_id}
                     onChange={(e) => setEditFields({ ...editFields, cultivar_id: e.target.value })}
-                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    className="w-full"
                   >
                     <option value="">— Custom (fill below) —</option>
                     {cultivars.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                   <p className="text-xs text-text-tertiary">Linking syncs name + genus from the registry.</p>
                 </div>
               )}
@@ -804,9 +799,7 @@ export default function Inventory() {
                 Save changes
               </Button>
             </div>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

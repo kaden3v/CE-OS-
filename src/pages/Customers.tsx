@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, FormEvent } from "react";
+import { Textarea } from "@/components/ui/Textarea";
 import { DataTable } from "@/components/ui/DataTable";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Store, ShoppingBag, X, Mail, Plus, Users, Pencil, Trash2 } from "lucide-react";
 import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
@@ -15,6 +17,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Customer = Tables<"customers">;
 type Subscription = Tables<"subscriptions">;
@@ -22,6 +26,7 @@ type Subscription = Tables<"subscriptions">;
 const SEED: Customer[] = [];
 
 export default function Customers() {
+  const confirm = useConfirm();
   const { data: customers, add, update, remove, isLoading } = useEntity<Customer>("customers", SEED, {
     toRow: (c) => ({
       name: c.name,
@@ -111,7 +116,7 @@ export default function Customers() {
 
   const cancelSubscription = async () => {
     if (!activeSub || !supabase || !activeOrgId) return;
-    if (!confirm(`Cancel ${selected?.name}'s ${activeSub.tier} subscription?`)) return;
+    if (!(await confirm({ title: "Cancel this subscription?", message: `${selected?.name}'s ${activeSub.tier} subscription will be marked cancelled.`, confirmLabel: "Cancel subscription", cancelLabel: "Keep it", tone: "danger" }))) return;
     const { error } = await (supabase as any)
       .from("subscriptions")
       .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
@@ -127,7 +132,7 @@ export default function Customers() {
 
   const handleDelete = async () => {
     if (!selected) return;
-    if (!confirm(`Delete ${selected.name}? Their orders are kept but unlinked.`)) return;
+    if (!(await confirm({ title: `Delete ${selected.name}?`, message: "Their orders are kept, but no longer linked to a customer.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await remove(selected.id);
     if (!result.ok) {
       addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -319,15 +324,15 @@ export default function Customers() {
                         </div>
                         <div>
                           <label className="block text-xs text-text-tertiary mb-1">Billing</label>
-                          <select
+                          <Select
                             value={subForm.billing_cycle}
                             onChange={(e) => setSubForm({ ...subForm, billing_cycle: e.target.value })}
-                            className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2 py-2 text-sm focus:outline-none focus:border-accent-brand"
+                            className="w-full"
                           >
                             <option value="monthly">Monthly</option>
                             <option value="quarterly">Quarterly</option>
                             <option value="yearly">Yearly</option>
-                          </select>
+                          </Select>
                         </div>
                       </div>
                       <div>
@@ -373,15 +378,7 @@ export default function Customers() {
         )}
       </div>
 
-      {isEditOpen && selected && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
-          <Card role="dialog" aria-modal="true" aria-labelledby="customer-edit-title" className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 id="customer-edit-title" className="text-lg font-semibold">Edit Customer</h2>
-              <button onClick={() => setIsEditOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isEditOpen && !!selected} onClose={() => setIsEditOpen(false)} title="Edit Customer" size="sm">
             <form onSubmit={handleEdit} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
@@ -403,11 +400,11 @@ export default function Customers() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Notes</label>
-                <textarea
+                <Textarea
                   value={editForm.notes}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   rows={3}
-                  className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2 py-2 text-sm focus:outline-none focus:border-accent-brand resize-y"
+                  className="w-full resize-y"
                 />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
@@ -415,19 +412,9 @@ export default function Customers() {
                 <Button type="submit">Save Changes</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
 
-      {isAddOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4">
-          <Card role="dialog" aria-modal="true" aria-labelledby="customer-add-title" className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 id="customer-add-title" className="text-lg font-semibold">New Customer</h2>
-              <button onClick={() => setIsAddOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} title="New Customer" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Name *</label>
@@ -450,9 +437,7 @@ export default function Customers() {
                 <Button type="submit">Save Customer</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

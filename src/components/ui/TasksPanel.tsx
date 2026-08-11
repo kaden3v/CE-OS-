@@ -5,6 +5,7 @@ import { useOrgMembers } from '@/hooks/useOrgMembers';
 import { CheckCircle2, Circle, X, Clock, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from './Input';
+import { Select } from "@/components/ui/Select";
 
 interface TasksPanelProps {
   open: boolean;
@@ -79,11 +80,11 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
             placeholder="Add a new task..."
             className="flex-1 text-sm"
           />
-          <select
+          <Select
             value={assignee}
             onChange={(e) => setAssignee(e.target.value)}
             aria-label="Assign to"
-            className="bg-bg-elevated border border-border-strong rounded-[8px] px-2 py-2 text-xs text-text-secondary focus:outline-none focus:border-accent-brand max-w-[110px]"
+            className="text-xs text-text-secondary max-w-[110px]"
           >
             <option value="">Anyone</option>
             {members.map((m) => (
@@ -91,7 +92,7 @@ export function TasksPanel({ open, onClose }: TasksPanelProps) {
                 {m.user_id === user?.id ? "Me" : (m.displayName?.trim() || "Teammate")}
               </option>
             ))}
-          </select>
+          </Select>
         </form>
 
         <div className="space-y-1">

@@ -13,6 +13,7 @@ import { useApp } from "@/contexts/AppContext";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { formatBusinessDate, todayISO, isoYear, currentYear } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Trip = Tables<"mileage_log">;
 type Route = Tables<"mileage_routes">;
@@ -21,6 +22,7 @@ type Settings = Tables<"finance_settings">;
 const PURPOSE_PRESETS = ["Post office run", "Supply pickup", "Other"];
 
 export default function Mileage() {
+  const confirm = useConfirm();
   const { addToast } = useApp();
   const { data: trips, add: addTrip, remove: removeTrip, isLoading } = useEntity<Trip>("mileage_log", [], { orderBy: "trip_date" });
   const { data: routes, add: addRoute, remove: removeRoute } = useEntity<Route>("mileage_routes", [], { orderBy: "created_at", ascending: true });
@@ -89,7 +91,7 @@ export default function Mileage() {
   };
 
   const deleteTrip = async (t: Trip) => {
-    if (!confirm("Delete this trip?")) return;
+    if (!(await confirm({ title: "Delete this trip?", message: "Its mileage deduction is removed from your reports.", confirmLabel: "Delete", tone: "danger" }))) return;
     await removeTrip(t.id);
     addToast({ title: "Trip deleted", status: "info" });
   };

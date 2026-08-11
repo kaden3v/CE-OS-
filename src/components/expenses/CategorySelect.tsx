@@ -1,5 +1,6 @@
 import { useCategoryBook, useTaxSchedule } from "@/contexts/ExpenseCategoriesContext";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/Select";
 
 interface CategorySelectProps {
   value: string;
@@ -30,7 +31,7 @@ export function CategorySelect({
   const { taxSchedule } = useTaxSchedule();
   const groups = book.groupsFor(taxSchedule);
   return (
-    <select
+    <Select
       id={id}
       {...rest}
       className={cn(
@@ -50,6 +51,6 @@ export function CategorySelect({
           ))}
         </optgroup>
       ))}
-    </select>
+    </Select>
   );
 }

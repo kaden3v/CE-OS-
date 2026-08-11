@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, ChevronDown } from "lucide-react";
+import { Download } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { LoadingTable } from "@/components/ui/StateRenderer";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
 import { currentYear } from "@/lib/dates";
 import { fetchPnl, downloadCsv, MONTH_LABELS, type Pnl, type FinanceWindow } from "@/lib/financeReports";
+import { Select } from "@/components/ui/Select";
 
 const n = (v: unknown) => Number(v ?? 0);
 
@@ -67,12 +68,9 @@ export function PnlReport() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <div className="relative">
-          <select className="appearance-none bg-bg-base border border-border-subtle rounded-md pl-3 pr-8 py-2 text-sm font-medium hover:border-border-strong focus:outline-none" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
-        </div>
+        <Select className="font-medium" aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </Select>
         <Button variant="outline" onClick={exportCsv} disabled={!pnl}><Download className="w-4 h-4" /> Export CSV</Button>
       </div>
 

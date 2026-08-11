@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Listing = Tables<"listings">;
 type Cultivar = Tables<"cultivars">;
@@ -243,8 +244,8 @@ export default function Listings() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  <Select
+                    className="w-full"
                     value={form.cultivar_id}
                     onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}
                   >
@@ -252,12 +253,12 @@ export default function Listings() {
                     {cultivars.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  <Select
+                    className="w-full"
                     value={form.channel}
                     onChange={(e) => setForm({ ...form, channel: e.target.value })}
                   >
@@ -265,7 +266,7 @@ export default function Listings() {
                     <option value="etsy">Etsy</option>
                     <option value="wholesale">Wholesale</option>
                     <option value="other">Other</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -25,6 +25,8 @@ import { suggestForRows } from "@/lib/expenseCategorization";
 import { scanReceipt, type ReceiptDraft } from "@/lib/receiptScan";
 import { summarizeWrites } from "@/lib/writeSummary";
 import { isManaged, type Expense, type ExpenseFormData, type Vendor } from "@/components/expenses/types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 const SEED: Expense[] = [];
 
@@ -56,6 +58,7 @@ const selectCls =
   "bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong";
 
 export default function Expenses() {
+  const confirm = useConfirm();
   const { user, activeOrgId } = useAuth();
   const { addToast } = useApp();
   const location = useLocation();
@@ -350,7 +353,7 @@ export default function Expenses() {
 
   // ---- Delete (single + bulk) ----------------------------------------------
   const deleteExpense = async (e: Expense) => {
-    if (!confirm("Delete this expense?")) return;
+    if (!(await confirm({ title: "Delete this expense?", message: "Any attached receipt is removed too.", confirmLabel: "Delete", tone: "danger" }))) return;
     const r = await remove(e.id);
     if (!r.ok) {
       addToast({ title: "Couldn't delete", description: friendlyDbError({ code: r.code } as any), status: "alert" });
@@ -364,7 +367,7 @@ export default function Expenses() {
   const bulkDelete = async () => {
     const targets = expenses.filter((e) => selected.has(e.id) && !isManaged(e));
     if (targets.length === 0) return;
-    if (!confirm(`Delete ${targets.length} expense${targets.length === 1 ? "" : "s"}?`)) return;
+    if (!(await confirm({ title: `Delete ${targets.length} expense${targets.length === 1 ? "" : "s"}?`, message: "Any attached receipts are removed too.", confirmLabel: "Delete", tone: "danger" }))) return;
     const r = await removeMany(targets.map((e) => e.id));
     clearSelection();
     if (!r.ok) {
@@ -509,9 +512,9 @@ export default function Expenses() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <select className={selectCls} value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>
+        <Select className={selectCls} value={preset} onChange={(e) => setPreset(e.target.value as Preset)}>
           {PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
+        </Select>
         {showCustom && (
           <>
             <Input type="date" className="w-auto" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
@@ -522,18 +525,18 @@ export default function Expenses() {
         <div className="w-40">
           <CategorySelect value={catFilter} onChange={(c) => { setCatFilter(c); setUncategorizedOnly(false); }} blankLabel="All categories" />
         </div>
-        <select className={selectCls} value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
+        <Select className={selectCls} value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
           <option value="">All vendors</option>
           {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
-        <select className={selectCls} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+        </Select>
+        <Select className={selectCls} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
           <option value="">All sources</option>
           <option value="manual">Manual</option>
           <option value="etsy">Etsy</option>
           <option value="subscription">Subscriptions</option>
           <option value="supply_purchase">Supplies</option>
           <option value="mileage">Mileage</option>
-        </select>
+        </Select>
         <div className="relative flex-1 min-w-[10rem]">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <Input className="pl-9" placeholder="Search memo…" value={search} onChange={(e) => setSearch(e.target.value)} />

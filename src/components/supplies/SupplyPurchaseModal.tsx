@@ -8,6 +8,7 @@ import { todayISO } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { logSupplyPurchase, updateSupplyPurchase } from "@/lib/cogs";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Supply = Tables<"supplies">;
 type Vendor = Tables<"vendors">;
@@ -92,12 +93,12 @@ export function SupplyPurchaseModal({ open, onClose, supplies, vendors, presetSu
       <form onSubmit={submit} className="p-4 space-y-4">
         <div>
           <label className={labelCls}>Supply</label>
-          <select className={selectCls} value={supplyId} disabled={!!editing || !!presetSupplyId} onChange={(e) => setSupplyId(e.target.value)}>
+          <Select className={selectCls} value={supplyId} disabled={!!editing || !!presetSupplyId} onChange={(e) => setSupplyId(e.target.value)}>
             <option value="">— Pick supply —</option>
             {supplies.map((s) => (
               <option key={s.id} value={s.id}>{s.name}{s.unit ? ` (${s.unit})` : ""}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -112,10 +113,10 @@ export function SupplyPurchaseModal({ open, onClose, supplies, vendors, presetSu
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Vendor</label>
-            <select className={selectCls} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+            <Select className={selectCls} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
               <option value="">— None —</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            </Select>
           </div>
           <div>
             <label className={labelCls}>Date</label>

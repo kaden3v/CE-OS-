@@ -8,11 +8,13 @@ import { restGet, functionInvoke } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import type { Tables } from "@/lib/database.types";
+import { useConfirm, type ConfirmOptions } from "@/components/ui/ConfirmDialog";
 
 type Request = Tables<"access_requests">;
 type Action = "approve" | "deny" | "revoke";
 
 export default function AccessRequests() {
+  const confirm = useConfirm();
   const { session } = useAuth();
   const { addToast } = useApp();
   const [requests, setRequests] = useState<Request[]>([]);
@@ -56,8 +58,8 @@ export default function AccessRequests() {
     return true;
   };
 
-  const run = async (req: Request, action: Action, options?: { confirm?: string; reason?: string }) => {
-    if (options?.confirm && !confirm(options.confirm)) return;
+  const run = async (req: Request, action: Action, options?: { confirm?: ConfirmOptions; reason?: string }) => {
+    if (options?.confirm && !(await confirm(options.confirm))) return;
     setBusyId(req.id);
     const ok = await callEdgeFunction(req.id, action, options?.reason);
     setBusyId(null);
@@ -198,7 +200,16 @@ export default function AccessRequests() {
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => run(req, "revoke", { confirm: `Revoke access for ${req.email}? This deletes their account.` })}
+                      onClick={() =>
+                        run(req, "revoke", {
+                          confirm: {
+                            title: `Revoke access for ${req.email}?`,
+                            message: "Their account is deleted. They would need to request access again.",
+                            confirmLabel: "Revoke",
+                            tone: "danger",
+                          },
+                        })
+                      }
                       disabled={busyId === req.id}
                       className="text-status-alert border-status-alert/20 hover:bg-status-alert/10"
                     >

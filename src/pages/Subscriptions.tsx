@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, FormEvent } from "react";
+import { useMemo, useState, FormEvent } from "react";
 import { Repeat, Plus, X, Trash2, Pencil, Receipt, RotateCcw, TrendingUp, TrendingDown, CalendarClock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +18,8 @@ import { friendlyDbError } from "@/lib/dbErrors";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, todayISO } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Recurring = Tables<"recurring_expenses">;
 type Vendor = Tables<"vendors">;
@@ -38,6 +41,7 @@ const isoShift = (iso: string, days = 0, years = 0): string => {
 };
 
 export default function Subscriptions() {
+  const confirm = useConfirm();
   const { user, activeOrgId } = useAuth();
   const { data: subs, add, update, remove, isLoading, refresh } = useEntity<Recurring>("recurring_expenses", [], {
     orderBy: "created_at",
@@ -99,13 +103,6 @@ export default function Subscriptions() {
   };
 
   const previewMonthly = (Number(form.amount) || 0) / (CYCLE_DIVISOR[form.billing_cycle] ?? 1);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen]);
 
   const openAdd = () => { setEditId(null); setForm(emptyForm); setIsOpen(true); };
   const openEdit = (s: Recurring) => {
@@ -174,7 +171,7 @@ export default function Subscriptions() {
   };
 
   const handleDelete = async (s: Recurring) => {
-    if (!confirm(`Delete "${s.name}"? Past payments already logged as expenses are kept.`)) return;
+    if (!(await confirm({ title: `Delete "${s.name}"?`, message: "Past payments already logged as expenses are kept.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await remove(s.id);
     if (result.ok === false) { addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" }); return; }
     addToast({ title: "Subscription removed", status: "info" });
@@ -329,25 +326,26 @@ export default function Subscriptions() {
         )}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}>
-          <Card role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title" className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl max-h-[90dvh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-border-subtle">
-              <div className="flex items-center gap-3">
-                {form.name.trim() ? (
-                  <CompanyLogo name={form.name} website={form.website} size={40} className="rounded-lg" />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
-                    <Repeat className="w-5 h-5 text-accent-brand" />
-                  </div>
-                )}
-                <div>
-                  <h2 id="subscription-modal-title" className="text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</h2>
-                  <p className="text-xs text-text-secondary mt-0.5">A recurring bill the business pays.</p>
-                </div>
-              </div>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="-mr-1 text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
-            </div>
+      <Modal
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        size="md"
+        title={
+          <span className="flex items-center gap-3">
+            {form.name.trim() ? (
+              <CompanyLogo name={form.name} website={form.website} size={40} className="rounded-lg" />
+            ) : (
+              <span className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
+                <Repeat className="w-5 h-5 text-accent-brand" />
+              </span>
+            )}
+            <span className="block">
+              <span className="block text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</span>
+              <span className="block text-xs font-normal text-text-secondary mt-0.5">A recurring bill the business pays.</span>
+            </span>
+          </span>
+        }
+      >
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div>
                 <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
@@ -360,10 +358,10 @@ export default function Subscriptions() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Vendor</label>
-                  <select className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2.5 py-2 text-sm focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
+                  <Select className="w-full" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
                     <option value="">— None —</option>
                     {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
@@ -380,9 +378,9 @@ export default function Subscriptions() {
                 </div>
                 <div>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Billing</label>
-                  <select className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2.5 py-2 text-sm capitalize focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
+                  <Select className="w-full capitalize" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
                     {CYCLES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
-                  </select>
+                  </Select>
                 </div>
               </div>
               {form.billing_cycle !== "monthly" && (Number(form.amount) || 0) > 0 && (
@@ -405,9 +403,7 @@ export default function Subscriptions() {
                 <Button type="submit" variant="brand">{editId ? "Save Changes" : "Add Subscription"}</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }
