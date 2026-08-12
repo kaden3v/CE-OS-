@@ -149,8 +149,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Amount *</label>
-            <Input
+            <label htmlFor="expensemodal-L152" className={labelCls}>Amount *</label>
+            <Input id="expensemodal-L152"
               type="number"
               step="0.01"
               min="0"
@@ -167,8 +167,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
         </div>
 
         <div>
-          <label className={labelCls}>Category</label>
-          <CategorySelect value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="Uncategorized" />
+          <label htmlFor="expensemodal-L170" className={labelCls}>Category</label>
+          <CategorySelect id="expensemodal-L170" value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="Uncategorized" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -181,10 +181,10 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
             </Select>
           </div>
           <div>
-            <label className={labelCls}>Vendor</label>
+            <label htmlFor="expensemodal-L184" className={labelCls}>Vendor</label>
             {creatingVendor ? (
               <div className="flex items-center gap-2">
-                <Input
+                <Input id="expensemodal-L184"
                   autoFocus
                   placeholder="New vendor name"
                   value={newVendor}
@@ -234,8 +234,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
 
         {/* Receipt */}
         <div>
-          <label className={labelCls}>Receipt</label>
-          <input
+          <label htmlFor="expensemodal-L237" className={labelCls}>Receipt</label>
+          <input id="expensemodal-L237"
             ref={fileRef}
             type="file"
             accept={RECEIPT_ACCEPT}

@@ -217,8 +217,8 @@ export default function Supplies() {
               <Input id="supplies-2" placeholder="bag, pc, bale" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Vendor</label>
-              <Select
+              <label htmlFor="supplies-L220" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Vendor</label>
+              <Select id="supplies-L220"
                 className="w-full"
                 value={form.vendor_id}
                 onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}

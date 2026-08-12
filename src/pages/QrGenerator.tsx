@@ -119,11 +119,11 @@ export default function QrGenerator() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-6">
           <div>
-            <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Cultivar</label>
+            <label htmlFor="qrgenerator-L122" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Cultivar</label>
             {cultivars.length === 0 ? (
               <p className="text-sm text-text-tertiary italic">Add cultivars first → <Link className="text-accent-brand hover:underline" to="/cultivars">Cultivars Registry</Link></p>
             ) : (
-              <Select
+              <Select id="qrgenerator-L122"
                 className="w-full"
                 value={cultivarId || cultivars[0].id}
                 onChange={(e) => setCultivarId(e.target.value)}

@@ -230,10 +230,13 @@ export function CsvImportWizard({ open, onClose, existing, onImport }: CsvImport
                     <option value="in">Money in only</option>
                   </Select>
                 </label>
-                <label className="flex items-center gap-2 text-text-secondary">
+                {/* Not a <label>: Toggle renders a role="switch" button that
+                    carries its own accessible name, and a label pointing at a
+                    button does nothing when clicked. */}
+                <span className="flex items-center gap-2 text-text-secondary">
                   Skip duplicates
                   <Toggle checked={skipDuplicates} onChange={setSkipDuplicates} ariaLabel="Skip duplicates" />
-                </label>
+                </span>
               </div>
             </div>
 

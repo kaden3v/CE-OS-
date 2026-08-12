@@ -61,8 +61,22 @@ describe("Modal", () => {
     fireEvent.click(screen.getByText("body"));
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("dialog").parentElement!);
+    // The backdrop is a sibling of the dialog, marked role="presentation".
+    const backdrop = screen.getByRole("dialog").parentElement!.querySelector('[role="presentation"]');
+    fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the backdrop out of the accessibility tree", () => {
+    render(
+      <Modal open onClose={() => {}} title="Backdrop">
+        <p>body</p>
+      </Modal>,
+    );
+    // Decorative: it must not read as an interactive element to assistive tech.
+    const backdrop = screen.getByRole("dialog").parentElement!.querySelector('[role="presentation"]');
+    expect(backdrop).not.toBeNull();
+    expect(screen.getByRole("dialog").getAttribute("onclick")).toBeNull();
   });
 
   it("Escape closes only the innermost modal", () => {

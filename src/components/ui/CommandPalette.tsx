@@ -250,19 +250,20 @@ export function CommandPalette() {
                     const idx = runningIndex++;
                     const isActive = idx === activeIndex;
                     return (
-                      <div
+                      <button
                         key={cmd.id}
+                        type="button"
                         data-cmd-index={idx}
                         onClick={cmd.onSelect}
                         onMouseEnter={() => setActiveIndex(idx)}
                         className={cn(
-                          "px-2 py-2 text-sm flex items-center gap-2 rounded-lg cursor-pointer transition-colors",
+                          "w-full text-left px-2 py-2 text-sm flex items-center gap-2 rounded-lg cursor-pointer transition-colors",
                           isActive ? "bg-bg-active text-text-primary" : "text-text-secondary",
                         )}
                       >
                         {cmd.icon ?? <ArrowRight className="w-4 h-4 text-text-tertiary opacity-50" />}
                         <span className="flex-1">{cmd.label}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

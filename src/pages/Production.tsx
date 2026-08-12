@@ -226,10 +226,14 @@ export default function Production() {
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor type</label>
-                <div className="inline-flex rounded-lg border border-border-subtle bg-bg-base p-0.5 text-sm">
+                {/* A toggle-button group, not a single control: the name goes
+                    on the group and each button reports its own pressed state.
+                    Matches the Tax schedule switcher in ExpenseCategories. */}
+                <span id="production-labor-type" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor type</span>
+                <div role="group" aria-labelledby="production-labor-type" className="inline-flex rounded-lg border border-border-subtle bg-bg-base p-0.5 text-sm">
                   {(["owner", "hired"] as const).map((t) => (
                     <button key={t} type="button" onClick={() => setForm({ ...form, labor_type: t })}
+                      aria-pressed={form.labor_type === t}
                       className={cn("px-3 py-1.5 rounded-md capitalize transition-colors", form.labor_type === t ? "bg-bg-active text-text-primary" : "text-text-secondary hover:text-text-primary")}>
                       {t}
                     </button>
@@ -242,7 +246,8 @@ export default function Production() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Supplies consumed</label>
+                  {/* Names the repeated group below, not one control. */}
+                  <span id="production-supplies" className="text-xs uppercase tracking-wide text-text-secondary">Supplies consumed</span>
                   <Button type="button" size="sm" variant="ghost" onClick={addSupplyLine} disabled={supplies.length === 0}>
                     <Plus className="w-3 h-3 mr-1" /> Add supply
                   </Button>
@@ -250,7 +255,7 @@ export default function Production() {
                 {supplies.length === 0 && (
                   <p className="text-xs text-text-tertiary italic">No supplies tracked yet — add them under Finances → Supplies to capture material costs.</p>
                 )}
-                <div className="space-y-2">
+                <div className="space-y-2" role="group" aria-labelledby="production-supplies">
                   {draftSupplies.map((line, i) => {
                     const sup = supplies.find((x) => x.id === line.supply_id);
                     return (

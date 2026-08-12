@@ -43,10 +43,17 @@ export function Modal({ open, onClose, title, children, size = "md", className }
 
   return (
     <Portal>
-      <div
-        className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4"
-        onClick={onClose}
-      >
+      <div className="fixed inset-0 z-modal flex items-end sm:items-center justify-center p-0 sm:p-4">
+        {/* The backdrop is a sibling of the dialog, not its parent. As a parent
+            it needed an onClick on the dialog just to stopPropagation, which
+            made the dialog itself look like a click target to assistive tech.
+            role="presentation" marks it as the decoration it is — closing by
+            tapping it is a convenience; Escape is the real keyboard path. */}
+        <div
+          role="presentation"
+          onClick={onClose}
+          className="absolute inset-0 bg-bg-base/80 backdrop-blur-sm"
+        />
         <div
           ref={dialogRef}
           role="dialog"
@@ -55,9 +62,8 @@ export function Modal({ open, onClose, title, children, size = "md", className }
           // Fallback focus target when the dialog holds no focusable control,
           // so opening one never leaves focus stranded on the page behind.
           tabIndex={-1}
-          onClick={(e) => e.stopPropagation()}
           className={cn(
-            "w-full bg-bg-elevated border border-border-strong shadow-2xl flex flex-col",
+            "relative w-full bg-bg-elevated border border-border-strong shadow-2xl flex flex-col",
             // The sheet is flush with the bottom of the screen on phones. The
             // tab bar now sits *behind* the backdrop (z-nav < z-modal), so the
             // only thing to clear is the home indicator.

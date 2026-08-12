@@ -362,6 +362,36 @@ open-writes-URL, close-after-open returning to the list, deep-linked close, othe
 preserved, and switching records. **The remaining unverified piece is the same as everywhere else —
 the real Android back gesture on an authed page needs credentials.**
 
+### Debt paydown — accessibility ✅ **DONE 2026-08-11**
+
+The linter's a11y warnings are now at **zero** (was 49). This finishes `F16` beyond what `T13`
+covered.
+
+- **All 33 remaining `label-has-associated-control`**. Three were labels that already correctly
+  *wrapped* their control — invisible to the rule because it can't see that `<Input>` renders an
+  `<input>`, fixed by mapping the custom components in `eslint.config.js` settings. 26 were paired
+  by id, driven off ESLint's own line numbers so the result was verifiable rather than guessed.
+- **The last four weren't field labels at all** and needed thought rather than a script: a `<label>`
+  wrapping a `Toggle` (which is a `role="switch"` button with its own name — a label pointing at a
+  button does nothing when clicked), and three headings naming a *group* ("Line Items", "Labor
+  type", "Supplies consumed"). Those became `<span id>` + `role="group" aria-labelledby`, and the
+  labour-type buttons gained `aria-pressed` — matching the Tax-schedule switcher already in
+  `ExpenseCategories`.
+- **Clickable `<div>`s became real buttons** where they were genuinely interactive: command-palette
+  results (20 rows, verified keyboard-focusable in-browser), notification rows, dashboard task rows,
+  and the topbar search box. Each gained an accessible name.
+- **`Modal`'s backdrop is now a sibling of the dialog, not its parent.** As a parent it forced an
+  `onClick` on the dialog purely to `stopPropagation`, which made the dialog itself read as a click
+  target. The backdrop is `role="presentation"` — dismissing by tapping it is a convenience, Escape
+  is the real keyboard path. Verified by hit-test that the dialog still paints above it and the
+  backdrop still covers everything else.
+- One genuine false positive remains suppressed with its reason: `<img onError>` in `CompanyLogo`
+  is a load-failure fallback advancing to the next source, not a user interaction.
+
+Remaining warnings are **147**, all engineering debt rather than user-facing: 90 `any` (mostly
+`supabase as any`), 30 `set-state-in-effect`, 12 components declared during render, and a handful of
+React Compiler hints.
+
 ### Also found while implementing
 
 - **`font-compact` did not exist.** `Layout` toggled it from the Settings "density" preference, but

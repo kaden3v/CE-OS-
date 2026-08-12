@@ -642,8 +642,8 @@ export default function Inventory() {
             <form onSubmit={handleLogLoss} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                  <Select
+                  <label htmlFor="inventory-L645" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                  <Select id="inventory-L645"
                     value={lossForm.stage}
                     onChange={(e) => setLossForm({ ...lossForm, stage: e.target.value as typeof lossForm.stage })}
                     className="w-full"
@@ -677,8 +677,8 @@ export default function Inventory() {
               <form id="add-plant-form" onSubmit={handleAddPlant} className="space-y-4">
                 {cultivars.length > 0 && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Link to Cultivar (recommended)</label>
-                    <Select
+                    <label htmlFor="inventory-L680" className="text-sm font-medium">Link to Cultivar (recommended)</label>
+                    <Select id="inventory-L680"
                       value={newPlant.cultivar_id}
                       onChange={(e) => setNewPlant({ ...newPlant, cultivar_id: e.target.value })}
                       className="w-full"
@@ -706,8 +706,8 @@ export default function Inventory() {
                   <Input id="inventory-4" placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({ ...newPlant, common: e.target.value })} className="w-full" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Genus</label>
-                  <Input
+                  <label htmlFor="inventory-L709" className="text-sm font-medium">Genus</label>
+                  <Input id="inventory-L709"
                     required={!newPlant.cultivar_id}
                     placeholder="Pinguicula"
                     value={newPlant.genus}
@@ -748,8 +748,8 @@ export default function Inventory() {
             <form id="edit-plant-form" onSubmit={handleEditSave} className="p-4 space-y-4">
               {cultivars.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Linked cultivar</label>
-                  <Select
+                  <label htmlFor="inventory-L751" className="text-sm font-medium">Linked cultivar</label>
+                  <Select id="inventory-L751"
                     value={editFields.cultivar_id}
                     onChange={(e) => setEditFields({ ...editFields, cultivar_id: e.target.value })}
                     className="w-full"
@@ -776,8 +776,8 @@ export default function Inventory() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Common name</label>
-                <Input
+                <label htmlFor="inventory-L779" className="text-sm font-medium">Common name</label>
+                <Input id="inventory-L779"
                   placeholder="Butterwort"
                   value={editFields.common}
                   onChange={(e) => setEditFields({ ...editFields, common: e.target.value })}
@@ -785,8 +785,8 @@ export default function Inventory() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Genus</label>
-                <Input
+                <label htmlFor="inventory-L788" className="text-sm font-medium">Genus</label>
+                <Input id="inventory-L788"
                   required={!editFields.cultivar_id}
                   placeholder="Pinguicula"
                   value={editFields.genus}

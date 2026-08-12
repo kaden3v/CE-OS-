@@ -42,7 +42,8 @@ export function ReceiptDrawer({ path, onClose }: { path: string | null; onClose:
 
   return (
     <Portal>
-      <div className="fixed inset-0 bg-bg-base/70 backdrop-blur-sm z-modal" onClick={onClose} />
+      {/* Decorative backdrop — Escape is the keyboard path (see the effect above). */}
+      <div role="presentation" className="fixed inset-0 bg-bg-base/70 backdrop-blur-sm z-modal" onClick={onClose} />
       <div className="fixed right-0 top-0 bottom-0 w-[min(560px,100vw)] bg-bg-elevated border-l border-border-strong z-modal flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
           <h2 className="text-base font-medium">Receipt</h2>

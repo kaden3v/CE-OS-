@@ -306,8 +306,8 @@ export default function Licenses() {
               <Input id="licenses-3" placeholder="Permit / registration #" value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Status</label>
-              <Select
+              <label htmlFor="licenses-L309" className="block text-sm font-medium text-text-secondary mb-1">Status</label>
+              <Select id="licenses-L309"
                 value={form.status}
                 onChange={(e) => setForm({ ...form, status: e.target.value as License["status"] })}
                 className="w-full"

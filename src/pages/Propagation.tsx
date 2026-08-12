@@ -389,8 +389,8 @@ export default function Propagation() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                  <Select
+                  <label htmlFor="propagation-L392" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                  <Select id="propagation-L392"
                     className="w-full"
                     value={editForm.stage}
                     onChange={(e) => setEditForm({ ...editForm, stage: e.target.value })}
@@ -414,8 +414,8 @@ export default function Propagation() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
-                <Textarea
+                <label htmlFor="propagation-L417" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+                <Textarea id="propagation-L417"
                   value={editForm.notes}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   rows={2}
@@ -436,8 +436,8 @@ export default function Propagation() {
                 <Input id="propagation-5" required placeholder="P. agnata" value={form.cultivar} onChange={(e) => setForm({ ...form, cultivar: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                <Select
+                <label htmlFor="propagation-L439" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                <Select id="propagation-L439"
                   className="w-full"
                   value={form.stage}
                   onChange={(e) => setForm({ ...form, stage: e.target.value })}

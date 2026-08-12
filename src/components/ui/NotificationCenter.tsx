@@ -10,7 +10,9 @@ export function NotificationCenter({ open, onClose }: { open: boolean, onClose: 
     <AnimatePresence>
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={onClose} />
+          {/* Click-outside catcher. Decorative: Escape and the bell button are
+              the keyboard paths, so it carries no semantics of its own. */}
+          <div role="presentation" className="fixed inset-0 z-40" onClick={onClose} />
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -51,9 +53,11 @@ export function NotificationCenter({ open, onClose }: { open: boolean, onClose: 
               ) : (
                 <div className="divide-y divide-border-subtle/50">
                   {notifications.map((notif) => (
-                    <div
+                    <button
                       key={notif.id}
-                      className={`p-4 flex items-start gap-2 transition-colors hover:bg-bg-hover cursor-pointer ${notif.read ? 'opacity-60' : ''}`}
+                      type="button"
+                      aria-label={`Mark "${notif.title}" as read`}
+                      className={`w-full text-left p-4 flex items-start gap-2 transition-colors hover:bg-bg-hover cursor-pointer ${notif.read ? 'opacity-60' : ''}`}
                       onClick={() => markNotificationRead(notif.id)}
                     >
                       <StatusDot status={notif.status} className="mt-2 flex-shrink-0" />
@@ -64,7 +68,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean, onClose: 
                         </div>
                         <p className="text-xs text-text-secondary line-clamp-2">{notif.description}</p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

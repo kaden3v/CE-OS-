@@ -295,8 +295,12 @@ export function Layout() {
             {getBreadcrumb()}
           </div>
           <div className="hidden md:block flex-1 max-w-md mx-6">
-            <div 
-              className="relative group cursor-text"
+            {/* A real button: it opens the command palette, so it has to be
+                reachable and activatable from the keyboard like one. */}
+            <button
+              type="button"
+              aria-label="Search everywhere"
+              className="relative group cursor-text w-full text-left"
               onClick={() => setCommandPaletteOpen(true)}
             >
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary group-hover:text-text-secondary transition-colors" />
@@ -304,7 +308,7 @@ export function Layout() {
                 <span>Search everywhere...</span>
                 <kbd className="font-sans text-[10px] px-1.5 py-0.5 rounded bg-bg-elevated border border-border-subtle">⌘K</kbd>
               </div>
-            </div>
+            </button>
           </div>
           <div className="flex items-center gap-1 md:gap-2 relative">
             <button className="md:hidden relative p-2.5 rounded-lg transition-colors text-text-secondary hover:text-text-primary active:bg-bg-hover" onClick={() => setCommandPaletteOpen(true)} aria-label="Search">

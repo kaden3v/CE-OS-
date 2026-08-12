@@ -32,6 +32,19 @@ export default tseslint.config(
       "react-hooks": reactHooks,
       "jsx-a11y": jsxA11y,
     },
+    settings: {
+      // Without this the a11y rules can't see that <Input> renders an <input>,
+      // so a label that correctly *wraps* one still reads as unassociated.
+      "jsx-a11y": {
+        components: {
+          Input: "input",
+          Select: "select",
+          Textarea: "textarea",
+          Button: "button",
+          CategorySelect: "select",
+        },
+      },
+    },
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...jsxA11y.flatConfigs.recommended.rules,

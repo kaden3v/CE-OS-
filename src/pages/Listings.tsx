@@ -245,8 +245,8 @@ export default function Listings() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
-                  <Select
+                  <label htmlFor="listings-L248" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
+                  <Select id="listings-L248"
                     className="w-full"
                     value={form.cultivar_id}
                     onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}
@@ -258,8 +258,8 @@ export default function Listings() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
-                  <Select
+                  <label htmlFor="listings-L261" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
+                  <Select id="listings-L261"
                     className="w-full"
                     value={form.channel}
                     onChange={(e) => setForm({ ...form, channel: e.target.value })}

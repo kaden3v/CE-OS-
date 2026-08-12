@@ -347,8 +347,8 @@ export default function Orders() {
                       <div className="flex-1 min-w-0">
                         <CultivarName name={item.name_snapshot} className="font-medium" />
                         <div className="flex items-center gap-2 mt-2">
-                          <label className="text-xs text-text-tertiary">Qty</label>
-                          <Input
+                          <label htmlFor="orders-L350" className="text-xs text-text-tertiary">Qty</label>
+                          <Input id="orders-L350"
                             type="number"
                             min={1}
                             defaultValue={item.qty}
@@ -358,8 +358,8 @@ export default function Orders() {
                               if (qty !== item.qty) handleItemPatch(selected.id, item.id, { qty });
                             }}
                           />
-                          <label className="text-xs text-text-tertiary">$ ea</label>
-                          <Input
+                          <label htmlFor="orders-L361" className="text-xs text-text-tertiary">$ ea</label>
+                          <Input id="orders-L361"
                             type="number"
                             min={0}
                             step="0.01"
@@ -503,8 +503,8 @@ export default function Orders() {
             <form onSubmit={handleCreate} className="p-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Customer</label>
-                  <Select
+                  <label htmlFor="orders-L506" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Customer</label>
+                  <Select id="orders-L506"
                     className="w-full"
                     value={draft.customer_id}
                     onChange={(e) => setDraft({ ...draft, customer_id: e.target.value })}
@@ -537,13 +537,15 @@ export default function Orders() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Line Items</label>
+                  {/* Names the repeated group below, not one control — so a
+                      span + aria-labelledby rather than a <label>. */}
+                  <span id="order-line-items" className="text-xs uppercase tracking-wide text-text-secondary">Line Items</span>
                   <Button type="button" size="sm" variant="ghost" onClick={addLine}>
                     <Plus className="w-3 h-3 mr-1" />
                     Add line
                   </Button>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" role="group" aria-labelledby="order-line-items">
                   {draft.items.map((line, i) => (
                     // Last track is 44px, not 32px: the remove button is
                     // icon-only and now carries a 44px touch minimum, which

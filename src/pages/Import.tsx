@@ -240,10 +240,10 @@ export default function Import() {
         </div>
 
         <div>
-          <label className="text-xs uppercase tracking-wide text-text-secondary block mb-2">
+          <label htmlFor="import-L243" className="text-xs uppercase tracking-wide text-text-secondary block mb-2">
             Or paste CSV (header row first)
           </label>
-          <Textarea
+          <Textarea id="import-L243"
             value={csvText}
             onChange={(e) => setCsvText(e.target.value)}
             rows={8}

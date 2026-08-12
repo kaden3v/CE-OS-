@@ -327,8 +327,8 @@ export default function Customers() {
                           <Input id="customers-1" value={subForm.tier} onChange={(e) => setSubForm({ ...subForm, tier: e.target.value })} />
                         </div>
                         <div>
-                          <label className="block text-xs text-text-tertiary mb-1">Billing</label>
-                          <Select
+                          <label htmlFor="customers-L330" className="block text-xs text-text-tertiary mb-1">Billing</label>
+                          <Select id="customers-L330"
                             value={subForm.billing_cycle}
                             onChange={(e) => setSubForm({ ...subForm, billing_cycle: e.target.value })}
                             className="w-full"
@@ -403,8 +403,8 @@ export default function Customers() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Notes</label>
-                <Textarea
+                <label htmlFor="customers-L406" className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Notes</label>
+                <Textarea id="customers-L406"
                   value={editForm.notes}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   rows={3}

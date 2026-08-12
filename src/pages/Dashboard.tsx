@@ -335,17 +335,23 @@ export default function Dashboard() {
                    </div>
                 )}
                 {pendingTasks.map((task) => (
-                  <div key={task.id} className="flex items-center gap-2 p-2 hover:bg-bg-hover rounded-lg transition-colors cursor-pointer group" onClick={() => toggleTask(task.id)}>
-                    <div className="w-5 h-5 rounded-full border border-border-strong flex items-center justify-center group-hover:border-status-ok group-hover:text-status-ok transition-colors">
+                  <button
+                    key={task.id}
+                    type="button"
+                    aria-label={`Mark "${task.title}" complete`}
+                    className="w-full text-left flex items-center gap-2 p-2 hover:bg-bg-hover rounded-lg transition-colors cursor-pointer group"
+                    onClick={() => toggleTask(task.id)}
+                  >
+                    <span className="w-5 h-5 rounded-full border border-border-strong flex items-center justify-center group-hover:border-status-ok group-hover:text-status-ok transition-colors shrink-0">
                       <CheckCircle2 className="w-3 h-3 opacity-0 group-hover:opacity-100" />
-                    </div>
-                    <div className="flex-1 text-sm">{task.title}</div>
+                    </span>
+                    <span className="flex-1 text-sm">{task.title}</span>
                     {task.due !== "No date" && (
-                      <div className="text-xs text-text-secondary px-2 py-2 rounded bg-bg-active">
+                      <span className="text-xs text-text-secondary px-2 py-0.5 rounded bg-bg-active">
                         {task.due}
-                      </div>
+                      </span>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>
