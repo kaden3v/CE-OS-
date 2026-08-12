@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ACTION_META, ENTITY_LABELS, humanizeField } from "@/lib/activityMeta";
 import { monthRange, ytdRange } from "@/lib/dates";
+import { Select } from "@/components/ui/Select";
 import {
   type ActivityFilters as Filters,
   EMPTY_ACTIVITY_FILTERS,
@@ -17,8 +18,8 @@ interface ActivityFiltersProps {
   members: OrgMember[];
 }
 
-const selectCls =
-  "bg-bg-elevated border border-border-strong rounded-[8px] px-2 py-2 text-sm text-text-primary focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors";
+// Field styling now lives in the Select primitive; this only carries colour.
+const selectCls = "text-text-primary";
 
 export function ActivityFilters({ filters, setFilters, members }: ActivityFiltersProps) {
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
@@ -37,25 +38,25 @@ export function ActivityFilters({ filters, setFilters, members }: ActivityFilter
         />
       </div>
 
-      <select className={selectCls} value={filters.action} onChange={(e) => set({ action: e.target.value })} aria-label="Filter by action">
+      <Select className={selectCls} value={filters.action} onChange={(e) => set({ action: e.target.value })} aria-label="Filter by action">
         <option value="">All actions</option>
         {Object.entries(ACTION_META).map(([key, meta]) => (
           <option key={key} value={key}>
             {humanizeField(meta.label)}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <select className={selectCls} value={filters.entity} onChange={(e) => set({ entity: e.target.value })} aria-label="Filter by record type">
+      <Select className={selectCls} value={filters.entity} onChange={(e) => set({ entity: e.target.value })} aria-label="Filter by record type">
         <option value="">All records</option>
         {Object.keys(ENTITY_LABELS).map((key) => (
           <option key={key} value={key}>
             {humanizeField(key)}
           </option>
         ))}
-      </select>
+      </Select>
 
-      <select className={selectCls} value={filters.actorId} onChange={(e) => set({ actorId: e.target.value })} aria-label="Filter by person">
+      <Select className={selectCls} value={filters.actorId} onChange={(e) => set({ actorId: e.target.value })} aria-label="Filter by person">
         <option value="">Anyone</option>
         <option value={SYSTEM_ACTOR}>System (automated)</option>
         {members.map((m) => (
@@ -63,7 +64,7 @@ export function ActivityFilters({ filters, setFilters, members }: ActivityFilter
             {m.displayName?.trim() || "Teammate"}
           </option>
         ))}
-      </select>
+      </Select>
 
       <Input type="date" value={filters.from} onChange={(e) => set({ from: e.target.value })} className="text-text-secondary" aria-label="From date" />
       <Input type="date" value={filters.to} onChange={(e) => set({ to: e.target.value })} className="text-text-secondary" aria-label="To date" />

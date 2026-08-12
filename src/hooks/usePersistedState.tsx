@@ -12,7 +12,9 @@ export function usePersistedState<T>(
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw !== null) return JSON.parse(raw) as T;
-    } catch {}
+    } catch {
+      // Unreadable/corrupt storage falls back to `initial`.
+    }
     return typeof initial === "function" ? (initial as () => T)() : initial;
   });
 
@@ -24,7 +26,9 @@ export function usePersistedState<T>(
     }
     try {
       localStorage.setItem(storageKey, JSON.stringify(value));
-    } catch {}
+    } catch {
+      // Private mode or quota exceeded — persistence is best-effort.
+    }
   }, [storageKey, value]);
 
   return [value, setValue];

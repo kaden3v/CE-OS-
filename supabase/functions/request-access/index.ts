@@ -35,8 +35,8 @@ const corsHeaders: Record<string, string> = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// 100 years out — long enough that we never accidentally clear it via TTL.
-const BANNED_UNTIL = "2125-01-01T00:00:00Z";
+// The ban is applied as a `ban_duration` on createUser below, not as an
+// absolute timestamp — the old BANNED_UNTIL constant here was never read.
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

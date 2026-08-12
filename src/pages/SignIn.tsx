@@ -1,4 +1,5 @@
 import { useState, FormEvent } from "react";
+import { Textarea } from "@/components/ui/Textarea";
 import { Navigate, useLocation } from "react-router";
 import { Sprout, Mail, Lock, ArrowRight, X, Send, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -273,14 +274,14 @@ export default function SignIn() {
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="req-msg" className="text-xs uppercase tracking-wide text-text-secondary">Message (optional)</label>
-                  <textarea
+                  <Textarea
                     id="req-msg"
                     rows={2}
                     placeholder="Why you'd like access"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     maxLength={500}
-                    className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-3 py-2 text-sm placeholder:text-text-secondary focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors resize-none"
+                    className="w-full resize-none"
                   />
                 </div>
                 {errorMsg && <div className="text-xs text-status-alert">{errorMsg}</div>}

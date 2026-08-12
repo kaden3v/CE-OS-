@@ -8,6 +8,7 @@ import { todayISO } from "@/lib/dates";
 import { formatMoney } from "@/lib/format";
 import { logSupplyPurchase, updateSupplyPurchase } from "@/lib/cogs";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Supply = Tables<"supplies">;
 type Vendor = Tables<"vendors">;
@@ -91,35 +92,35 @@ export function SupplyPurchaseModal({ open, onClose, supplies, vendors, presetSu
     <Modal open={open} onClose={onClose} title={editing ? "Edit Purchase" : "Log Purchase"} size="md">
       <form onSubmit={submit} className="p-4 space-y-4">
         <div>
-          <label className={labelCls}>Supply</label>
-          <select className={selectCls} value={supplyId} disabled={!!editing || !!presetSupplyId} onChange={(e) => setSupplyId(e.target.value)}>
+          <label htmlFor="supplypurchasemodal-1" className={labelCls}>Supply</label>
+          <Select id="supplypurchasemodal-1" className={selectCls} value={supplyId} disabled={!!editing || !!presetSupplyId} onChange={(e) => setSupplyId(e.target.value)}>
             <option value="">— Pick supply —</option>
             {supplies.map((s) => (
               <option key={s.id} value={s.id}>{s.name}{s.unit ? ` (${s.unit})` : ""}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Quantity</label>
-            <Input type="number" step="0.01" min="0" required placeholder="0" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <label htmlFor="supplypurchasemodal-2" className={labelCls}>Quantity</label>
+            <Input id="supplypurchasemodal-2" type="number" step="0.01" min="0" required placeholder="0" value={qty} onChange={(e) => setQty(e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Total cost $</label>
-            <Input type="number" step="0.01" min="0" required placeholder="0.00" value={totalCost} onChange={(e) => setTotalCost(e.target.value)} />
+            <label htmlFor="supplypurchasemodal-3" className={labelCls}>Total cost $</label>
+            <Input id="supplypurchasemodal-3" type="number" step="0.01" min="0" required placeholder="0.00" value={totalCost} onChange={(e) => setTotalCost(e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Vendor</label>
-            <select className={selectCls} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+            <label htmlFor="supplypurchasemodal-4" className={labelCls}>Vendor</label>
+            <Select id="supplypurchasemodal-4" className={selectCls} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
               <option value="">— None —</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            </Select>
           </div>
           <div>
-            <label className={labelCls}>Date</label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <label htmlFor="supplypurchasemodal-5" className={labelCls}>Date</label>
+            <Input id="supplypurchasemodal-5" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
         <div className="text-right text-sm text-text-secondary">

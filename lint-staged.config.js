@@ -6,5 +6,13 @@
 // single project-wide command and ignores lint-staged's file list. The glob
 // still gates execution — the check only runs when a .ts/.tsx file is staged.
 export default {
-  '*.{ts,tsx}': () => 'tsc --noEmit -p tsconfig.json',
+  '*.{ts,tsx}': [
+    () => 'tsc --noEmit -p tsconfig.json',
+    // ESLint DOES accept file arguments, so this runs only on what's staged.
+    // No --max-warnings here: errors block the commit, warnings are printed.
+    // Most files still carry known `any`/hook-dep warnings, so a zero-warning
+    // gate would block almost every commit and just get bypassed. CI holds the
+    // project-wide warning baseline instead.
+    'eslint',
+  ],
 };

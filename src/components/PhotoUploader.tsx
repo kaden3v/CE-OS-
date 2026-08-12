@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import { logDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Photo = Tables<"plant_photos">;
 
@@ -24,6 +25,7 @@ interface Props {
  * restricts writes to the authed user's namespace.
  */
 export function PhotoUploader({ inventoryId }: Props) {
+  const confirm = useConfirm();
   const { user, activeOrgId } = useAuth();
   const { addToast } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,7 +120,7 @@ export function PhotoUploader({ inventoryId }: Props) {
 
   const handleDelete = async (photo: Photo) => {
     if (!isAuthed) return;
-    if (!confirm("Delete this photo?")) return;
+    if (!(await confirm({ title: "Delete this photo?", confirmLabel: "Delete", tone: "danger" }))) return;
     const { error: storageErr } = await supabase!.storage.from(BUCKET).remove([photo.storage_path]);
     if (storageErr) {
       logDbError("photo storage delete", storageErr as any);

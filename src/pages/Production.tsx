@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, FormEvent } from "react";
 import { useLocation } from "react-router";
-import { Factory, Plus, X, Trash2 } from "lucide-react";
+import { Factory, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import type { ColumnDef } from "@tanstack/react-table";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
@@ -16,6 +18,8 @@ import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, todayISO, isoYear, currentYear } from "@/lib/dates";
 import { logProductionRun, deleteProductionRun } from "@/lib/cogs";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Run = Tables<"production_runs">;
 type RunSupply = Tables<"production_run_supplies">;
@@ -26,8 +30,9 @@ type DraftSupply = { supply_id: string; qty_used: number };
 type LaborType = "owner" | "hired";
 
 export default function Production() {
+  const confirm = useConfirm();
   const { activeOrgId } = useAuth();
-  const { data: runs, isLoading, refresh: refreshRuns } = useEntity<Run>("production_runs", [], { orderBy: "run_on" });
+  const { data: runs, isLoading, error, refresh: refreshRuns } = useEntity<Run>("production_runs", [], { orderBy: "run_on" });
   const { data: runSupplies, refresh: refreshRunSupplies } = useEntity<RunSupply>("production_run_supplies", [], { orderBy: "created_at" });
   const { data: supplies, refresh: refreshSupplies } = useEntity<Supply>("supplies", []);
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
@@ -106,7 +111,7 @@ export default function Production() {
   };
 
   const handleDelete = async (run: Run) => {
-    if (!confirm("Delete this run? Consumed stock will be restored to each supply.")) return;
+    if (!(await confirm({ title: "Delete this run?", message: "Consumed stock will be restored to each supply.", confirmLabel: "Delete", tone: "danger" }))) return;
     try {
       await deleteProductionRun(run.id);
       await Promise.all([refreshRuns(), refreshRunSupplies(), refreshSupplies()]);
@@ -128,20 +133,20 @@ export default function Production() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, materialsByRun]);
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Run>[]>(
     () => [
-      { accessorKey: "run_on", header: "Date", cell: (info: any) => <span className="text-text-secondary whitespace-nowrap">{formatBusinessDate(info.getValue())}</span> },
-      { accessorKey: "description", header: "Run", cell: (info: any) => <span className="font-medium">{info.getValue() ?? "—"}</span> },
-      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
-      { accessorKey: "quantity", header: "Units", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },
-      { id: "materials", header: "Materials", cell: (info: any) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).materials)}</span> },
-      { id: "labor", header: "Labor", cell: (info: any) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).labor)} {info.row.original.labor_type === "hired" ? <span className="text-[10px] uppercase text-status-info ml-1">hired</span> : null}</span> },
-      { id: "total", header: "Run cost", cell: (info: any) => <span className="tabular-nums font-medium">{formatMoney(runCost(info.row.original).total)}</span> },
-      { id: "perUnit", header: "Per unit", cell: (info: any) => <span className="tabular-nums">{formatMoney(runCost(info.row.original).perUnit)}</span> },
+      { accessorKey: "run_on", header: "Date", cell: (info) => <span className="text-text-secondary whitespace-nowrap">{formatBusinessDate(info.row.original.run_on)}</span> },
+      { accessorKey: "description", header: "Run", cell: (info) => <span className="font-medium">{info.row.original.description ?? "—"}</span> },
+      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info) => <CultivarName name={cultivarName(info.row.original.cultivar_id)} className="text-text-secondary" /> },
+      { accessorKey: "quantity", header: "Units", cell: (info) => <span className="tabular-nums">{info.row.original.quantity}</span> },
+      { id: "materials", header: "Materials", cell: (info) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).materials)}</span> },
+      { id: "labor", header: "Labor", cell: (info) => <span className="tabular-nums text-text-secondary">{formatMoney(runCost(info.row.original).labor)} {info.row.original.labor_type === "hired" ? <span className="text-[10px] uppercase text-status-info ml-1">hired</span> : null}</span> },
+      { id: "total", header: "Run cost", cell: (info) => <span className="tabular-nums font-medium">{formatMoney(runCost(info.row.original).total)}</span> },
+      { id: "perUnit", header: "Per unit", cell: (info) => <span className="tabular-nums">{formatMoney(runCost(info.row.original).perUnit)}</span> },
       {
         id: "actions",
         header: "",
-        cell: (info: any) => (
+        cell: (info) => (
           <button onClick={() => handleDelete(info.row.original)} aria-label="Delete run" className="p-1.5 rounded text-text-secondary hover:text-status-alert hover:bg-bg-active">
             <Trash2 className="w-4 h-4" />
           </button>
@@ -175,7 +180,9 @@ export default function Production() {
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
         {isLoading ? (
           <LoadingTable cols={9} rows={8} />
-        ) : runs.length === 0 ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refreshRuns} />
+          ) : runs.length === 0 ? (
           <EmptyState
             icon={Factory}
             title="No production runs yet"
@@ -187,48 +194,46 @@ export default function Production() {
         )}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setIsOpen(false)}>
-          <Card role="dialog" aria-modal="true" aria-labelledby="production-run-title" onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85dvh] rounded-t-2xl sm:rounded-xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 id="production-run-title" className="text-lg font-semibold">Log Production Run</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Log Production Run" size="lg">
+            <form onSubmit={handleCreate} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Description</label>
-                <Input placeholder="Potted up 40 D. capensis into 3.5-inch pots" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <label htmlFor="production-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Description</label>
+                <Input id="production-1" placeholder="Potted up 40 D. capensis into 3.5-inch pots" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={form.cultivar_id} onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}>
+                  <label htmlFor="production-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
+                  <Select id="production-2" className="w-full" value={form.cultivar_id} onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}>
                     <option value="">— None —</option>
                     {cultivars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Units produced</label>
-                  <Input type="number" min="0" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} />
+                  <label htmlFor="production-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Units produced</label>
+                  <Input id="production-3" type="number" min="0" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor hours</label>
-                  <Input type="number" step="0.25" min="0" value={form.labor_hours} onChange={(e) => setForm({ ...form, labor_hours: Number(e.target.value) || 0 })} />
+                  <label htmlFor="production-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor hours</label>
+                  <Input id="production-4" type="number" step="0.25" min="0" value={form.labor_hours} onChange={(e) => setForm({ ...form, labor_hours: Number(e.target.value) || 0 })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor rate ($/hr)</label>
-                  <Input type="number" step="0.01" min="0" value={form.labor_rate} onChange={(e) => setForm({ ...form, labor_rate: Number(e.target.value) || 0 })} />
+                  <label htmlFor="production-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor rate ($/hr)</label>
+                  <Input id="production-5" type="number" step="0.01" min="0" value={form.labor_rate} onChange={(e) => setForm({ ...form, labor_rate: Number(e.target.value) || 0 })} />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor type</label>
-                <div className="inline-flex rounded-lg border border-border-subtle bg-bg-base p-0.5 text-sm">
+                {/* A toggle-button group, not a single control: the name goes
+                    on the group and each button reports its own pressed state.
+                    Matches the Tax schedule switcher in ExpenseCategories. */}
+                <span id="production-labor-type" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Labor type</span>
+                <div role="group" aria-labelledby="production-labor-type" className="inline-flex rounded-lg border border-border-subtle bg-bg-base p-0.5 text-sm">
                   {(["owner", "hired"] as const).map((t) => (
                     <button key={t} type="button" onClick={() => setForm({ ...form, labor_type: t })}
+                      aria-pressed={form.labor_type === t}
                       className={cn("px-3 py-1.5 rounded-md capitalize transition-colors", form.labor_type === t ? "bg-bg-active text-text-primary" : "text-text-secondary hover:text-text-primary")}>
                       {t}
                     </button>
@@ -241,7 +246,8 @@ export default function Production() {
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Supplies consumed</label>
+                  {/* Names the repeated group below, not one control. */}
+                  <span id="production-supplies" className="text-xs uppercase tracking-wide text-text-secondary">Supplies consumed</span>
                   <Button type="button" size="sm" variant="ghost" onClick={addSupplyLine} disabled={supplies.length === 0}>
                     <Plus className="w-3 h-3 mr-1" /> Add supply
                   </Button>
@@ -249,17 +255,17 @@ export default function Production() {
                 {supplies.length === 0 && (
                   <p className="text-xs text-text-tertiary italic">No supplies tracked yet — add them under Finances → Supplies to capture material costs.</p>
                 )}
-                <div className="space-y-2">
+                <div className="space-y-2" role="group" aria-labelledby="production-supplies">
                   {draftSupplies.map((line, i) => {
                     const sup = supplies.find((x) => x.id === line.supply_id);
                     return (
                       <div key={i} className="grid grid-cols-[2fr_80px_90px_32px] gap-2 items-center">
-                        <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={line.supply_id} onChange={(e) => updateSupplyLine(i, { supply_id: e.target.value })}>
+                        <Select className="w-full" value={line.supply_id} onChange={(e) => updateSupplyLine(i, { supply_id: e.target.value })}>
                           <option value="">— Pick supply —</option>
                           {supplies.map((s) => (
                             <option key={s.id} value={s.id}>{s.name} · {Number(s.on_hand)}{s.unit ? ` ${s.unit}` : ""} @ {formatMoney(s.cost ?? 0)}</option>
                           ))}
-                        </select>
+                        </Select>
                         <Input type="number" step="0.01" min="0" placeholder="Qty" value={line.qty_used} onChange={(e) => updateSupplyLine(i, { qty_used: Number(e.target.value) || 0 })} />
                         <span className="text-xs text-text-secondary tabular-nums text-right">{formatMoney(sup ? Number(sup.cost ?? 0) * line.qty_used : 0)}</span>
                         <Button type="button" variant="ghost" size="icon" onClick={() => removeSupplyLine(i)} aria-label="Remove supply line"><Trash2 className="w-4 h-4" /></Button>
@@ -280,9 +286,7 @@ export default function Production() {
                 <Button type="submit" disabled={isSaving}>{isSaving ? "Saving…" : "Log Run"}</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

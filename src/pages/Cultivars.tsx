@@ -1,17 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Plus, X, ExternalLink } from "lucide-react";
 import { Link } from "react-router";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { cn } from "@/lib/utils";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { useFocusParam } from "@/hooks/useFocusParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
@@ -21,7 +24,7 @@ type Cultivar = Tables<"cultivars">;
 const SEED: Cultivar[] = [];
 
 export default function Cultivars() {
-  const { data: cultivars, add, isLoading } = useEntity<Cultivar>("cultivars", SEED, {
+  const { data: cultivars, add, isLoading, error, refresh } = useEntity<Cultivar>("cultivars", SEED, {
     toRow: (c) => ({
       name: c.name,
       common: c.common,
@@ -31,9 +34,12 @@ export default function Cultivars() {
   });
   const { addToast } = useApp();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useDrawerParam();
   useFocusParam(cultivars, setSelectedId);
   const selected = useMemo(() => cultivars.find((c) => c.id === selectedId) ?? null, [cultivars, selectedId]);
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected, () => setSelectedId(null));
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({ name: "", common: "", genus: "Pinguicula", origin: "" });
@@ -59,12 +65,12 @@ export default function Cultivars() {
     addToast({ title: "Cultivar added", description: name, status: "ok" });
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Cultivar>[]>(
     () => [
-      { accessorKey: "name", header: "Name", cell: (info: any) => <CultivarName name={info.getValue()} className="font-medium" /> },
-      { accessorKey: "common", header: "Common", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
-      { accessorKey: "genus", header: "Genus", cell: (info: any) => (info.getValue() ? <Badge>{info.getValue()}</Badge> : null) },
-      { accessorKey: "origin", header: "Origin", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
+      { accessorKey: "name", header: "Name", cell: (info) => <CultivarName name={info.row.original.name} className="font-medium" /> },
+      { accessorKey: "common", header: "Common", cell: (info) => <span className="text-text-secondary">{info.row.original.common ?? "—"}</span> },
+      { accessorKey: "genus", header: "Genus", cell: (info) => (info.row.original.genus ? <Badge>{info.row.original.genus}</Badge> : null) },
+      { accessorKey: "origin", header: "Origin", cell: (info) => <span className="text-text-secondary">{info.row.original.origin ?? "—"}</span> },
     ],
     [],
   );
@@ -91,7 +97,9 @@ export default function Cultivars() {
         <Card className="flex-1 overflow-auto flex flex-col">
           {isLoading ? (
             <LoadingTable cols={4} rows={10} />
-          ) : isEmpty ? (
+            ) : error ? (
+              <ErrorState description={error} onRetry={refresh} />
+            ) : isEmpty ? (
             <EmptyState
               title="No cultivars yet"
               description="Add the first one to begin tracking parentage and care."
@@ -105,13 +113,13 @@ export default function Cultivars() {
 
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
               <div>
                 <CultivarName className="text-xl font-semibold" name={selected.name} />
                 <div className="text-sm text-text-secondary">{selected.common ?? "—"}</div>
@@ -159,21 +167,21 @@ export default function Cultivars() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Add Cultivar" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
-                <Input required placeholder="P. agnata 'Red'" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label htmlFor="cultivars-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Name *</label>
+                <Input id="cultivars-1" required placeholder="P. agnata 'Red'" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Common</label>
-                <Input placeholder="Red Mexican Butterwort" value={form.common} onChange={(e) => setForm({ ...form, common: e.target.value })} />
+                <label htmlFor="cultivars-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Common</label>
+                <Input id="cultivars-2" placeholder="Red Mexican Butterwort" value={form.common} onChange={(e) => setForm({ ...form, common: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Genus</label>
-                  <Input placeholder="Pinguicula" value={form.genus} onChange={(e) => setForm({ ...form, genus: e.target.value })} />
+                  <label htmlFor="cultivars-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Genus</label>
+                  <Input id="cultivars-3" placeholder="Pinguicula" value={form.genus} onChange={(e) => setForm({ ...form, genus: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Origin</label>
-                  <Input placeholder="Mexico / Hybrid" value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} />
+                  <label htmlFor="cultivars-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Origin</label>
+                  <Input id="cultivars-4" placeholder="Mexico / Hybrid" value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

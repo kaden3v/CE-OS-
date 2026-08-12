@@ -20,7 +20,7 @@ type Command = {
 };
 
 export function CommandPalette() {
-  const { isCommandPaletteOpen, setCommandPaletteOpen, setGlobalOrderViewId } = useApp();
+  const { isCommandPaletteOpen, setCommandPaletteOpen } = useApp();
   const { activeOrgId } = useAuth();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -92,10 +92,9 @@ export function CommandPalette() {
             group: "Orders",
             label: `${r.id.slice(0, 8)} · ${r.customers.name}`,
             icon: <ShoppingCart className="w-4 h-4 text-text-tertiary" />,
-            onSelect: () => {
-              setGlobalOrderViewId(r.id);
-              handleNavigate("/orders");
-            },
+            // Deep-link rather than priming cross-page context: the drawer's
+            // open state lives in the URL now (see useDrawerParam).
+            onSelect: () => handleNavigate(`/orders?view=${encodeURIComponent(r.id)}`),
           }));
       (ven.data ?? []).forEach((r: { id: string; name: string }) =>
         found.push({ id: `ven-${r.id}`, group: "Vendors", label: r.name, icon: <Store className="w-4 h-4 text-text-tertiary" />, onSelect: () => handleNavigate(`/finances/vendors/${r.id}`) }));
@@ -194,7 +193,11 @@ export function CommandPalette() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm z-50 flex items-start justify-center pt-[15vh]"
+          // Phones: a full-height sheet. The old `pt-[15vh]` + fixed 360px list
+          // pushed the results and footer below the fold as soon as the
+          // software keyboard opened — you typed into a box whose matches you
+          // could not see. dvh (not vh) so the URL bar doesn't add to it.
+          className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm z-modal flex items-stretch sm:items-start justify-center sm:pt-[15dvh]"
           onClick={() => setCommandPaletteOpen(false)}
           onKeyDown={onPaletteKeyDown}
         >
@@ -203,7 +206,7 @@ export function CommandPalette() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="w-full max-w-[560px] bg-bg-base/90 backdrop-blur-lg border border-border-subtle rounded-xl overflow-hidden shadow-2xl mr-4 ml-4"
+            className="w-full sm:max-w-[560px] bg-bg-base/90 backdrop-blur-lg border-0 sm:border border-border-subtle rounded-none sm:rounded-xl overflow-hidden shadow-2xl mx-0 sm:mx-4 flex flex-col pt-safe sm:pt-0"
             onClick={e => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -228,7 +231,7 @@ export function CommandPalette() {
               </button>
             </div>
 
-            <div ref={listRef} className="max-h-[360px] overflow-y-auto p-2">
+            <div ref={listRef} className="flex-1 sm:flex-none sm:max-h-[360px] overflow-y-auto overscroll-contain p-2">
               {filtered.length === 0 && (
                 <div className="px-2 py-2 text-sm text-text-tertiary text-center">
                   No matches for "{query}".
@@ -237,7 +240,7 @@ export function CommandPalette() {
               {Object.entries(groups).map(([group, items]) => (
                 <div key={group} className="mb-4 last:mb-0">
                   <div className={cn(
-                    "px-2 py-2 text-xs font-medium uppercase tracking-wider mb-2 flex items-center gap-2",
+                    "px-2 py-1 text-xs font-medium uppercase tracking-wider mb-2 flex items-center gap-2",
                     group === "Scenarios" ? "text-accent-brand" : "text-text-secondary",
                   )}>
                     {group === "Scenarios" && <PlayCircle className="w-3.5 h-3.5" />}
@@ -247,29 +250,31 @@ export function CommandPalette() {
                     const idx = runningIndex++;
                     const isActive = idx === activeIndex;
                     return (
-                      <div
+                      <button
                         key={cmd.id}
+                        type="button"
                         data-cmd-index={idx}
                         onClick={cmd.onSelect}
                         onMouseEnter={() => setActiveIndex(idx)}
                         className={cn(
-                          "px-2 py-2 text-sm flex items-center gap-2 rounded-lg cursor-pointer transition-colors",
+                          "w-full text-left px-2 py-2 text-sm flex items-center gap-2 rounded-lg cursor-pointer transition-colors",
                           isActive ? "bg-bg-active text-text-primary" : "text-text-secondary",
                         )}
                       >
                         {cmd.icon ?? <ArrowRight className="w-4 h-4 text-text-tertiary opacity-50" />}
                         <span className="flex-1">{cmd.label}</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               ))}
             </div>
 
-            <div className="px-4 py-2 border-t border-border-subtle text-xs text-text-tertiary flex items-center justify-center gap-4 bg-bg-base/30">
-              <span><kbd className="font-sans px-2 py-2 rounded bg-bg-active border border-border-subtle">↑↓</kbd> to navigate</span>
-              <span><kbd className="font-sans px-2 py-2 rounded bg-bg-active border border-border-subtle">↵</kbd> to select</span>
-              <span><kbd className="font-sans px-2 py-2 rounded bg-bg-active border border-border-subtle">esc</kbd> to close</span>
+            {/* Keyboard-only affordances — meaningless on a touch device. */}
+            <div className="hidden sm:flex px-4 py-2 border-t border-border-subtle text-xs text-text-tertiary items-center justify-center gap-4 bg-bg-base/30">
+              <span><kbd className="font-sans px-1.5 py-0.5 rounded bg-bg-active border border-border-subtle">↑↓</kbd> to navigate</span>
+              <span><kbd className="font-sans px-1.5 py-0.5 rounded bg-bg-active border border-border-subtle">↵</kbd> to select</span>
+              <span><kbd className="font-sans px-1.5 py-0.5 rounded bg-bg-active border border-border-subtle">esc</kbd> to close</span>
             </div>
           </motion.div>
         </motion.div>

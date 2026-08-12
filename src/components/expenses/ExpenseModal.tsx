@@ -11,6 +11,7 @@ import { RECEIPT_ACCEPT, isAcceptedReceipt, receiptTooLarge } from "@/lib/receip
 import type { ReceiptDraft } from "@/lib/receiptScan";
 import { CategorySelect } from "./CategorySelect";
 import { PAYMENT_METHODS, type Expense, type ExpenseFormData, type Vendor } from "./types";
+import { Select } from "@/components/ui/Select";
 
 interface ExpenseModalProps {
   open: boolean;
@@ -159,8 +160,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Amount *</label>
-            <Input
+            <label htmlFor="expensemodal-L152" className={labelCls}>Amount *</label>
+            <Input id="expensemodal-L152"
               type="number"
               step="0.01"
               min="0"
@@ -171,30 +172,30 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
             />
           </div>
           <div>
-            <label className={labelCls}>Date</label>
-            <Input type="date" value={form.occurred_on} onChange={(e) => setForm({ ...form, occurred_on: e.target.value })} />
+            <label htmlFor="expensemodal-1" className={labelCls}>Date</label>
+            <Input id="expensemodal-1" type="date" value={form.occurred_on} onChange={(e) => setForm({ ...form, occurred_on: e.target.value })} />
           </div>
         </div>
 
         <div>
-          <label className={labelCls}>Category</label>
-          <CategorySelect value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="Uncategorized" />
+          <label htmlFor="expensemodal-L170" className={labelCls}>Category</label>
+          <CategorySelect id="expensemodal-L170" value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="Uncategorized" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Payment method</label>
-            <select className={selectCls} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
+            <label htmlFor="expensemodal-2" className={labelCls}>Payment method</label>
+            <Select id="expensemodal-2" className={selectCls} value={form.payment_method} onChange={(e) => setForm({ ...form, payment_method: e.target.value })}>
               {PAYMENT_METHODS.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
-            <label className={labelCls}>Vendor</label>
+            <label htmlFor="expensemodal-L184" className={labelCls}>Vendor</label>
             {creatingVendor ? (
               <div className="flex items-center gap-2">
-                <Input
+                <Input id="expensemodal-L184"
                   autoFocus
                   placeholder="New vendor name"
                   value={newVendor}
@@ -215,12 +216,12 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <select className={selectCls} value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
+                <Select className={selectCls} value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
                   <option value="">— None —</option>
                   {vendors.map((v) => (
                     <option key={v.id} value={v.id}>{v.name}</option>
                   ))}
-                </select>
+                </Select>
                 <button type="button" onClick={() => setCreatingVendor(true)} aria-label="New vendor" className="shrink-0 p-2 rounded-lg border border-border-strong hover:bg-bg-hover text-text-secondary">
                   <Plus className="w-4 h-4" />
                 </button>
@@ -230,8 +231,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
         </div>
 
         <div>
-          <label className={labelCls}>Memo</label>
-          <Input placeholder="Optional" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          <label htmlFor="expensemodal-3" className={labelCls}>Memo</label>
+          <Input id="expensemodal-3" placeholder="Optional" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
 
         <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
@@ -244,8 +245,8 @@ export function ExpenseModal({ open, onClose, vendors, editing, onSubmit, onCrea
 
         {/* Receipt */}
         <div>
-          <label className={labelCls}>Receipt</label>
-          <input
+          <label htmlFor="expensemodal-L237" className={labelCls}>Receipt</label>
+          <input id="expensemodal-L237"
             ref={fileRef}
             type="file"
             accept={RECEIPT_ACCEPT}

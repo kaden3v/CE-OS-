@@ -21,6 +21,7 @@ import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, formatBusinessDateTime } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
 import type { Expense } from "./types";
+import { Select } from "@/components/ui/Select";
 
 export type ImportBatch = Tables<"expense_import_batches">;
 
@@ -309,7 +310,7 @@ export function CsvImportWizard({
               ] as const).map(([key, label]) => (
                 <div key={key}>
                   <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">{label}</label>
-                  <select
+                  <Select
                     className={selectCls}
                     value={mapping[key]}
                     onChange={(e) => setMapping((m) => ({ ...m, [key]: Number(e.target.value) }))}
@@ -318,7 +319,7 @@ export function CsvImportWizard({
                     {headers.map((h, i) => (
                       <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               ))}
             </div>
@@ -360,7 +361,7 @@ export function CsvImportWizard({
               <div className="flex items-center gap-4 ml-auto">
                 <label className="flex items-center gap-2 text-text-secondary">
                   Import
-                  <select
+                  <Select
                     className={selectClsSmall}
                     value={polarity}
                     onChange={(e) => setPolarity(e.target.value as Polarity)}
@@ -369,12 +370,15 @@ export function CsvImportWizard({
                     <option value="all">All rows</option>
                     <option value="out">Money out only</option>
                     <option value="in">Money in only</option>
-                  </select>
+                  </Select>
                 </label>
-                <label className="flex items-center gap-2 text-text-secondary">
+                {/* Not a <label>: Toggle renders a role="switch" button that
+                    carries its own accessible name, and a label pointing at a
+                    button does nothing when clicked. */}
+                <span className="flex items-center gap-2 text-text-secondary">
                   Skip duplicates
                   <Toggle checked={skipDuplicates} onChange={setSkipDuplicates} ariaLabel="Skip duplicates" />
-                </label>
+                </span>
               </div>
             </div>
 

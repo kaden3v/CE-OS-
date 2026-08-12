@@ -18,9 +18,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity";
 import { friendlyDbError } from "@/lib/dbErrors";
+import { Select } from "@/components/ui/Select";
 
 import type { Tables } from "@/lib/database.types";
 import { useEntity as useEntityRaw } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type InventoryRow = Tables<"inventory">;
 type CultivarRow = Tables<"cultivars">;
@@ -83,7 +87,8 @@ const toRow = (it: Partial<InventoryItem>): Record<string, unknown> => {
 
 
 export default function Inventory() {
-  const { data: inventory, add: addInventoryItem, update: updateInventoryItem, remove: removeInventoryItem } = useEntityRaw<InventoryItem, InventoryRow>(
+  const confirm = useConfirm();
+  const { data: inventory, add: addInventoryItem, update: updateInventoryItem, remove: removeInventoryItem, error: inventoryError, refresh: refreshInventory } = useEntityRaw<InventoryItem, InventoryRow>(
     "inventory",
     INVENTORY,
     { toRow, fromRow },
@@ -95,7 +100,7 @@ export default function Inventory() {
   const { data: mortality, refresh: refreshMortality } = useEntityRaw<MortalityRow>("mortality_events", [], { orderBy: "noted_at", ascending: false });
   const [lowStockFilter, setLowStockFilter] = useState(false);
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [selectedId, setSelectedId] = useDrawerParam();
   const [activeTab, setActiveTab] = useState("Stock");
 
   const { data, isLoading, isError, isEmpty } = useDataState(inventory);
@@ -115,7 +120,11 @@ export default function Inventory() {
     });
   }, [data, search, lowStockFilter]);
 
-  const selectedItem = useMemo(() => inventory.find(i => i.id === selectedId), [inventory, selectedId]);
+  // String(): inventory ids are `string | number`, the URL only yields strings.
+  const selectedItem = useMemo(() => inventory.find((i) => String(i.id) === selectedId), [inventory, selectedId]);
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selectedItem, () => { setSelectedId(null); setActiveTab("Stock"); });
 
   // Modal logic
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -274,7 +283,7 @@ export default function Inventory() {
 
   const handleDelete = async () => {
     if (!selectedItem) return;
-    if (!confirm(`Delete "${selectedItem.name}" from inventory? This also removes its photos. This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete "${selectedItem.name}"?`, message: "This removes the inventory record and its photos. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await removeInventoryItem(selectedItem.id);
     if (result.ok === false) {
       addToast({ title: "Delete failed", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -356,14 +365,16 @@ export default function Inventory() {
                 </Card>
               ))}
             </div>
-          ) : isError ? (
-            <ErrorState />
+          ) : inventoryError || isError ? (
+            // inventoryError is the real fetch failure; isError is the Settings
+            // dev toggle, which only ever simulated one.
+            <ErrorState description={inventoryError ?? undefined} onRetry={refreshInventory} />
           ) : isEmpty ? (
             <EmptyState title="Inventory is empty" description="Add a plant to begin." action={<Button variant="outline" onClick={() => setIsAddModalOpen(true)}>Add Plant</Button>} />
           ) : filteredData.length === 0 ? (
             <ZeroResultState onClearOption={() => { setLowStockFilter(false); setSearch(""); }} />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-24 md:pb-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredData.map((item) => {
                 const isLowStock = sellable(item.stock) < 10;
                 return (
@@ -421,12 +432,12 @@ export default function Inventory() {
       {/* Detail Panel / Screen */}
       <div 
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col", selectedItem ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in"
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col", selectedItem ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in"
         )}
       >
         {selectedItem && (
           <>
-            <div className="p-4 md:p-6 pb-0 border-b border-border-subtle flex flex-col bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pb-0 pt-safe md:pt-6 border-b border-border-subtle flex flex-col bg-bg-elevated md:bg-transparent">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <button 
@@ -622,66 +633,61 @@ export default function Inventory() {
         )}
       </div>
 
-      {isLossOpen && selectedItem && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Log Loss — {selectedItem.name}</h2>
-              <button onClick={() => setIsLossOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={isLossOpen && !!selectedItem}
+        onClose={() => setIsLossOpen(false)}
+        title={`Log Loss — ${selectedItem?.name ?? ""}`}
+        size="sm"
+      >
             <form onSubmit={handleLogLoss} className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                  <select
+                  <label htmlFor="inventory-L645" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                  <Select id="inventory-L645"
                     value={lossForm.stage}
                     onChange={(e) => setLossForm({ ...lossForm, stage: e.target.value as typeof lossForm.stage })}
-                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    className="w-full"
                   >
                     <option value="growout">Grow-Out ({selectedItem.stock.growout})</option>
                     <option value="juv">Sale-Ready ({selectedItem.stock.juv})</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
-                  <Input type="number" min="1" required value={lossForm.count} onChange={(e) => setLossForm({ ...lossForm, count: parseInt(e.target.value) || 1 })} />
+                  <label htmlFor="inventory-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                  <Input id="inventory-1" type="number" min="1" required value={lossForm.count} onChange={(e) => setLossForm({ ...lossForm, count: parseInt(e.target.value) || 1 })} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cause</label>
-                <Input placeholder="Rot, pests, shipping damage…" value={lossForm.cause} onChange={(e) => setLossForm({ ...lossForm, cause: e.target.value })} />
+                <label htmlFor="inventory-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cause</label>
+                <Input id="inventory-2" placeholder="Rot, pests, shipping damage…" value={lossForm.cause} onChange={(e) => setLossForm({ ...lossForm, cause: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
-                <Input placeholder="Optional" value={lossForm.notes} onChange={(e) => setLossForm({ ...lossForm, notes: e.target.value })} />
+                <label htmlFor="inventory-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+                <Input id="inventory-3" placeholder="Optional" value={lossForm.notes} onChange={(e) => setLossForm({ ...lossForm, notes: e.target.value })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsLossOpen(false)}>Cancel</Button>
                 <Button type="submit">Log Loss</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
 
       <Modal open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add to Inventory" size="sm">
             <div className="p-4">
               <form id="add-plant-form" onSubmit={handleAddPlant} className="space-y-4">
                 {cultivars.length > 0 && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Link to Cultivar (recommended)</label>
-                    <select
+                    <label htmlFor="inventory-L680" className="text-sm font-medium">Link to Cultivar (recommended)</label>
+                    <Select id="inventory-L680"
                       value={newPlant.cultivar_id}
                       onChange={(e) => setNewPlant({ ...newPlant, cultivar_id: e.target.value })}
-                      className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                      className="w-full"
                     >
                       <option value="">— Custom (fill below) —</option>
                       {cultivars.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 )}
                 <div className="space-y-2">
@@ -696,12 +702,12 @@ export default function Inventory() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Common Name</label>
-                  <Input placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({ ...newPlant, common: e.target.value })} className="w-full" />
+                  <label htmlFor="inventory-4" className="text-sm font-medium">Common Name</label>
+                  <Input id="inventory-4" placeholder="Butterwort" value={newPlant.common} onChange={(e) => setNewPlant({ ...newPlant, common: e.target.value })} className="w-full" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Genus</label>
-                  <Input
+                  <label htmlFor="inventory-L709" className="text-sm font-medium">Genus</label>
+                  <Input id="inventory-L709"
                     required={!newPlant.cultivar_id}
                     placeholder="Pinguicula"
                     value={newPlant.genus}
@@ -712,16 +718,16 @@ export default function Inventory() {
                 </div>
                 <div className="grid grid-cols-3 gap-2 pt-2">
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Too small/young to sell">Grow-Out</label>
-                     <Input type="number" min="0" required value={newPlant.growout} onChange={(e) => setNewPlant({...newPlant, growout: parseInt(e.target.value) || 0})} className="w-full" />
+                     <label htmlFor="inventory-5" className="text-xs text-text-secondary uppercase" title="Too small/young to sell">Grow-Out</label>
+                     <Input id="inventory-5" type="number" min="0" required value={newPlant.growout} onChange={(e) => setNewPlant({...newPlant, growout: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Sellable stock">Sale-Ready</label>
-                     <Input type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
+                     <label htmlFor="inventory-6" className="text-xs text-text-secondary uppercase" title="Sellable stock">Sale-Ready</label>
+                     <Input id="inventory-6" type="number" min="0" required value={newPlant.juv} onChange={(e) => setNewPlant({...newPlant, juv: parseInt(e.target.value) || 0})} className="w-full" />
                    </div>
                    <div className="space-y-2">
-                     <label className="text-xs text-text-secondary uppercase" title="Cost per unit — drives profit on sale">Cost $/unit</label>
-                     <Input type="number" min="0" step="0.01" value={newPlant.cost} onChange={(e) => setNewPlant({...newPlant, cost: parseFloat(e.target.value) || 0})} className="w-full" />
+                     <label htmlFor="inventory-7" className="text-xs text-text-secondary uppercase" title="Cost per unit — drives profit on sale">Cost $/unit</label>
+                     <Input id="inventory-7" type="number" min="0" step="0.01" value={newPlant.cost} onChange={(e) => setNewPlant({...newPlant, cost: parseFloat(e.target.value) || 0})} className="w-full" />
                    </div>
                 </div>
               </form>
@@ -733,29 +739,26 @@ export default function Inventory() {
       </Modal>
 
       {/* Edit Details Modal */}
-      {isEditModalOpen && selectedItem && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle shrink-0">
-              <h2 className="text-lg font-semibold">Edit details</h2>
-              <button onClick={() => setIsEditModalOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={isEditModalOpen && !!selectedItem}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit details"
+        size="sm"
+      >
             <form id="edit-plant-form" onSubmit={handleEditSave} className="p-4 space-y-4">
               {cultivars.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Linked cultivar</label>
-                  <select
+                  <label htmlFor="inventory-L751" className="text-sm font-medium">Linked cultivar</label>
+                  <Select id="inventory-L751"
                     value={editFields.cultivar_id}
                     onChange={(e) => setEditFields({ ...editFields, cultivar_id: e.target.value })}
-                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    className="w-full"
                   >
                     <option value="">— Custom (fill below) —</option>
                     {cultivars.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                   <p className="text-xs text-text-tertiary">Linking syncs name + genus from the registry.</p>
                 </div>
               )}
@@ -773,8 +776,8 @@ export default function Inventory() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Common name</label>
-                <Input
+                <label htmlFor="inventory-L779" className="text-sm font-medium">Common name</label>
+                <Input id="inventory-L779"
                   placeholder="Butterwort"
                   value={editFields.common}
                   onChange={(e) => setEditFields({ ...editFields, common: e.target.value })}
@@ -782,8 +785,8 @@ export default function Inventory() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Genus</label>
-                <Input
+                <label htmlFor="inventory-L788" className="text-sm font-medium">Genus</label>
+                <Input id="inventory-L788"
                   required={!editFields.cultivar_id}
                   placeholder="Pinguicula"
                   value={editFields.genus}
@@ -800,9 +803,7 @@ export default function Inventory() {
                 Save changes
               </Button>
             </div>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

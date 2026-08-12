@@ -1,4 +1,6 @@
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
+import { Textarea } from "@/components/ui/Textarea";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
@@ -12,9 +14,13 @@ import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
 import { formatDate } from "@/lib/format";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Batch = Tables<"propagation_batches">;
 type InventoryRow = Tables<"inventory">;
@@ -31,6 +37,7 @@ const STAGE_ORDER = STAGES.map((s) => s.id);
 const SEED: Batch[] = [];
 
 export default function Propagation() {
+  const confirm = useConfirm();
   const { data: batches, add, update, remove, isLoading } = useEntity<Batch>("propagation_batches", SEED, {
     toRow: (b) => ({
       batch_id: b.batch_id,
@@ -54,8 +61,11 @@ export default function Propagation() {
   });
   const { addToast } = useApp();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useDrawerParam();
   const selected = batches.find((b) => b.id === selectedId) ?? null;
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected, () => setSelectedId(null));
 
   /**
    * Move a ready batch's plants into inventory as GROW-OUT stock (fresh from the
@@ -63,7 +73,7 @@ export default function Propagation() {
    * to Sale-Ready by hand once they've sized up.
    */
   const convertToInventory = async (b: Batch) => {
-    if (!confirm(`Move ${b.count} × ${b.cultivar} into inventory as grow-out stock? The batch comes off the board.`)) return;
+    if (!(await confirm({ title: "Move batch into inventory?", message: `${b.count} × ${b.cultivar} will be added as grow-out stock, and the batch comes off the board.`, confirmLabel: "Move" }))) return;
     const existing = inventoryRows.find((i) => i.name.trim().toLowerCase() === b.cultivar.trim().toLowerCase());
     if (existing) {
       const result = await updateInventory(existing.id, { stock_growout: existing.stock_growout + b.count } as Partial<InventoryRow>);
@@ -207,7 +217,7 @@ export default function Propagation() {
   };
 
   const discard = async (b: Batch) => {
-    if (!confirm(`Discard batch ${b.batch_id}?`)) return;
+    if (!(await confirm({ title: `Discard batch ${b.batch_id}?`, message: "The batch is removed from the board. This cannot be undone.", confirmLabel: "Discard", tone: "danger" }))) return;
     const result = await remove(b.id);
     if (result.ok === false) {
       addToast({ title: "Couldn't discard", description: friendlyDbError({ code: result.code } as any), status: "alert" });
@@ -242,7 +252,7 @@ export default function Propagation() {
               action={<Button variant="outline" onClick={() => setIsOpen(true)}>Add Batch</Button>}
             />
           ) : (
-            <div className="flex h-full gap-6 min-w-max pr-6 pb-24 md:pb-0">
+            <div className="flex h-full gap-6 min-w-max pr-6">
               {STAGES.map((col) => (
                 <div key={col.id} className="flex-1 flex flex-col w-[85vw] md:w-[280px] shrink-0 snap-center md:snap-none">
                   <div className="flex items-center justify-between mb-4 px-2">
@@ -302,13 +312,13 @@ export default function Propagation() {
       {/* Detail panel */}
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-center justify-between bg-bg-elevated md:bg-transparent">
               <div>
                 <h2 className="text-xl font-semibold mb-2">Batch {selected.batch_id}</h2>
                 <div className="flex items-center gap-2 text-sm text-text-secondary">
@@ -366,53 +376,50 @@ export default function Propagation() {
         )}
       </div>
 
-      {isEditOpen && selected && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Edit Batch {selected.batch_id}</h2>
-              <button onClick={() => setIsEditOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={isEditOpen && !!selected}
+        onClose={() => setIsEditOpen(false)}
+        title={`Edit Batch ${selected?.batch_id ?? ""}`}
+        size="sm"
+      >
             <form onSubmit={handleEdit} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
-                <Input required value={editForm.cultivar} onChange={(e) => setEditForm({ ...editForm, cultivar: e.target.value })} />
+                <label htmlFor="propagation-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
+                <Input id="propagation-1" required value={editForm.cultivar} onChange={(e) => setEditForm({ ...editForm, cultivar: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-brand"
+                  <label htmlFor="propagation-L392" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                  <Select id="propagation-L392"
+                    className="w-full"
                     value={editForm.stage}
                     onChange={(e) => setEditForm({ ...editForm, stage: e.target.value })}
                   >
                     {STAGES.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
-                  <Input type="number" min="1" required value={editForm.count} onChange={(e) => setEditForm({ ...editForm, count: parseInt(e.target.value) || 0 })} />
+                  <label htmlFor="propagation-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                  <Input id="propagation-2" type="number" min="1" required value={editForm.count} onChange={(e) => setEditForm({ ...editForm, count: parseInt(e.target.value) || 0 })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Started</label>
-                  <Input type="date" value={editForm.started} onChange={(e) => setEditForm({ ...editForm, started: e.target.value })} />
+                  <label htmlFor="propagation-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Started</label>
+                  <Input id="propagation-3" type="date" value={editForm.started} onChange={(e) => setEditForm({ ...editForm, started: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Est. ready</label>
-                  <Input type="date" value={editForm.est_ready} onChange={(e) => setEditForm({ ...editForm, est_ready: e.target.value })} />
+                  <label htmlFor="propagation-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Est. ready</label>
+                  <Input id="propagation-4" type="date" value={editForm.est_ready} onChange={(e) => setEditForm({ ...editForm, est_ready: e.target.value })} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
-                <textarea
+                <label htmlFor="propagation-L417" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Notes</label>
+                <Textarea id="propagation-L417"
                   value={editForm.notes}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                   rows={2}
-                  className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-brand resize-y"
+                  className="w-full resize-y"
                 />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
@@ -420,46 +427,34 @@ export default function Propagation() {
                 <Button type="submit">Save Changes</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md bg-bg-elevated border-border-strong shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">Add Propagation Batch</h2>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isOpen} onClose={() => setIsOpen(false)} title="Add Propagation Batch" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
-                <Input required placeholder="P. agnata" value={form.cultivar} onChange={(e) => setForm({ ...form, cultivar: e.target.value })} />
+                <label htmlFor="propagation-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar *</label>
+                <Input id="propagation-5" required placeholder="P. agnata" value={form.cultivar} onChange={(e) => setForm({ ...form, cultivar: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
-                <select
-                  className="w-full bg-bg-base border border-border-subtle rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-brand"
+                <label htmlFor="propagation-L439" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stage</label>
+                <Select id="propagation-L439"
+                  className="w-full"
                   value={form.stage}
                   onChange={(e) => setForm({ ...form, stage: e.target.value })}
                 >
                   {STAGES.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-                </select>
+                </Select>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
-                <Input type="number" min="1" required value={form.count} onChange={(e) => setForm({ ...form, count: parseInt(e.target.value) || 0 })} />
+                <label htmlFor="propagation-6" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Count</label>
+                <Input id="propagation-6" type="number" min="1" required value={form.count} onChange={(e) => setForm({ ...form, count: parseInt(e.target.value) || 0 })} />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">
                 <Button variant="ghost" type="button" onClick={() => setIsOpen(false)}>Cancel</Button>
                 <Button type="submit">Create Batch</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

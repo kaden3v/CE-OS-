@@ -27,7 +27,7 @@ const TABS: { to: string; label: string; end?: boolean; divider?: boolean }[] = 
 
 export function FinanceTabs() {
   return (
-    <div className="sticky top-0 z-20 border-b border-border-subtle bg-bg-base/95 backdrop-blur-md no-print">
+    <div className="sticky top-0 z-sticky border-b border-border-subtle bg-bg-base/95 backdrop-blur-md no-print">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-2.5 flex justify-center">
         <nav
           aria-label="Finance sections"

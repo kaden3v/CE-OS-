@@ -1,7 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect } from "react";
-import { cn } from "@/lib/utils";
 
 interface Props {
   open: boolean;
@@ -73,7 +72,7 @@ export function KeyboardReference({ open, onClose }: Props) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
+            className="fixed inset-0 bg-[#0E0F11]/60 backdrop-blur-sm z-modal flex items-center justify-center p-4 md:p-8"
             onClick={onClose}
           >
             <motion.div
@@ -106,7 +105,7 @@ export function KeyboardReference({ open, onClose }: Props) {
                              <div className="flex items-center gap-2 ml-4">
                                {item.keys.map((k, i) => (
                                  k === '/' ? <span key={i} className="text-text-tertiary">/</span> :
-                                 <kbd key={i} className="min-w-[20px] inline-flex items-center justify-center px-2 py-2 rounded bg-bg-active border border-border-strong text-text-primary font-sans text-xs">
+                                 <kbd key={i} className="min-w-[20px] inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-bg-active border border-border-strong text-text-primary font-sans text-xs">
                                    {k}
                                  </kbd>
                                ))}

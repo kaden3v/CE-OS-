@@ -1,7 +1,9 @@
 import { useState, useMemo, FormEvent } from "react";
 import { Link } from "react-router";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -10,14 +12,18 @@ import { X, Search, Plus, Trash2, Store, ShoppingBag, PackageSearch, Truck, Exte
 import { cn } from "@/lib/utils";
 import { trackingUrl, carrierLabel } from "@/lib/tracking";
 import { CultivarName } from "@/components/ui/CultivarName";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { RecordActivity } from "@/components/activity/RecordActivity";
 import { useApp } from "@/contexts/AppContext";
 import { useOrders, type OrderWithRelations } from "@/hooks/useOrders";
 import { useEntity } from "@/hooks/useEntity";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useDrawerParam } from "@/hooks/useDrawerParam";
 import { friendlyDbError } from "@/lib/dbErrors";
 import { orderStatusTone, shipmentStatusTone, orderStatusLabel } from "@/lib/status";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Customer = Tables<"customers">;
 type Cultivar = Tables<"cultivars">;
@@ -31,8 +37,13 @@ type Status = (typeof STATUSES)[number];
 const statusColor = orderStatusTone;
 
 export default function Orders() {
-  const { globalOrderViewId, setGlobalOrderViewId, addToast } = useApp();
-  const { data: orders, isLoading, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
+  const confirm = useConfirm();
+  const { addToast } = useApp();
+  // Was AppContext's globalOrderViewId, set by the command palette before it
+  // navigated here. The palette now links straight to /orders?view=<id>, so the
+  // drawer has one source of truth — the URL — and no cross-page context.
+  const [selectedId, setSelectedId] = useDrawerParam();
+  const { data: orders, isLoading, error, refresh, createOrder, updateStatus, updateItem, removeItem, deleteOrder } = useOrders();
   const { data: customers } = useEntity<Customer>("customers", [], { toRow: (c) => ({ name: c.name }) });
   const { data: cultivars } = useEntity<Cultivar>("cultivars", [], { toRow: (c) => ({ name: c.name }) });
   const { data: shipments } = useEntity<Shipment>("shipments", []);
@@ -41,11 +52,14 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  const selected = useMemo(() => orders.find((o) => o.id === globalOrderViewId) ?? null, [orders, globalOrderViewId]);
+  const selected = useMemo(() => orders.find((o) => o.id === selectedId) ?? null, [orders, selectedId]);
   const selectedShipment = useMemo(
     () => (selected ? shipments.find((s) => s.order_id === selected.id) ?? null : null),
     [shipments, selected],
   );
+
+  // The drawer covers the whole screen on mobile — Escape has to get out of it.
+  useEscapeKey(!!selected && !isAddOpen, () => setSelectedId(null));
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -179,43 +193,46 @@ export default function Orders() {
   };
 
   const handleDelete = async (orderId: string) => {
-    if (!confirm("Delete this order? This also removes its line items.")) return;
+    if (!(await confirm({ title: "Delete this order?", message: "Its line items go with it. This cannot be undone.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await deleteOrder(orderId);
     if (!result.ok) {
       addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" });
       return;
     }
-    setGlobalOrderViewId(null);
+    setSelectedId(null);
     addToast({ title: "Order deleted", status: "info" });
   };
 
-  const columns = useMemo(
+  // Typed column defs: annotating the array makes `info.row.original` an
+  // OrderWithRelations, so accessor typos and wrong field access are caught at
+  // compile time instead of `info: any` swallowing them.
+  const columns = useMemo<ColumnDef<OrderWithRelations>[]>(
     () => [
-      { accessorKey: "id", header: "Order #", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
+      { accessorKey: "id", header: "Order #", meta: { mobileHidden: true }, cell: (info) => <span className="font-mono text-xs">{String(info.getValue()).slice(0, 8)}</span> },
       {
         accessorKey: "channel",
         header: "Channel",
-        cell: (info: any) => (
+        cell: (info) => (
           <div className="flex items-center gap-2 text-text-secondary capitalize">
             {info.getValue() === "shopify" ? <Store className="w-3.5 h-3.5" /> : <ShoppingBag className="w-3.5 h-3.5" />}
-            {info.getValue()}
+            {String(info.getValue())}
           </div>
         ),
       },
-      { accessorKey: "customer", header: "Customer", cell: (info: any) => <span className="font-medium">{info.row.original.customer?.name ?? "—"}</span> },
-      { accessorKey: "items", header: "Items", cell: (info: any) => <span className="text-text-secondary">{info.row.original.items?.length ?? 0}</span> },
+      { accessorKey: "customer", header: "Customer", meta: { mobileTitle: true }, cell: (info) => <span className="font-medium">{info.row.original.customer?.name ?? "—"}</span> },
+      { accessorKey: "items", header: "Items", cell: (info) => <span className="text-text-secondary">{info.row.original.items?.length ?? 0}</span> },
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => (
+        cell: (info) => (
           <div className="flex items-center gap-2">
-            <StatusDot status={statusColor(info.getValue())} />
-            {orderStatusLabel(info.getValue())}
+            <StatusDot status={statusColor(info.row.original.status)} />
+            {orderStatusLabel(info.row.original.status)}
           </div>
         ),
       },
-      { accessorKey: "total", header: "Total", cell: (info: any) => <span className="font-medium tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
-      { accessorKey: "placed_at", header: "Placed", cell: (info: any) => <span className="text-text-secondary">{new Date(info.getValue()).toLocaleDateString()}</span> },
+      { accessorKey: "total", header: "Total", cell: (info) => <span className="font-medium tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
+      { accessorKey: "placed_at", header: "Placed", cell: (info) => <span className="text-text-secondary">{new Date(String(info.getValue())).toLocaleDateString()}</span> },
     ],
     [],
   );
@@ -253,6 +270,8 @@ export default function Orders() {
         <Card className="flex-1 overflow-auto flex flex-col min-h-0">
           {isLoading ? (
             <LoadingTable cols={7} rows={10} />
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
           ) : isEmpty ? (
             <EmptyState
               icon={PackageSearch}
@@ -261,7 +280,7 @@ export default function Orders() {
               action={<Button variant="outline" onClick={() => setIsAddOpen(true)} disabled={cultivars.length === 0}>New Order</Button>}
             />
           ) : (
-            <DataTable columns={columns} data={filtered} onRowClick={(row: OrderWithRelations) => setGlobalOrderViewId(row.id)} />
+            <DataTable columns={columns} data={filtered} onRowClick={(row: OrderWithRelations) => setSelectedId(row.id)} />
           )}
         </Card>
       </div>
@@ -269,13 +288,13 @@ export default function Orders() {
       {/* Detail panel */}
       <div
         className={cn(
-          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-50 md:z-20 flex flex-col",
+          "fixed inset-0 md:inset-auto md:top-[56px] md:right-0 md:bottom-0 w-full md:w-[480px] bg-bg-base md:bg-[rgba(255,255,255,0.04)] backdrop-blur-md md:border-l border-border-subtle shadow-2xl transition-transform z-drawer flex flex-col",
           selected ? "translate-x-0 duration-200 ease-out" : "translate-x-full duration-150 ease-in",
         )}
       >
         {selected && (
           <>
-            <div className="p-4 md:p-6 border-b border-border-subtle flex items-start justify-between bg-bg-elevated md:bg-transparent">
+            <div className="p-4 md:p-6 pt-safe md:pt-6 border-b border-border-subtle flex items-start justify-between bg-bg-elevated md:bg-transparent">
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <h2 className="text-xl font-semibold font-mono">{selected.id.slice(0, 8)}</h2>
@@ -296,7 +315,7 @@ export default function Orders() {
                   </div>
                 )}
               </div>
-              <button onClick={() => setGlobalOrderViewId(null)} aria-label="Close" className="p-2 -mr-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors">
+              <button onClick={() => setSelectedId(null)} aria-label="Close" className="p-2 -mr-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -328,8 +347,8 @@ export default function Orders() {
                       <div className="flex-1 min-w-0">
                         <CultivarName name={item.name_snapshot} className="font-medium" />
                         <div className="flex items-center gap-2 mt-2">
-                          <label className="text-xs text-text-tertiary">Qty</label>
-                          <Input
+                          <label htmlFor="orders-L350" className="text-xs text-text-tertiary">Qty</label>
+                          <Input id="orders-L350"
                             type="number"
                             min={1}
                             defaultValue={item.qty}
@@ -339,8 +358,8 @@ export default function Orders() {
                               if (qty !== item.qty) handleItemPatch(selected.id, item.id, { qty });
                             }}
                           />
-                          <label className="text-xs text-text-tertiary">$ ea</label>
-                          <Input
+                          <label htmlFor="orders-L361" className="text-xs text-text-tertiary">$ ea</label>
+                          <Input id="orders-L361"
                             type="number"
                             min={0}
                             step="0.01"
@@ -480,21 +499,13 @@ export default function Orders() {
       </div>
 
       {/* Create modal */}
-      {isAddOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl bg-bg-elevated border-border-strong shadow-2xl flex flex-col max-h-[85dvh]">
-            <div className="flex items-center justify-between p-4 border-b border-border-subtle">
-              <h2 className="text-lg font-semibold">New Order</h2>
-              <button onClick={() => setIsAddOpen(false)} aria-label="Close" className="text-text-secondary hover:text-text-primary">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <Modal open={isAddOpen} onClose={() => setIsAddOpen(false)} title="New Order" size="lg">
+            <form onSubmit={handleCreate} className="p-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Customer</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  <label htmlFor="orders-L506" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Customer</label>
+                  <Select id="orders-L506"
+                    className="w-full"
                     value={draft.customer_id}
                     onChange={(e) => setDraft({ ...draft, customer_id: e.target.value })}
                   >
@@ -502,41 +513,46 @@ export default function Orders() {
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })}>
+                  <label htmlFor="orders-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
+                  <Select id="orders-1" className="w-full" value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })}>
                     <option value="shopify">Shopify</option>
                     <option value="etsy">Etsy</option>
                     <option value="wholesale">Wholesale</option>
                     <option value="direct">Direct</option>
                     <option value="other">Other</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Status</label>
-                  <select className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
+                  <label htmlFor="orders-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Status</label>
+                  <Select id="orders-2" className="w-full" value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Status })}>
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>{orderStatusLabel(s)}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Line Items</label>
+                  {/* Names the repeated group below, not one control — so a
+                      span + aria-labelledby rather than a <label>. */}
+                  <span id="order-line-items" className="text-xs uppercase tracking-wide text-text-secondary">Line Items</span>
                   <Button type="button" size="sm" variant="ghost" onClick={addLine}>
                     <Plus className="w-3 h-3 mr-1" />
                     Add line
                   </Button>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" role="group" aria-labelledby="order-line-items">
                   {draft.items.map((line, i) => (
-                    <div key={i} className="grid grid-cols-[2fr_60px_80px_32px] gap-2 items-end">
-                      <select
-                        className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                    // Last track is 44px, not 32px: the remove button is
+                    // icon-only and now carries a 44px touch minimum, which
+                    // would have overflowed a 32px column on a phone.
+                    <div key={i} className="grid grid-cols-[1fr_60px_80px_44px] gap-2 items-end">
+                      <Select
+                        className="w-full"
                         value={line.cultivar_id}
                         onChange={(e) => updateLine(i, { cultivar_id: e.target.value })}
                       >
@@ -544,7 +560,7 @@ export default function Orders() {
                         {cultivars.map((c) => (
                           <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
-                      </select>
+                      </Select>
                       <Input type="number" min="1" placeholder="Qty" value={line.qty} onChange={(e) => updateLine(i, { qty: Number(e.target.value) || 1 })} />
                       <Input type="number" step="0.01" min="0" placeholder="Price" value={line.price} onChange={(e) => updateLine(i, { price: Number(e.target.value) || 0 })} />
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(i)} aria-label="Remove line" disabled={draft.items.length === 1}>
@@ -563,9 +579,7 @@ export default function Orders() {
                 <Button type="submit">Create Order</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

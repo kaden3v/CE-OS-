@@ -65,7 +65,8 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
     reader.onload = () => {
       const url = String(reader.result ?? "");
       const comma = url.indexOf(",");
-      comma >= 0 ? resolve(url.slice(comma + 1)) : reject(new Error("unreadable file"));
+      if (comma >= 0) resolve(url.slice(comma + 1));
+      else reject(new Error("unreadable file"));
     };
     reader.onerror = () => reject(reader.error ?? new Error("unreadable file"));
     reader.readAsDataURL(blob);

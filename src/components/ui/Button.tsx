@@ -19,9 +19,12 @@ export function Button({
     outline: "border border-border-strong hover:bg-bg-hover text-text-primary",
     brand: "bg-accent-brand-dim text-accent-brand hover:bg-accent-brand hover:text-bg-base border border-accent-brand/20",
   };
+  // "sm" used to be px-2 py-2 against a default of px-4 py-2 — only narrower,
+  // exactly as tall, so the two read as the same button. The vertical step is
+  // what makes them distinguishable.
   const sizes = {
-    default: "px-4 py-2",
-    sm: "px-2 py-2 text-xs",
+    default: "px-4 py-2.5",
+    sm: "px-3 py-1.5 text-xs",
     icon: "p-2",
   };
   return (

@@ -57,7 +57,7 @@ export default function Customers() {
       notes: c.notes,
     }),
   });
-  const { addToast, setGlobalOrderViewId } = useApp();
+  const { addToast } = useApp();
   const { user, activeOrgId } = useAuth();
   const navigate = useNavigate();
 
@@ -470,10 +470,7 @@ export default function Customers() {
                         <li key={o.id}>
                           <button
                             type="button"
-                            onClick={() => {
-                              setGlobalOrderViewId(o.id);
-                              navigate("/orders");
-                            }}
+                            onClick={() => navigate(`/orders?view=${o.id}`)}
                             className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover transition-colors"
                           >
                             <span className="text-xs text-text-secondary whitespace-nowrap w-16 shrink-0">

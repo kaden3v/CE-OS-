@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, ChevronDown, Info } from "lucide-react";
+import { Download, Info } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useEntity } from "@/hooks/useEntity";
@@ -12,6 +12,7 @@ import { formatMoney } from "@/lib/format";
 import { isoYear, currentYear, toBusinessISODate } from "@/lib/dates";
 import { downloadCsv, fetchPnl, type Pnl } from "@/lib/financeReports";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Expense = Tables<"expenses">;
 type Shipment = Tables<"shipments">;
@@ -141,12 +142,9 @@ export function TaxReportContent() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-        <div className="relative">
-          <select className="appearance-none bg-bg-base border border-border-subtle rounded-md pl-3 pr-8 py-2 text-sm font-medium hover:border-border-strong focus:outline-none" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
-        </div>
+        <Select className="font-medium" aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </Select>
         <div className="flex items-center gap-2 flex-wrap">
           <div role="group" aria-label="Tax schedule" className="flex rounded-lg border border-border-subtle overflow-hidden">
             {(["F", "C"] as const).map((s) => (

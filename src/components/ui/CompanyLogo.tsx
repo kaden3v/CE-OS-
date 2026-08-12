@@ -49,6 +49,10 @@ export function CompanyLogo({ name, website, size = 32, className }: CompanyLogo
 
   if (domain && idx < sources.length) {
     return (
+      // onError here is a load-failure fallback that advances to the next
+      // source, not a user interaction — the rule can't tell them apart, and
+      // dropping it would break the logo chain.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
       <img
         src={sources[idx]}
         alt={`${name} logo`}

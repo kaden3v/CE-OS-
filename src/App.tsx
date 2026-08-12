@@ -42,15 +42,25 @@ import { AppProvider } from "./contexts/AppContext";
 import { AuthProvider, RequireAuth, RequireAdmin, RequireManager } from "./contexts/AuthContext";
 import { Toasts } from "./components/ui/Toasts";
 import { CommandPalette } from "./components/ui/CommandPalette";
+import { ConfirmProvider } from "./components/ui/ConfirmDialog";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { useDocumentTitle } from "./hooks/useDocumentTitle";
+
+/** Renders nothing; keeps <title> in step with the route. Must sit inside the router. */
+function RouteTitle() {
+  useDocumentTitle();
+  return null;
+}
 
 export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <AppProvider>
+          <ConfirmProvider>
           <Toasts />
           <BrowserRouter>
+            <RouteTitle />
             <CommandPalette />
             <Suspense fallback={<div className="h-dvh w-full bg-bg-base" />}>
             <Routes>
@@ -100,6 +110,7 @@ export default function App() {
             </Routes>
             </Suspense>
           </BrowserRouter>
+          </ConfirmProvider>
         </AppProvider>
       </AuthProvider>
     </ErrorBoundary>

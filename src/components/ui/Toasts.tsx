@@ -1,17 +1,26 @@
 import React, { useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useApp } from "@/contexts/AppContext";
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Portal } from "./Portal";
 
 export function Toasts() {
   const { toasts, removeToast } = useApp();
 
+  // z-toast, not z-50: <Toasts /> mounts before the router in App.tsx, so at an
+  // equal z-index every modal (later in the DOM) painted over it — errors
+  // raised from inside a dialog were never seen.
   return (
-    <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 sm:w-[360px] pointer-events-none">
-      {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={() => removeToast(toast.id)} />
-      ))}
-    </div>
+    <Portal>
+      <div className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-4 left-4 sm:left-auto z-toast flex flex-col gap-2 sm:w-[360px] pointer-events-none">
+        <AnimatePresence initial={false}>
+          {toasts.map((toast) => (
+            <ToastItem key={toast.id} toast={toast} onDismiss={() => removeToast(toast.id)} />
+          ))}
+        </AnimatePresence>
+      </div>
+    </Portal>
   );
 }
 
@@ -61,11 +70,20 @@ const ToastItem: React.FC<{ toast: any; onDismiss: () => void }> = ({ toast, onD
   const Icon = cfg.Icon;
 
   return (
-    <div
+    // framer-motion, not `animate-in slide-in-from-right-8`: those are
+    // tailwindcss-animate classes and that package isn't installed, so the
+    // entrance never rendered. framer-motion is already a dependency and drives
+    // every other overlay animation — and it gives the exit the toast never had.
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: 32 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 32 }}
+      transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
       role="status"
       aria-live={status === "alert" ? "assertive" : "polite"}
       className={cn(
-        "pointer-events-auto relative bg-[rgba(255,255,255,0.06)] backdrop-blur-md border rounded-lg p-3 pl-4 shadow-lg flex items-start gap-3 overflow-hidden animate-in slide-in-from-right-8 fade-in duration-200 ease-out",
+        "pointer-events-auto relative bg-[rgba(255,255,255,0.06)] backdrop-blur-md border rounded-lg p-3 pl-4 shadow-lg flex items-start gap-3 overflow-hidden",
         cfg.borderClass,
       )}
     >
@@ -96,6 +114,6 @@ const ToastItem: React.FC<{ toast: any; onDismiss: () => void }> = ({ toast, onD
       >
         <X className="w-4 h-4" />
       </button>
-    </div>
+    </motion.div>
   );
 };

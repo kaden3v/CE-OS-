@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState, FormEvent } from "react";
+import { useMemo, useState, FormEvent } from "react";
 import { Repeat, Plus, X, Trash2, Pencil, Receipt, RotateCcw, TrendingUp, TrendingDown, CalendarClock, Zap } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { StatTile } from "@/components/ui/StatTile";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Toggle } from "@/components/ui/Toggle";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/Badge";
 import { CompanyLogo } from "@/components/ui/CompanyLogo";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useEntity } from "@/hooks/useEntity";
 import { useApp } from "@/contexts/AppContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +20,8 @@ import { friendlyDbError } from "@/lib/dbErrors";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, todayISO } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Recurring = Tables<"recurring_expenses">;
 type Vendor = Tables<"vendors">;
@@ -39,8 +43,9 @@ const isoShift = (iso: string, days = 0, years = 0): string => {
 };
 
 export default function Subscriptions() {
+  const confirm = useConfirm();
   const { user, activeOrgId } = useAuth();
-  const { data: subs, add, update, updateMany, remove, isLoading, refresh } = useEntity<Recurring>("recurring_expenses", [], {
+  const { data: subs, add, update, updateMany, remove, isLoading, error, refresh } = useEntity<Recurring>("recurring_expenses", [], {
     orderBy: "created_at",
     toRow: (s) => ({
       name: s.name, website: s.website, vendor_id: s.vendor_id, category: s.category,
@@ -100,13 +105,6 @@ export default function Subscriptions() {
   };
 
   const previewMonthly = (Number(form.amount) || 0) / (CYCLE_DIVISOR[form.billing_cycle] ?? 1);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen]);
 
   const openAdd = () => { setEditId(null); setForm(emptyForm); setIsOpen(true); };
   const openEdit = (s: Recurring) => {
@@ -189,7 +187,7 @@ export default function Subscriptions() {
   };
 
   const handleDelete = async (s: Recurring) => {
-    if (!confirm(`Delete "${s.name}"? Past payments already logged as expenses are kept.`)) return;
+    if (!(await confirm({ title: `Delete "${s.name}"?`, message: "Past payments already logged as expenses are kept.", confirmLabel: "Delete", tone: "danger" }))) return;
     const result = await remove(s.id);
     if (result.ok === false) { addToast({ title: "Couldn't delete", description: friendlyDbError({ code: result.code } as any), status: "alert" }); return; }
     addToast({ title: "Subscription removed", status: "info" });
@@ -206,12 +204,12 @@ export default function Subscriptions() {
     }
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Recurring>[]>(
     () => [
       {
         accessorKey: "name",
         header: "Subscription",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           return (
             <div className="flex items-center gap-2.5">
@@ -221,16 +219,16 @@ export default function Subscriptions() {
           );
         },
       },
-      { accessorKey: "vendor_id", header: "Vendor", cell: (info: any) => <span className="text-text-secondary">{vendorName(info.getValue())}</span> },
+      { accessorKey: "vendor_id", header: "Vendor", cell: (info) => <span className="text-text-secondary">{vendorName(info.row.original.vendor_id)}</span> },
       {
         accessorKey: "amount",
         header: "Amount",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           const pc = priceChange(s);
           return (
             <span className="inline-flex items-center gap-1.5 tabular-nums">
-              {formatMoney(info.getValue())}<span className="text-text-tertiary">/{cycleAbbr(s.billing_cycle)}</span>
+              {formatMoney(info.row.original.amount)}<span className="text-text-tertiary">/{cycleAbbr(s.billing_cycle)}</span>
               {pc && (
                 <span title={pc.tip} className={pc.dir === "up" ? "text-status-alert" : "text-status-ok"} aria-label="price changed">
                   {pc.dir === "up" ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -240,12 +238,12 @@ export default function Subscriptions() {
           );
         },
       },
-      { id: "monthly", header: "Monthly", cell: (info: any) => <span className="tabular-nums text-text-secondary">{formatMoney(monthlyEquiv(info.row.original))}</span> },
-      { accessorKey: "next_renewal", header: "Next renewal", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ? formatBusinessDate(info.getValue()) : "—"}</span> },
+      { id: "monthly", header: "Monthly", cell: (info) => <span className="tabular-nums text-text-secondary">{formatMoney(monthlyEquiv(info.row.original))}</span> },
+      { accessorKey: "next_renewal", header: "Next renewal", cell: (info) => <span className="text-text-secondary">{info.row.original.next_renewal ? formatBusinessDate(info.row.original.next_renewal) : "—"}</span> },
       {
         id: "auto",
         header: "Auto-log",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           return <Toggle checked={!!s.auto_log} onChange={() => toggleAutoLog(s)} ariaLabel="Auto-log on renewal" />;
         },
@@ -253,7 +251,7 @@ export default function Subscriptions() {
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           if (isOverdue(s)) return <Badge variant="outline" className="text-status-warn border-status-warn/40">Overdue</Badge>;
           return <Badge variant={s.status === "active" ? "brand" : "default"} className="capitalize">{s.status}</Badge>;
@@ -262,7 +260,7 @@ export default function Subscriptions() {
       {
         id: "actions",
         header: "",
-        cell: (info: any) => {
+        cell: (info) => {
           const s: Recurring = info.row.original;
           return (
             <div className="flex items-center gap-1 justify-end">
@@ -347,7 +345,9 @@ export default function Subscriptions() {
       <Card className="flex-1 overflow-auto flex flex-col mb-12">
         {isLoading ? (
           <LoadingTable cols={8} rows={6} />
-        ) : subs.length === 0 ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : subs.length === 0 ? (
           <EmptyState
             icon={Repeat}
             title="No subscriptions tracked"
@@ -359,60 +359,61 @@ export default function Subscriptions() {
         )}
       </Card>
 
-      {isOpen && (
-        <div className="fixed inset-0 bg-bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}>
-          <Card role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title" className="w-full max-w-lg bg-bg-elevated border-border-strong shadow-2xl max-h-[90dvh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-border-subtle">
-              <div className="flex items-center gap-3">
-                {form.name.trim() ? (
-                  <CompanyLogo name={form.name} website={form.website} size={40} className="rounded-lg" />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
-                    <Repeat className="w-5 h-5 text-accent-brand" />
-                  </div>
-                )}
-                <div>
-                  <h2 id="subscription-modal-title" className="text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</h2>
-                  <p className="text-xs text-text-secondary mt-0.5">A recurring bill the business pays.</p>
-                </div>
-              </div>
-              <button onClick={() => setIsOpen(false)} aria-label="Close" className="-mr-1 text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>
-            </div>
+      <Modal
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        size="md"
+        title={
+          <span className="flex items-center gap-3">
+            {form.name.trim() ? (
+              <CompanyLogo name={form.name} website={form.website} size={40} className="rounded-lg" />
+            ) : (
+              <span className="w-10 h-10 rounded-lg bg-bg-base border border-border-subtle flex items-center justify-center shrink-0">
+                <Repeat className="w-5 h-5 text-accent-brand" />
+              </span>
+            )}
+            <span className="block">
+              <span className="block text-lg font-semibold leading-tight">{editId ? "Edit subscription" : "Add subscription"}</span>
+              <span className="block text-xs font-normal text-text-secondary mt-0.5">A recurring bill the business pays.</span>
+            </span>
+          </span>
+        }
+      >
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
-                <Input autoFocus required className="w-full" placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label htmlFor="subscriptions-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Name <span className="text-accent-brand">*</span></label>
+                <Input id="subscriptions-1" autoFocus required className="w-full" placeholder="e.g. Shopify" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Website</label>
-                <Input className="w-full" placeholder="shopify.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+                <label htmlFor="subscriptions-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Website</label>
+                <Input id="subscriptions-2" className="w-full" placeholder="shopify.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Vendor</label>
-                  <select className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2.5 py-2 text-sm focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
+                  <label htmlFor="subscriptions-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Vendor</label>
+                  <Select id="subscriptions-3" className="w-full" value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}>
                     <option value="">— None —</option>
                     {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
-                  <CategorySelect value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="— Pick —" />
+                  <label htmlFor="subscriptions-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Category</label>
+                  <CategorySelect id="subscriptions-4" value={form.category} onChange={(c) => setForm({ ...form, category: c })} blankLabel="— Pick —" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Amount</label>
+                  <label htmlFor="subscriptions-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Amount</label>
                   <div className="relative">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-text-secondary pointer-events-none">$</span>
-                    <Input type="number" step="0.01" min="0" inputMode="decimal" className="w-full pl-6" value={form.amount} onFocus={(e) => e.target.select()} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })} />
+                    <Input id="subscriptions-5" type="number" step="0.01" min="0" inputMode="decimal" className="w-full pl-6" value={form.amount} onFocus={(e) => e.target.select()} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) || 0 })} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Billing</label>
-                  <select className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-2.5 py-2 text-sm capitalize focus:outline-none focus:border-accent-brand focus:ring-1 focus:ring-accent-brand transition-colors" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
+                  <label htmlFor="subscriptions-6" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Billing</label>
+                  <Select id="subscriptions-6" className="w-full capitalize" value={form.billing_cycle} onChange={(e) => setForm({ ...form, billing_cycle: e.target.value })}>
                     {CYCLES.map((c) => <option key={c} value={c} className="capitalize">{c}</option>)}
-                  </select>
+                  </Select>
                 </div>
               </div>
               {form.billing_cycle !== "monthly" && (Number(form.amount) || 0) > 0 && (
@@ -422,13 +423,13 @@ export default function Subscriptions() {
                 </div>
               )}
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Next renewal</label>
-                <Input type="date" className="w-full" value={form.next_renewal} onChange={(e) => setForm({ ...form, next_renewal: e.target.value })} />
+                <label htmlFor="subscriptions-7" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Next renewal</label>
+                <Input id="subscriptions-7" type="date" className="w-full" value={form.next_renewal} onChange={(e) => setForm({ ...form, next_renewal: e.target.value })} />
                 <p className="text-xs text-text-tertiary mt-1">When the next charge is expected. Logging a charge advances this automatically.</p>
               </div>
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Notes</label>
-                <Input className="w-full" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <label htmlFor="subscriptions-8" className="block text-xs uppercase tracking-wide text-text-secondary mb-1.5">Notes</label>
+                <Input id="subscriptions-8" className="w-full" placeholder="Optional" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               </div>
               <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
                 <div>
@@ -442,9 +443,7 @@ export default function Subscriptions() {
                 <Button type="submit" variant="brand">{editId ? "Save Changes" : "Add Subscription"}</Button>
               </div>
             </form>
-          </Card>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

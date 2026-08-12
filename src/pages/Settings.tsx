@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
+import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Modal } from "@/components/ui/Modal";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Toggle } from "@/components/ui/Toggle";
 import { Badge } from "@/components/ui/Badge";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Keyboard, TerminalSquare, LogOut, Lock, ShieldCheck, Plus, Trash2, Mail, ExternalLink, RefreshCw, UserRound, Monitor, Bell, Receipt, Plug, type LucideIcon } from "lucide-react";
 import { Link } from "react-router";
 import { ChannelFeesSettings } from "@/components/settings/ChannelFeesSettings";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 /** Consistent section header: a muted leading icon, the title, and optional
  *  right-aligned content (e.g. a status badge). Keeps every section on the page
@@ -66,6 +68,7 @@ const CONNECTORS = [
 ];
 
 export default function Settings() {
+  const confirm = useConfirm();
   const { settings, updateSettings, setCommandPaletteOpen, addToast } = useApp();
   const { user, isConfigured, isAdmin, signOut, resyncSession } = useAuth();
   const [resyncing, setResyncing] = useState(false);
@@ -222,12 +225,22 @@ export default function Settings() {
   };
 
   const handleRemoveAdmin = async (email: string) => {
-    if (email === user?.email) {
-      const ok = confirm("This is your own email. Removing it will demote you when you next sign in. Continue?");
-      if (!ok) return;
-    } else {
-      if (!confirm(`Remove ${email} from the admin allowlist? Existing admin users keep access until you also flip their profile.is_admin to false.`)) return;
-    }
+    const ok =
+      email === user?.email
+        ? await confirm({
+            title: "Remove your own admin access?",
+            message: "This is your own email. Removing it will demote you the next time you sign in.",
+            confirmLabel: "Remove anyway",
+            tone: "danger",
+          })
+        : await confirm({
+            title: `Remove ${email} from the allowlist?`,
+            message:
+              "Existing admin users keep access until you also clear their profile.is_admin flag.",
+            confirmLabel: "Remove",
+            tone: "danger",
+          });
+    if (!ok) return;
     if (!supabase) return;
     const { error } = await supabase.from("admin_emails").delete().eq("email", email);
     if (error) {
@@ -287,8 +300,8 @@ export default function Settings() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Email</label>
-                  <Input value={user?.email ?? ""} disabled className="w-full" />
+                  <label htmlFor="settings-1" className="text-xs uppercase tracking-wide text-text-secondary">Email</label>
+                  <Input id="settings-1" value={user?.email ?? ""} disabled className="w-full" />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -471,9 +484,16 @@ export default function Settings() {
           </div>
         </section>
 
-        {/* Developer Tools */}
+        {/* Developer Tools. framer-motion rather than
+            `animate-in fade-in slide-in-from-bottom-2`: those are
+            tailwindcss-animate classes and that package isn't installed, so the
+            entrance never rendered. */}
         {isDev && (
-          <section className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0, 0, 0.2, 1] }}
+          >
             <SectionHeader icon={TerminalSquare} title="Developer Tools" tone="info" />
             <Card className="border-status-info/20 divide-y divide-border-subtle p-0">
               <div className="p-4 flex items-center justify-between">
@@ -528,7 +548,7 @@ export default function Settings() {
                 </Button>
               </div>
             </Card>
-          </section>
+          </motion.section>
         )}
       </div>
 

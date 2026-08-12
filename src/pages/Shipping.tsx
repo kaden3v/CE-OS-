@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/Button";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Input } from "@/components/ui/Input";
 import { DataTable } from "@/components/ui/DataTable";
-import { Plus, X, Truck, ThermometerSun } from "lucide-react";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus, Truck, ThermometerSun } from "lucide-react";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { useApp } from "@/contexts/AppContext";
 import { useEntity } from "@/hooks/useEntity";
 import { trackingUrl } from "@/lib/tracking";
@@ -15,14 +16,16 @@ import { useOrders } from "@/hooks/useOrders";
 import { checkShippingWeather } from "@/lib/weather";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Shipment = Tables<"shipments">;
 
-const STATUSES = ["pending", "ready", "held", "shipped", "delivered", "exception"] as const;
-type Status = (typeof STATUSES)[number];
+// Declared as a union rather than `typeof [...] [number]`: the array existed
+// only to derive this type, so it was dead weight at runtime.
+type Status = "pending" | "ready" | "held" | "shipped" | "delivered" | "exception";
 
 export default function Shipping() {
-  const { data: shipments, add, update, isLoading } = useEntity<Shipment>("shipments", [], {
+  const { data: shipments, add, update, isLoading, error, refresh } = useEntity<Shipment>("shipments", [], {
     toRow: (s) => ({
       order_id: s.order_id,
       status: s.status,
@@ -139,16 +142,16 @@ export default function Shipping() {
     return `${o.id.slice(0, 8)} · ${o.customer?.name ?? "—"}`;
   };
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Shipment>[]>(
     () => [
-      { accessorKey: "id", header: "Shipment", cell: (info: any) => <span className="font-mono text-xs">{info.getValue().slice(0, 8)}</span> },
-      { accessorKey: "order_id", header: "Order", cell: (info: any) => { const label = orderLabel(info.getValue()); return <span className="font-medium truncate inline-block align-middle max-w-[220px]" title={label}>{label}</span>; } },
-      { accessorKey: "carrier", header: "Carrier", cell: (info: any) => <span className="text-text-secondary">{info.getValue() ?? "—"}</span> },
+      { accessorKey: "id", header: "Shipment", meta: { mobileHidden: true }, cell: (info) => <span className="font-mono text-xs">{info.row.original.id.slice(0, 8)}</span> },
+      { accessorKey: "order_id", header: "Order", meta: { mobileTitle: true }, cell: (info) => { const label = orderLabel(info.row.original.order_id); return <span className="font-medium truncate inline-block align-middle max-w-[220px]" title={label}>{label}</span>; } },
+      { accessorKey: "carrier", header: "Carrier", cell: (info) => <span className="text-text-secondary">{info.row.original.carrier ?? "—"}</span> },
       {
         accessorKey: "tracking_number",
         header: "Tracking",
-        cell: (info: any) => {
-          const t = info.getValue();
+        cell: (info) => {
+          const t = info.row.original.tracking_number;
           if (!t) return <span className="font-mono text-xs">—</span>;
           const url = trackingUrl(info.row.original.carrier ?? null, t);
           return (
@@ -168,13 +171,13 @@ export default function Shipping() {
       {
         accessorKey: "ship_to_state",
         header: "Destination",
-        cell: (info: any) => <span className="text-text-secondary">{info.getValue() ? `${info.row.original.ship_to_zip ?? ""} ${info.getValue()}` : "—"}</span>,
+        cell: (info) => <span className="text-text-secondary">{info.row.original.ship_to_state ? `${info.row.original.ship_to_zip ?? ""} ${info.row.original.ship_to_state}` : "—"}</span>,
       },
       {
         accessorKey: "status",
         header: "Status",
-        cell: (info: any) => {
-          const s = info.getValue();
+        cell: (info) => {
+          const s = info.row.original.status;
           return (
             <div className="flex items-center gap-2 capitalize">
               <StatusDot status={shipmentStatusTone(s)} />
@@ -186,7 +189,7 @@ export default function Shipping() {
       {
         accessorKey: "weather_note",
         header: "Weather",
-        cell: (info: any) => {
+        cell: (info) => {
           const sh: Shipment = info.row.original;
           if (!sh.weather_note) return <span className="text-text-tertiary">—</span>;
           return (
@@ -202,7 +205,7 @@ export default function Shipping() {
       {
         id: "actions",
         header: "",
-        cell: (info: any) => {
+        cell: (info) => {
           const sh: Shipment = info.row.original;
           return (
             <div className="flex gap-1">
@@ -241,7 +244,9 @@ export default function Shipping() {
       <Card className="flex-1 overflow-auto flex flex-col">
         {isLoading ? (
           <LoadingTable cols={7} rows={8} />
-        ) : isEmpty ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : isEmpty ? (
           <EmptyState
             icon={Truck}
             title="No shipments yet"
@@ -256,32 +261,32 @@ export default function Shipping() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Shipment" size="sm">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Order *</label>
-                <select required className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
+                <label htmlFor="shipping-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Order *</label>
+                <Select id="shipping-1" required className="w-full" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
                   <option value="">— Pick an order —</option>
                   {orders.map((o) => (
                     <option key={o.id} value={o.id}>{orderLabel(o.id)}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Carrier</label>
-                  <Input placeholder="USPS / UPS / FedEx" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
+                  <label htmlFor="shipping-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Carrier</label>
+                  <Input id="shipping-2" placeholder="USPS / UPS / FedEx" value={form.carrier} onChange={(e) => setForm({ ...form, carrier: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Tracking #</label>
-                  <Input placeholder="1Z..." value={form.tracking_number} onChange={(e) => setForm({ ...form, tracking_number: e.target.value })} />
+                  <label htmlFor="shipping-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Tracking #</label>
+                  <Input id="shipping-3" placeholder="1Z..." value={form.tracking_number} onChange={(e) => setForm({ ...form, tracking_number: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Ship to ZIP</label>
-                  <Input placeholder="85001" value={form.ship_to_zip} onChange={(e) => setForm({ ...form, ship_to_zip: e.target.value })} />
+                  <label htmlFor="shipping-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Ship to ZIP</label>
+                  <Input id="shipping-4" placeholder="85001" value={form.ship_to_zip} onChange={(e) => setForm({ ...form, ship_to_zip: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">State</label>
-                  <Input placeholder="AZ" value={form.ship_to_state} onChange={(e) => setForm({ ...form, ship_to_state: e.target.value })} />
+                  <label htmlFor="shipping-5" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">State</label>
+                  <Input id="shipping-5" placeholder="AZ" value={form.ship_to_state} onChange={(e) => setForm({ ...form, ship_to_state: e.target.value })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

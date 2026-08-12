@@ -1,7 +1,18 @@
 import React from "react";
-import { cn } from "@/lib/utils";
 import { AlertCircle, FileSearch, Filter } from "lucide-react";
 import { Button } from "./Button";
+
+/**
+ * Deterministic pseudo-random width from a cell's coordinates.
+ *
+ * The skeleton used to call Math.random() during render, so every re-render
+ * reshuffled every bar and the placeholder visibly jittered while loading.
+ * Same cell → same width, for as long as the skeleton is on screen.
+ */
+function skeletonWidth(row: number, col: number, min: number, spread: number): string {
+  const hash = Math.sin(row * 12.9898 + col * 78.233) * 43758.5453;
+  return `${min + (hash - Math.floor(hash)) * spread}%`;
+}
 
 export function LoadingTable({ rows = 8, cols = 5 }: { rows?: number; cols?: number }) {
   return (
@@ -11,7 +22,7 @@ export function LoadingTable({ rows = 8, cols = 5 }: { rows?: number; cols?: num
           <tr>
             {Array.from({ length: cols }).map((_, i) => (
               <th key={i} className="px-4 py-2 font-medium">
-                <div className="h-4 bg-bg-elevated rounded animate-pulse" style={{ width: `${Math.random() * 40 + 40}%`, animationDuration: '1.2s' }} />
+                <div className="h-4 bg-bg-elevated rounded animate-pulse" style={{ width: skeletonWidth(-1, i, 40, 40), animationDuration: '1.2s' }} />
               </th>
             ))}
           </tr>
@@ -21,7 +32,7 @@ export function LoadingTable({ rows = 8, cols = 5 }: { rows?: number; cols?: num
             <tr key={i} className="border-b border-border-subtle/50 last:border-0">
               {Array.from({ length: cols }).map((_, j) => (
                 <td key={j} className="px-4 py-2">
-                  <div className="h-4 bg-bg-elevated rounded animate-pulse" style={{ width: `${Math.random() * 60 + 20}%`, animationDuration: '1.2s', '--tw-pulse-opacity': '0.6' } as any} />
+                  <div className="h-4 bg-bg-elevated rounded animate-pulse" style={{ width: skeletonWidth(i, j, 20, 60), animationDuration: '1.2s' }} />
                 </td>
               ))}
             </tr>
@@ -38,12 +49,8 @@ export function ErrorState({ title = "Couldn't load data", description = "There 
       <AlertCircle className="w-12 h-12 text-status-alert mb-4 opacity-80" strokeWidth={1} />
       <h3 className="text-base font-medium text-text-primary mb-2">{title}</h3>
       <p className="text-sm text-text-secondary mb-6 max-w-sm">{description}</p>
-      {onRetry && (
-        <div className="flex items-center gap-2">
-          <Button variant="default" onClick={onRetry}>Try again</Button>
-          <Button variant="ghost">View status</Button>
-        </div>
-      )}
+      {/* "View status" used to sit here with no onClick — a dead control. */}
+      {onRetry && <Button variant="default" onClick={onRetry}>Try again</Button>}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, Dispatch, SetStateAction } from "reac
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/database.types";
 import { useAuth } from "@/contexts/AuthContext";
-import { logDbError } from "@/lib/dbErrors";
+import { logDbError, friendlyDbError } from "@/lib/dbErrors";
 import { logActivity, rowSummary } from "@/lib/activity";
 import { pageRanges } from "@/hooks/pageRanges";
 
@@ -62,6 +62,16 @@ export function useEntity<T extends WithId, Row = T>(
   remove: (id: T["id"]) => Promise<{ ok: boolean; code?: string }>;
   removeMany: (ids: T["id"][]) => Promise<{ ok: boolean; code?: string }>;
   isLoading: boolean;
+  /**
+   * User-facing message when the last fetch failed, else null.
+   *
+   * Without this a failed load was indistinguishable from an empty table: the
+   * hook logged to console, cleared isLoading, and returned []. Pages then
+   * rendered "No orders yet — create your first order" over data that exists,
+   * which is the same class of trust problem as showing a wrong number.
+   * Callers must branch on `error` BEFORE `isEmpty`.
+   */
+  error: string | null;
   refresh: () => Promise<void>;
 } {
   const { user, activeOrgId } = useAuth();
@@ -73,10 +83,12 @@ export function useEntity<T extends WithId, Row = T>(
 
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(ready);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!ready) return;
     setIsLoading(true);
+    setError(null);
     const ceiling = options?.limit ?? DEFAULT_FETCH_LIMIT;
     const list: Row[] = [];
     // Page past PostgREST's max-rows cap until a short page ends the run.
@@ -89,6 +101,9 @@ export function useEntity<T extends WithId, Row = T>(
         .range(from, to);
       if (error) {
         logDbError(`fetch ${table}`, error);
+        // Surface it, don't just log it — the caller has to be able to tell a
+        // failed load apart from an empty table.
+        setError(friendlyDbError(error, "Couldn't load this data. Check your connection and try again."));
         setIsLoading(false);
         return;
       }
@@ -274,5 +289,5 @@ export function useEntity<T extends WithId, Row = T>(
     return { ok: true };
   };
 
-  return { data, setData, add, update, updateMany, remove, removeMany, isLoading, refresh: fetchAll };
+  return { data, setData, add, update, updateMany, remove, removeMany, isLoading, error, refresh: fetchAll };
 }

@@ -73,10 +73,10 @@ export default function ResetPassword() {
               </p>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">New password</label>
+                  <label htmlFor="resetpassword-L76" className="text-xs uppercase tracking-wide text-text-secondary">New password</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                    <Input
+                    <Input id="resetpassword-L76"
                       type="password"
                       required
                       autoFocus
@@ -89,10 +89,10 @@ export default function ResetPassword() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs uppercase tracking-wide text-text-secondary">Confirm</label>
+                  <label htmlFor="resetpassword-L92" className="text-xs uppercase tracking-wide text-text-secondary">Confirm</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                    <Input
+                    <Input id="resetpassword-L92"
                       type="password"
                       required
                       autoComplete="new-password"

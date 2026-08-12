@@ -1,18 +1,19 @@
 import React, { useState, useMemo } from "react";
 import { DataTable } from "@/components/ui/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { Plus, X, Store, ShoppingBag, ExternalLink } from "lucide-react";
-import { LoadingTable, EmptyState } from "@/components/ui/StateRenderer";
+import { Plus, Store, ShoppingBag, ExternalLink } from "lucide-react";
+import { LoadingTable, EmptyState, ErrorState } from "@/components/ui/StateRenderer";
 import { CultivarName } from "@/components/ui/CultivarName";
 import { useApp } from "@/contexts/AppContext";
 import { Input } from "@/components/ui/Input";
 import { useEntity } from "@/hooks/useEntity";
 import { friendlyDbError } from "@/lib/dbErrors";
 import type { Tables } from "@/lib/database.types";
+import { Select } from "@/components/ui/Select";
 
 type Listing = Tables<"listings">;
 type Cultivar = Tables<"cultivars">;
@@ -57,7 +58,7 @@ const renderStatus = (s: string) => {
 };
 
 export default function Listings() {
-  const { data: listings, add, isLoading } = useEntity<Listing>("listings", SEED, {
+  const { data: listings, add, isLoading, error, refresh } = useEntity<Listing>("listings", SEED, {
     toRow: (l) => ({
       cultivar_id: l.cultivar_id,
       channel: l.channel,
@@ -127,33 +128,33 @@ export default function Listings() {
 
   const cultivarName = (id: string | null) => (id ? cultivars.find((c) => c.id === id)?.name ?? "—" : "—");
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Listing>[]>(
     () => [
       {
         accessorKey: "title",
         header: "Title",
-        cell: (info: any) => {
+        cell: (info) => {
           const rawUrl = info.row.original.url as string | null;
           // Only render http(s) links; DB-sourced URLs (synced from Etsy) must
           // not be allowed to carry a javascript:/data: scheme into href.
           const url = rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : null;
-          if (!url) return <span className="font-medium">{info.getValue()}</span>;
+          if (!url) return <span className="font-medium">{info.row.original.title}</span>;
           return (
             <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-medium inline-flex items-center gap-1 hover:underline" title="Open live listing">
-              {info.getValue()}
+              {info.row.original.title}
               <ExternalLink className="w-3 h-3 text-text-tertiary shrink-0" />
             </a>
           );
         },
       },
-      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info: any) => <CultivarName name={cultivarName(info.getValue())} className="text-text-secondary" /> },
-      { accessorKey: "channel", header: "Channel", cell: (info: any) => <div className="flex items-center gap-2 text-text-secondary capitalize">{channelIcon(info.getValue())}{info.getValue()}</div> },
-      { accessorKey: "price", header: "Price", cell: (info: any) => <span className="tabular-nums">${Number(info.getValue()).toFixed(2)}</span> },
-      { accessorKey: "stock", header: "Listed qty", cell: (info: any) => <span className="tabular-nums">{info.getValue()}</span> },
+      { accessorKey: "cultivar_id", header: "Cultivar", cell: (info) => <CultivarName name={cultivarName(info.row.original.cultivar_id)} className="text-text-secondary" /> },
+      { accessorKey: "channel", header: "Channel", cell: (info) => <div className="flex items-center gap-2 text-text-secondary capitalize">{channelIcon(info.row.original.channel)}{info.row.original.channel}</div> },
+      { accessorKey: "price", header: "Price", cell: (info) => <span className="tabular-nums">${Number(info.row.original.price).toFixed(2)}</span> },
+      { accessorKey: "stock", header: "Listed qty", cell: (info) => <span className="tabular-nums">{info.row.original.stock}</span> },
       {
         id: "on_hand",
         header: "On hand",
-        cell: (info: any) => {
+        cell: (info) => {
           const cid = info.row.original.cultivar_id as string | null;
           if (!cid) return <span className="text-text-tertiary">—</span>;
           const onHand = onHandByCultivar.get(cid) ?? 0;
@@ -165,12 +166,12 @@ export default function Listings() {
           );
         },
       },
-      { accessorKey: "status", header: "Status", cell: (info: any) => renderStatus(info.getValue()) },
+      { accessorKey: "status", header: "Status", cell: (info) => renderStatus(info.row.original.status) },
       {
         accessorKey: "last_synced_at",
         header: "Synced",
-        cell: (info: any) => {
-          const v = info.getValue() as string | null;
+        cell: (info) => {
+          const v = info.row.original.last_synced_at as string | null;
           if (!v) return <span className="text-text-tertiary text-xs">manual</span>;
           const mins = Math.floor((Date.now() - new Date(v).getTime()) / 60000);
           const label = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`;
@@ -180,7 +181,7 @@ export default function Listings() {
       {
         id: "quality",
         header: "Quality",
-        cell: (info: any) => {
+        cell: (info) => {
           const { score, missing } = scoreListing(info.row.original);
           return (
             <div
@@ -223,7 +224,9 @@ export default function Listings() {
       <Card className="flex-1 overflow-auto flex flex-col">
         {isLoading ? (
           <LoadingTable cols={6} rows={8} />
-        ) : isEmpty ? (
+          ) : error ? (
+            <ErrorState description={error} onRetry={refresh} />
+          ) : isEmpty ? (
           <EmptyState
             title="No listings yet"
             description="Drafts you create here can later sync to Shopify/Etsy."
@@ -237,14 +240,14 @@ export default function Listings() {
       <Modal open={isOpen} onClose={() => setIsOpen(false)} title="New Listing" size="lg">
             <form onSubmit={handleAdd} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Title *</label>
-                <Input required placeholder='Pinguicula "Pirouette" — Mature' value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                <label htmlFor="listings-1" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Title *</label>
+                <Input id="listings-1" required placeholder='Pinguicula "Pirouette" — Mature' value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  <label htmlFor="listings-L248" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Cultivar</label>
+                  <Select id="listings-L248"
+                    className="w-full"
                     value={form.cultivar_id}
                     onChange={(e) => setForm({ ...form, cultivar_id: e.target.value })}
                   >
@@ -252,12 +255,12 @@ export default function Listings() {
                     {cultivars.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
-                  <select
-                    className="w-full bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-border-strong"
+                  <label htmlFor="listings-L261" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Channel</label>
+                  <Select id="listings-L261"
+                    className="w-full"
                     value={form.channel}
                     onChange={(e) => setForm({ ...form, channel: e.target.value })}
                   >
@@ -265,21 +268,21 @@ export default function Listings() {
                     <option value="etsy">Etsy</option>
                     <option value="wholesale">Wholesale</option>
                     <option value="other">Other</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Price</label>
-                  <Input type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+                  <label htmlFor="listings-2" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Price</label>
+                  <Input id="listings-2" type="number" step="0.01" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stock</label>
-                  <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
+                  <label htmlFor="listings-3" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">Stock</label>
+                  <Input id="listings-3" type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase tracking-wide text-text-secondary mb-2">URL</label>
-                  <Input placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                  <label htmlFor="listings-4" className="block text-xs uppercase tracking-wide text-text-secondary mb-2">URL</label>
+                  <Input id="listings-4" placeholder="https://..." value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
                 </div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-border-subtle">

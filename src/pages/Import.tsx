@@ -1,4 +1,5 @@
 import { useMemo, useState, ChangeEvent } from "react";
+import { Textarea } from "@/components/ui/Textarea";
 import { UploadCloud, FileDown, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -6,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import { supabase } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity";
+import { Select } from "@/components/ui/Select";
 
 const INSERT_CHUNK_SIZE = 100;
 const PREVIEW_ROWS = 5;
@@ -216,7 +218,7 @@ export default function Import() {
 
       <Card className="p-4 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <select
+          <Select
             value={entity}
             onChange={(e) => {
               setEntity(e.target.value as EntityKey);
@@ -227,27 +229,27 @@ export default function Import() {
             {(Object.keys(ENTITIES) as EntityKey[]).map((k) => (
               <option key={k} value={k}>{ENTITIES[k].label}</option>
             ))}
-          </select>
+          </Select>
           <Button variant="outline" size="sm" onClick={downloadTemplate}>
             <FileDown className="w-3.5 h-3.5" /> Template
           </Button>
-          <label className="inline-flex items-center gap-2 text-xs px-2 py-2 rounded-md border border-border-strong hover:bg-bg-hover cursor-pointer text-text-primary">
+          <label htmlFor="import-1" className="inline-flex items-center gap-2 text-xs px-2 py-2 rounded-md border border-border-strong hover:bg-bg-hover cursor-pointer text-text-primary">
             <UploadCloud className="w-3.5 h-3.5" /> Choose CSV file
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+            <input id="import-1" type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
           </label>
         </div>
 
         <div>
-          <label className="text-xs uppercase tracking-wide text-text-secondary block mb-2">
+          <label htmlFor="import-L243" className="text-xs uppercase tracking-wide text-text-secondary block mb-2">
             Or paste CSV (header row first)
           </label>
-          <textarea
+          <Textarea id="import-L243"
             value={csvText}
             onChange={(e) => setCsvText(e.target.value)}
             rows={8}
             spellCheck={false}
             placeholder={spec.template}
-            className="w-full bg-bg-elevated border border-border-strong rounded-[8px] px-3 py-2 text-sm font-mono placeholder:text-text-tertiary focus:outline-none focus:border-accent-brand resize-y"
+            className="w-full font-mono placeholder:text-text-tertiary resize-y"
           />
         </div>
 

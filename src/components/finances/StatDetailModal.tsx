@@ -92,7 +92,7 @@ function LineItems({ detail, loading }: { detail: StatDetail; loading: boolean }
       <SectionTitle>{heading}</SectionTitle>
       <div className="max-h-80 overflow-y-auto rounded-lg border border-border-subtle">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-bg-base">
+          <thead className="sticky top-0 z-sticky bg-bg-base">
             <tr className="text-[11px] uppercase tracking-wide text-text-secondary">
               {lineItems.columns.map((c, i) => (
                 <th key={i} className={cn("px-3 py-2 font-medium", c.align === "right" ? "text-right" : "text-left")}>{c.header}</th>

@@ -14,6 +14,7 @@ import { friendlyDbError } from "@/lib/dbErrors";
 import { formatMoney } from "@/lib/format";
 import { formatBusinessDate, isoYear, currentYear } from "@/lib/dates";
 import type { Tables } from "@/lib/database.types";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 
 type Vendor = Tables<"vendors">;
 type Expense = Tables<"expenses">;
@@ -29,6 +30,7 @@ const sourceMeta = (src: string | null) => SOURCE_META[src ?? "manual"] ?? SOURC
 const labelCls = "block text-xs uppercase tracking-wide text-text-secondary mb-1.5";
 
 export default function VendorDetail() {
+  const confirm = useConfirm();
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useApp();
@@ -102,9 +104,9 @@ export default function VendorDetail() {
     const linked = activity.length;
     const message =
       linked > 0
-        ? `Delete ${vendor.name}? Its ${linked} linked transaction${linked === 1 ? "" : "s"} will be kept but no longer tied to this vendor.`
-        : `Delete ${vendor.name}? This can't be undone.`;
-    if (!confirm(message)) return;
+        ? `Its ${linked} linked transaction${linked === 1 ? "" : "s"} will be kept, but no longer tied to this vendor.`
+        : "This can't be undone.";
+    if (!(await confirm({ title: `Delete ${vendor.name}?`, message, confirmLabel: "Delete", tone: "danger" }))) return;
     const r = await remove(vendor.id);
     if (!r.ok) {
       addToast({ title: "Couldn't delete", description: friendlyDbError({ code: r.code } as any), status: "alert" });
@@ -174,12 +176,12 @@ export default function VendorDetail() {
         {editing ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className={labelCls}>Name</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div><label className={labelCls}>Category</label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
-              <div><label className={labelCls}>Email</label><Input type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} /></div>
-              <div><label className={labelCls}>Phone</label><Input type="tel" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} /></div>
-              <div><label className={labelCls}>Website</label><Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></div>
-              <div><label className={labelCls}>Notes</label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+              <div><label htmlFor="vendordetail-1" className={labelCls}>Name</label><Input id="vendordetail-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div><label htmlFor="vendordetail-2" className={labelCls}>Category</label><Input id="vendordetail-2" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+              <div><label htmlFor="vendordetail-3" className={labelCls}>Email</label><Input id="vendordetail-3" type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} /></div>
+              <div><label htmlFor="vendordetail-4" className={labelCls}>Phone</label><Input id="vendordetail-4" type="tel" value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} /></div>
+              <div><label htmlFor="vendordetail-5" className={labelCls}>Website</label><Input id="vendordetail-5" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} /></div>
+              <div><label htmlFor="vendordetail-6" className={labelCls}>Notes</label><Input id="vendordetail-6" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border-subtle px-3 py-2.5">
               <div>
